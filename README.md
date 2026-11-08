@@ -154,6 +154,25 @@ Miljövariabler:
 | `ANTHROPIC_BASE_URL` | Egen Anthropic-bas-URL (valfritt) |
 | `MAJER_MODEL` | Modellnamn |
 | `MAJER_BASE_URL` | Bas-URL för OpenAI-liknande proxy |
+| `MAJER_PROFILE_MODEL` | Konkret modell som profilen `openhands_<namn>` pekar på |
+
+> **Obs (Agent Canvas):** agent-servern håller sina LLM-profiler i minnet. Startas
+> containern om försvinner de, och modellnamnet `openhands_Default` slutar
+> fungera (404 "Profile not found"). Klienten skapar då profilen på nytt och gör
+> om anropet en gång. Startas miljön om försvinner också de globalt installerade
+> paketen – kör `pip install -r requirements.txt` igen.
+
+### Vad ett svar kostar i tokens
+
+Klienten sparar tokenräkningen från senaste anropet i `LLMClient.last_usage`
+(`prompt_tokens`, `completion_tokens`, `total_tokens`). Mätningar mot proxyn:
+
+- Prompten har en **fast overhead på cirka 17 400 tokens** per anrop, oberoende
+  av vår egen text (våra prompter är ~1 000–1 500 tecken).
+- Att be modellen om fältet `reasoning` kostar extra **utdata-tokens**, ungefär
+  200–600 fler, och mer när modellen resonerar längre.
+- Ett vanligt Majer-svar landar därför kring **17 900 prompt + 200–700
+  completion ≈ 18 000–19 000 tokens totalt**.
 
 ## Tester
 

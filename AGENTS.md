@@ -15,6 +15,8 @@ lower bid). Multiple agents with distinct roles can also play full games.
   bid comparison, and call resolution. Change rules here only.
 - `majer/llm.py` – LLM client. Prefers Anthropic (Claude) via
   `ANTHROPIC_API_KEY`; falls back to the OpenHands agent-server proxy.
+  `LLMClient.last_usage` holds the token count from the last call.
+  Self-heals the agent-server LLM profile (see gotcha below).
 - `majer/game.py` – multi-agent game engine. Keeps each agent isolated; no agent
   sees another's secret dice.
 - `majer/session.py` – interactive session: full flow to a call (roll → blind
@@ -38,6 +40,37 @@ Higher is *not* the larger number. The order is `21` (Mejer, highest), then
 `11, 22, 33, 44, 55, 66`, then `65, 64, …` down to `31` (lowest). So `33` is
 higher than `44`, and `55` is higher than `66`. Always compare with
 `rules.is_higher` / `rules.compare` — never with `<`/`>` on the raw value.
+
+## Agent Canvas: LLM profiles vanish on container restart (gotcha)
+
+The app talks to the LLM through the local agent-server proxy
+(`http://127.0.0.1:60000/v1/chat/completions`) with the model name
+`openhands_<profile>`. The agent server keeps its LLM profiles **in memory**, so
+a container restart wipes them. Then every call fails with
+`404 {"detail":"Profile '<name>' not found"}`, and the web app looks dead.
+
+`LLMClient` self-heals: on that 404 it recreates the profile and retries once.
+The profile points at a concrete model (`MAJER_PROFILE_MODEL`, default
+`openhands/deepseek-v4.1-flash`). Note the model-name forms:
+
+- `openhands_Default` – a *profile* name; must exist in the agent server.
+- `openhands/deepseek-v4.1-flash` – the concrete model the profile targets.
+
+Useful endpoints (header `X-Session-API-Key: $SESSION_API_KEY`):
+`GET /api/settings`, `GET /api/llm/models/verified`, `GET /api/profiles`,
+`POST /api/profiles/<name>`, `POST /api/profiles/<name>/activate`.
+
+Token cost (measured): the proxy adds a large fixed prompt overhead (~17.4k
+tokens) to every call, independent of our own prompt length. Asking the model
+for a `reasoning` field costs extra output tokens (roughly +200–600, more when
+the model thinks longer). `LLMClient.last_usage` reports the real count.
+
+## Environment restarts wipe global packages
+
+Dependencies are installed globally (no venv). After a container restart,
+`python3 -m uvicorn` fails with "No module named uvicorn". Reinstall with
+`pip install -r requirements.txt`, then restart the server:
+`python3 -m uvicorn majer.web.app:app --host 0.0.0.0 --port 12000`.
 
 ## Referee design (important)
 

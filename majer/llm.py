@@ -20,6 +20,10 @@ class LLMError(RuntimeError):
     """Fel vid anrop mot språkmodellen."""
 
 
+class _MissingProfile(LLMError):
+    """Agent-servern saknar LLM-profilen som modellnamnet pekar på."""
+
+
 @dataclass
 class LLMConfig:
     """Konfiguration för en LLM-anslutning."""
@@ -31,6 +35,13 @@ class LLMConfig:
     max_tokens: int = 1024
     temperature: float = 0.7
     timeout: float = 120.0
+
+    @property
+    def profile_name(self) -> str:
+        """Profilnamn i agent-servern för ett ``openhands_<namn>``-modellnamn."""
+        prefix = "openhands_"
+        return self.model[len(prefix):] if self.model.startswith(prefix) else ""
+
 
     @classmethod
     def from_env(cls) -> "LLMConfig":
@@ -78,6 +89,9 @@ class LLMClient:
 
     config: LLMConfig = field(default_factory=LLMConfig.from_env)
 
+    #: Tokenräkning från det senaste anropet (prompt/completion/total).
+    last_usage: dict[str, int] = field(default_factory=dict, init=False)
+
     def complete(self, system: str, user: str, *, json_mode: bool = False) -> str:
         if self.config.provider == "anthropic":
             return self._complete_anthropic(system, user)
@@ -107,6 +121,15 @@ class LLMClient:
             raise LLMError(f"Anthropic-anrop misslyckades: {exc}") from exc
 
         parts = [block.text for block in resp.content if getattr(block, "type", "") == "text"]
+        usage = getattr(resp, "usage", None)
+        if usage is not None:
+            self.last_usage = {
+                "prompt_tokens": getattr(usage, "input_tokens", 0) or 0,
+                "completion_tokens": getattr(usage, "output_tokens", 0) or 0,
+            }
+            self.last_usage["total_tokens"] = (
+                self.last_usage["prompt_tokens"] + self.last_usage["completion_tokens"]
+            )
         return "".join(parts).strip()
 
     # -- OpenHands agent-server-proxy ---------------------------------------
@@ -133,18 +156,66 @@ class LLMClient:
             headers["Authorization"] = f"Bearer {self.config.api_key}"
 
         try:
-            resp = httpx.post(url, json=payload, headers=headers, timeout=self.config.timeout)
-            resp.raise_for_status()
-        except httpx.HTTPStatusError as exc:
-            raise LLMError(f"LLM-anrop misslyckades ({exc.response.status_code}): {exc.response.text[:300]}") from exc
-        except httpx.HTTPError as exc:
-            raise LLMError(f"Kunde inte nå LLM: {exc}") from exc
+            resp = self._post(url, payload, headers)
+        except _MissingProfile:
+            # Agent-servern tappar sina LLM-profiler vid omstart. Skapa profilen
+            # på nytt och gör om anropet en gång.
+            self._ensure_profile(base)
+            try:
+                resp = self._post(url, payload, headers)
+            except _MissingProfile as exc:
+                raise LLMError(str(exc)) from exc
 
         data = resp.json()
+        self.last_usage = {
+            k: int(v)
+            for k, v in (data.get("usage") or {}).items()
+            if isinstance(v, (int, float))
+        }
         try:
             return data["choices"][0]["message"]["content"].strip()
         except (KeyError, IndexError, TypeError) as exc:
             raise LLMError(f"Oväntat LLM-svar: {json.dumps(data)[:300]}") from exc
+
+    def _post(self, url: str, payload: dict, headers: dict) -> httpx.Response:
+        try:
+            resp = httpx.post(url, json=payload, headers=headers, timeout=self.config.timeout)
+            resp.raise_for_status()
+            return resp
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 404 and self.config.profile_name:
+                try:
+                    detail = exc.response.json().get("detail", "")
+                except ValueError:
+                    detail = ""
+                if "not found" in str(detail):
+                    raise _MissingProfile(
+                        f"LLM-profilen '{self.config.profile_name}' saknas i agent-servern"
+                    ) from exc
+            raise LLMError(
+                f"LLM-anrop misslyckades ({exc.response.status_code}): {exc.response.text[:300]}"
+            ) from exc
+        except httpx.HTTPError as exc:
+            raise LLMError(f"Kunde inte nå LLM: {exc}") from exc
+
+    def _ensure_profile(self, base: str) -> None:
+        """Skapa och aktivera LLM-profilen som modellnamnet pekar på.
+
+        Agent-serverns profiler ligger i minnet och försvinner när containern
+        startas om. Profilen pekar i sin tur på en konkret modell
+        (``MAJER_PROFILE_MODEL``, standard ``openhands/deepseek-v4.1-flash``).
+        """
+        name = self.config.profile_name
+        if not name:
+            return
+        target = os.environ.get("MAJER_PROFILE_MODEL", "openhands/deepseek-v4.1-flash")
+        headers = {"Content-Type": "application/json", "X-Session-API-Key": _session_api_key()}
+        body = {"llm": {"model": target}, "include_secrets": True}
+        try:
+            httpx.post(f"{base}/api/profiles/{name}", json=body, headers=headers, timeout=30)
+            httpx.post(f"{base}/api/profiles/{name}/activate", json={}, headers=headers, timeout=30)
+        except httpx.HTTPError as exc:
+            raise LLMError(f"Kunde inte återskapa LLM-profilen '{name}': {exc}") from exc
 
 
 def parse_json_object(text: str) -> dict[str, Any]:
