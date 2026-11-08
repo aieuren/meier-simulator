@@ -55,7 +55,20 @@ class DecideRequest(BaseModel):
 
 @app.get("/")
 def index() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html")
+    # Ingen cachning: filerna ändras ofta och gamla kopior gav "undefined" i UI:t.
+    return FileResponse(
+        STATIC_DIR / "index.html",
+        headers={"Cache-Control": "no-store, must-revalidate"},
+    )
+
+
+class NoCacheStaticFiles(StaticFiles):
+    """Serverar statiska filer utan cachning så att UI:t alltid är färskt."""
+
+    def file_response(self, *args, **kwargs):  # type: ignore[override]
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-store, must-revalidate"
+        return response
 
 
 @app.get("/api/roles")
@@ -168,10 +181,23 @@ def session_state() -> dict:
 
 @app.post("/api/session/advance")
 def session_advance() -> dict:
-    """Bekräfta (OK) tärningsslaget och låt spelaren i tur svara."""
+    """Bekräfta (OK) det aktuella steget och utför det."""
     session = _require_session()
     try:
         session.advance()
+    except LLMError as exc:
+        raise HTTPException(status_code=502, detail=f"LLM-fel: {exc}") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return session.to_dict()
+
+
+@app.post("/api/session/run")
+def session_run() -> dict:
+    """Kör hela flödet fram till en syn (stänger av grinden)."""
+    session = _require_session()
+    try:
+        session.run_to_call()
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=f"LLM-fel: {exc}") from exc
     except ValueError as exc:
@@ -186,4 +212,4 @@ def session_stop() -> dict:
     return session.to_dict()
 
 
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+app.mount("/static", NoCacheStaticFiles(directory=STATIC_DIR), name="static")

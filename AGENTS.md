@@ -17,8 +17,10 @@ lower bid). Multiple agents with distinct roles can also play full games.
   `ANTHROPIC_API_KEY`; falls back to the OpenHands agent-server proxy.
 - `majer/game.py` – multi-agent game engine. Keeps each agent isolated; no agent
   sees another's secret dice.
-- `majer/session.py` – interactive session: random player order, OK-gate on the
-  dice roll, referee review, and the log of every answer.
+- `majer/session.py` – interactive session: full flow to a call (roll → blind
+  raise / pass → forced raise → call), random player order, referee review, and
+  the log of every answer. `advance()` does one gated step; `run_to_call()` runs
+  the whole flow to the next call.
 - `majer/agents/base.py` – `Agent`/`Role` base classes.
 - `majer/agents/player.py` – `MajerPlayerAgent` and the role registry.
 - `majer/agents/referee.py` – `RefereeAgent` (Domare-Doris). Judges each answer.
@@ -26,6 +28,13 @@ lower bid). Multiple agents with distinct roles can also play full games.
 - `majer/cli.py` – command line entry points (`announce`, `decide`, `play`,
   `session`).
 - `tests/` – unit tests. No real LLM calls; `FakeLLM`/`ScriptedAgent` are used.
+
+## Majer ranking is non-numeric (gotcha)
+
+Higher is *not* the larger number. The order is `21` (Mejer, highest), then
+`11, 22, 33, 44, 55, 66`, then `65, 64, …` down to `31` (lowest). So `33` is
+higher than `44`, and `55` is higher than `66`. Always compare with
+`rules.is_higher` / `rules.compare` — never with `<`/`>` on the raw value.
 
 ## Referee design (important)
 

@@ -179,18 +179,41 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 .turn { margin-bottom: 0.7rem; }
 .muted { color: var(--muted); }
 
-.dice-box {
-  display: flex;
-  align-items: baseline;
-  gap: 0.7rem;
+.dice-panel {
   background: var(--panel-2);
-  border: 1px solid var(--accent);
-  border-radius: 10px;
-  padding: 0.7rem 1rem;
+  border: 2px solid var(--accent);
+  border-radius: 12px;
+  padding: 0.8rem 1rem;
+  margin-bottom: 0.6rem;
 }
-.dice-label { color: var(--muted); font-size: 0.85rem; }
-.dice-value { font-size: 1.8rem; font-weight: 700; color: var(--accent); }
-.dice-detail { color: var(--muted); font-size: 0.85rem; }
+.panel-title {
+  color: var(--accent);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 0.4rem;
+}
+.dice-faces { display: flex; gap: 0.6rem; align-items: center; }
+.die {
+  font-size: 2.4rem;
+  line-height: 1;
+  color: var(--accent);
+  background: var(--bg);
+  border-radius: 10px;
+  padding: 0.15rem 0.4rem;
+}
+.dice-readout { margin-top: 0.4rem; font-size: 1.05rem; }
+.dice-readout strong { font-size: 1.5rem; color: var(--accent); }
+
+.bid-panel {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.7rem 1rem;
+  margin-bottom: 0.6rem;
+}
+.bid-value { font-size: 1.4rem; color: var(--fg); }
+.bid-by { color: var(--muted); font-size: 0.85rem; }
 
 .log-title { margin: 1.4rem 0 0.6rem; font-size: 0.95rem; color: var(--accent); text-transform: uppercase; letter-spacing: 1px; }
 .log { display: grid; gap: 0.6rem; }
@@ -204,6 +227,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 .log-head { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; font-size: 0.9rem; }
 .log-player { font-weight: 700; }
 .log-dice { color: var(--muted); }
+.log-dice .die { font-size: 1.1rem; padding: 0; background: none; }
 .log-bid.truth { color: var(--good); }
 .log-bid.lie { color: var(--bad); }
 .log-referee { margin-left: auto; padding: 0.1rem 0.55rem; border-radius: 999px; font-size: 0.8rem; font-weight: 700; }
@@ -213,6 +237,22 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 .log-reasoning { color: var(--muted); font-size: 0.85rem; }
 .ref-detail { color: var(--bad); font-size: 0.85rem; margin-top: 0.3rem; }
 .log-corrected { font-size: 0.78rem; color: var(--accent); border: 1px dashed var(--accent); border-radius: 6px; padding: 0 0.4rem; }
+.log-action { color: var(--accent); font-size: 0.85rem; }
+.log-prev { color: var(--muted); font-size: 0.82rem; }
+.log-row.is-call { border-color: var(--bad); }
+.log-row.is-call .log-head { color: var(--bad); }
+
+.call-result {
+  margin-top: 0.8rem;
+  background: rgba(239, 107, 107, 0.1);
+  border: 1px solid var(--bad);
+  border-radius: 10px;
+  padding: 0.7rem 0.9rem;
+  display: grid;
+  gap: 0.25rem;
+}
+.call-title { font-weight: 700; color: var(--bad); text-transform: uppercase; letter-spacing: 1px; }
+.call-loser { color: var(--bad); font-weight: 600; }
 
 .error { color: var(--bad); }
 .loading { color: var(--muted); font-style: italic; }

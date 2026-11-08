@@ -59,6 +59,7 @@ async function boot() {
   $("decideBtn").onclick = doDecide;
   $("newSessionBtn").onclick = newSession;
   $("okBtn").onclick = advanceSession;
+  $("runBtn").onclick = runToCall;
 }
 
 function readDice(a, b) {
@@ -207,34 +208,125 @@ async function advanceSession() {
     $("log").insertAdjacentHTML("afterbegin", `<p class="error">Fel: ${err.message}</p>`);
   } finally {
     btn.disabled = false;
-    btn.textContent = "OK – låt spelaren svara";
+    btn.textContent = "OK – nästa steg";
   }
+}
+
+async function runToCall() {
+  const btn = $("runBtn");
+  btn.disabled = true;
+  btn.textContent = "Spelar…";
+  try {
+    const res = await fetch("/api/session/run", { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Fel");
+    renderSession(data);
+  } catch (err) {
+    $("log").insertAdjacentHTML("afterbegin", `<p class="error">Fel: ${err.message}</p>`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Kör till syn";
+  }
+}
+
+const DICE_FACE = ["", "⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
+
+function diceFaces(dice) {
+  if (!Array.isArray(dice) || dice.length < 2) return "";
+  return dice
+    .slice(0, 2)
+    .map((d) => `<span class="die" title="tärning ${d}">${DICE_FACE[d] || d}</span>`)
+    .join("");
+}
+
+function textOr(value, fallback) {
+  return value === undefined || value === null || value === "" ? fallback : value;
 }
 
 function renderSession(data) {
   $("sessionStatus").hidden = false;
 
-  // Ordning
-  const orderNames = data.order.map((p) => p.name).join(" → ");
+  // Spelordning med liv.
+  const orderNames = (data.order || [])
+    .map((p) => `${textOr(p.name, "?")} <span class="muted">(${textOr(p.lives, "?")} liv)</span>`)
+    .join(" → ");
   $("turnInfo").innerHTML = `<span class="muted">Spelordning:</span> ${orderNames}`;
 
   const finished = data.phase === "finished";
+  const pending = data.pending || {};
+
   if (finished) {
     $("okBtn").hidden = true;
-    $("pendingDice").hidden = true;
+    $("runBtn").hidden = true;
+    $("dicePanel").hidden = true;
+    $("bidPanel").hidden = true;
     $("turnInfo").innerHTML += ` <span class="muted">(avslutad)</span>`;
   } else {
-    const cur = data.current;
-    $("turnInfo").innerHTML += `<br><span class="muted">I tur:</span> <strong>${cur.name}</strong>`;
-    if (data.pending) {
-      $("okBtn").hidden = false;
-      $("pendingDice").hidden = false;
-      $("pendingValue").textContent = data.pending.shown_name;
-      $("pendingDetail").textContent = `(tärning ${data.pending.dice[0]} och ${data.pending.dice[1]})`;
+    const cur = data.current || {};
+    const what =
+      data.step_kind === "roll"
+        ? "slår och ska säga sitt bud"
+        : data.step_kind === "raise"
+        ? "måste höja – bägaren har gått ett helt varv"
+        : "ska svara på budet";
+    $("turnInfo").innerHTML += `<br><span class="muted">I tur:</span> <strong>${textOr(
+      cur.name,
+      "?"
+    )}</strong> – ${what}`;
+    $("okBtn").hidden = false;
+    $("runBtn").hidden = false;
+
+    // Tärningsslaget – alltid synligt som indata till spelaren i rundan.
+    if (pending.shown_name !== undefined) {
+      $("dicePanel").hidden = false;
+      $("dicePanelTitle").textContent =
+        data.step_kind === "roll"
+          ? "Tärningsslaget (indata till budet)"
+          : "Tärningarna under bägaren (indata till synen)";
+      $("diceFaces").innerHTML = diceFaces(pending.dice);
+      $("diceReadout").innerHTML = `<strong>${pending.shown_name}</strong> <span class="muted">(tärning ${textOr(
+        (pending.dice || [])[0],
+        "?"
+      )} och ${textOr((pending.dice || [])[1], "?")})</span>`;
+    } else {
+      $("dicePanel").hidden = true;
+    }
+
+    // Aktuellt bud (när någon ska svara) – visas separat från tärningarna.
+    if (pending.bid_name !== undefined && data.step_kind !== "roll") {
+      $("bidPanel").hidden = false;
+      $("bidValue").innerHTML = `<strong>${pending.bid_name}</strong>`;
+      $("bidBy").textContent = `sagt av ${textOr(pending.bidder, "?")}`;
+    } else {
+      $("bidPanel").hidden = true;
     }
   }
 
+  renderResult(data.result);
   renderLog(data.log);
+}
+
+function renderResult(result) {
+  let box = $("callResult");
+  if (!box) {
+    box = document.createElement("div");
+    box.id = "callResult";
+    box.className = "call-result";
+    $("sessionStatus").appendChild(box);
+  }
+  if (!result) {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  box.innerHTML = `
+    <div class="call-title">Syn!</div>
+    <div>Tärningarna visade <strong>${result.shown_name}</strong> mot budet
+      <strong>${result.bid_name}</strong>.</div>
+    <div>${result.caller} synade ${result.bidder}.</div>
+    <div class="call-loser"><strong>${result.loser}</strong> förlorar
+      ${result.lives} liv${result.lives === 2 ? " (Mejer kostar dubbelt)" : ""}.</div>
+  `;
 }
 
 function renderLog(entries) {
@@ -245,26 +337,56 @@ function renderLog(entries) {
   }
   box.innerHTML = "";
   // Nyaste först.
+  const actionLabel = {
+    bud: "säger (tittade i smyg)",
+    "slå": "slår – höjer utan att titta",
+    höja: "måste höja",
+    skicka: "skickar vidare",
+    syna: "synar",
+  };
   [...entries].reverse().forEach((e) => {
     const row = document.createElement("div");
-    row.className = "log-row";
+    row.className = "log-row" + (e.action === "syna" ? " is-call" : "");
     const ref = e.referee || {};
     const refClass = ref.ok ? "ok" : "objection";
     const refText = ref.ok ? "Domaren: OK" : "Domaren: invändning";
-    const refDetail = ref.ok ? "" : `<div class="ref-detail">${(ref.objections || []).join(" ")}</div>`;
+    const refDetail = ref.ok
+      ? ref.comment
+        ? `<div class="log-reasoning">${ref.comment}</div>`
+        : ""
+      : `<div class="ref-detail">${(ref.objections || []).join(" ")}</div>`;
     const corrected = e.corrected
       ? `<span class="log-corrected" title="Modellen föreslog ${e.proposed}">korrigerat bud</span>`
       : "";
+    const label = actionLabel[e.action] || textOr(e.action, "svarar");
+    const bidText =
+      e.action === "skicka"
+        ? `vidare med ${textOr(e.bid_name, "?")}`
+        : `säger <strong>${textOr(e.bid_name, "?")}</strong>`;
+    const prev =
+      e.previous_bid_name && e.action !== "bud"
+        ? `<span class="log-prev">(över ${e.previous_bid_name})</span>`
+        : "";
+    const truthTag =
+      e.action === "bud" || e.action === "slå" || e.action === "höja"
+        ? `<span class="log-bid ${e.lie ? "lie" : "truth"}">${e.lie ? "bluff" : "sant"}</span>`
+        : "";
+    const diceTag =
+      e.shown_name !== undefined
+        ? `<span class="log-dice" title="tärningarna">${diceFaces(e.dice)} ${e.shown_name}</span>`
+        : "";
     row.innerHTML = `
       <div class="log-head">
-        <span class="log-player">${e.player_name}</span>
-        <span class="log-dice">🎲 ${e.shown_name}</span>
-        <span class="log-bid ${e.lie ? "lie" : "truth"}">säger ${e.bid_name}</span>
-        ${corrected}
+        <span class="log-player">${textOr(e.player_name, "?")}</span>
+        ${diceTag}
+        <span class="log-action">${label}</span>
+        ${bidText} ${prev}
+        ${truthTag}
         <span class="log-referee ${refClass}">${refText}</span>
       </div>
-      <div class="log-line">“${e.line || ""}”</div>
-      <div class="log-reasoning">${e.reasoning || ""}</div>
+      <div class="log-line">“${textOr(e.line, "")}”</div>
+      ${e.reasoning ? `<div class="log-reasoning">${e.reasoning}</div>` : ""}
+      ${corrected ? `<div class="log-reasoning">${corrected}</div>` : ""}
       ${refDetail}
     `;
     box.appendChild(row);

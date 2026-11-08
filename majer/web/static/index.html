@@ -68,20 +68,29 @@
   <section class="card" id="sessionCard">
     <h2>Fyra agenter spelar mot varandra</h2>
     <p class="hint">
-      Slumpen avgör ordningen och vem som börjar. Bekräfta tärningsslaget med
-      <strong>OK</strong> innan spelaren i tur ger sitt svar. Domaren granskar varje svar.
+      Slumpen avgör ordningen och vem som börjar. Bekräfta varje steg med
+      <strong>OK</strong> – eller kör hela flödet fram till en syn på en gång.
+      Domaren granskar varje svar.
     </p>
     <div class="session-controls">
       <button id="newSessionBtn" class="primary">Ny session</button>
-      <button id="okBtn" hidden>OK – låt spelaren svara</button>
+      <button id="okBtn" hidden>OK – nästa steg</button>
+      <button id="runBtn" hidden>Kör till syn</button>
     </div>
 
     <div id="sessionStatus" class="session-status" hidden>
       <div class="turn" id="turnInfo"></div>
-      <div class="dice-box" id="pendingDice" hidden>
-        <span class="dice-label">Tärningsslaget</span>
-        <span class="dice-value" id="pendingValue">–</span>
-        <span class="dice-detail" id="pendingDetail"></span>
+
+      <div class="dice-panel" id="dicePanel" hidden>
+        <div class="panel-title" id="dicePanelTitle">Tärningsslaget (indata)</div>
+        <div class="dice-faces" id="diceFaces"></div>
+        <div class="dice-readout" id="diceReadout"></div>
+      </div>
+
+      <div class="bid-panel" id="bidPanel" hidden>
+        <div class="panel-title">Aktuellt bud</div>
+        <div class="bid-value" id="bidValue"></div>
+        <div class="bid-by" id="bidBy"></div>
       </div>
     </div>
 

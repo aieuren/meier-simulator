@@ -59,6 +59,44 @@ def _cmd_play(args: argparse.Namespace) -> int:
     return 0
 
 
+def _describe_step(state: dict) -> str:
+    pending = state.get("pending") or {}
+    current = state["current"]["name"]
+    kind = state["step_kind"]
+    if kind == "roll":
+        return (
+            f"{current} slår. Tärningsslaget visar {pending.get('shown_name')} "
+            f"(tärning {pending['dice'][0]} och {pending['dice'][1]})."
+        )
+    if kind == "raise":
+        return (
+            f"{current} måste höja – bägaren har gått ett helt varv. "
+            f"Aktuellt bud: {pending.get('bid_name')}."
+        )
+    return (
+        f"{current} ska svara på budet {pending.get('bid_name')} "
+        f"(sagt av {pending.get('bidder')})."
+    )
+
+
+def _print_entry(entry) -> None:
+    action = entry.action
+    if action == "syna":
+        print(f"  {entry.player_name} synar! {entry.line}")
+    elif action == "skicka":
+        print(f"  {entry.player_name} skickar vidare {rules.name(entry.bid)}: “{entry.line}”")
+    else:
+        truth = "sant" if entry.truth else "bluff"
+        print(
+            f"  {entry.player_name} säger {rules.name(entry.bid)} ({truth}): “{entry.line}”"
+        )
+    verdict = entry.referee
+    if verdict.ok:
+        print(f"  Domaren: OK – {verdict.comment}")
+    else:
+        print(f"  Domaren: INVÄNDNING – {' '.join(verdict.objections)}")
+
+
 def _cmd_session(args: argparse.Namespace) -> int:
     roles = args.roles or list(ROLES)
     players = [MajerPlayerAgent(role=get_role(key)) for key in roles]
@@ -66,42 +104,41 @@ def _cmd_session(args: argparse.Namespace) -> int:
     session = Session.new(players, referee, seed=args.seed)
 
     print("Spelordning: " + " → ".join(players[i].name for i in session.order))
-    print("Tryck Enter (OK) för att bekräfta tärningsslaget och låta spelaren svara.")
+    print("Tryck Enter (OK) för nästa steg. Skriv 'k' för att köra fram till en syn.")
     print("Skriv 'q' för att avsluta.\n")
 
     try:
-        while not session.finished:
-            pending = session.to_dict()["pending"]
-            current = session.current_player.name
-            print(f"Runda {session.round} – {current} i tur.")
-            print(
-                f"  Tärningsslaget visar {pending['shown_name']} "
-                f"(tärning {pending['dice'][0]} och {pending['dice'][1]})."
-            )
-            answer = input("  [Enter = OK, q = avsluta] ").strip().lower()
+        while not session.finished and session.step_kind:
+            state = session.to_dict()
+            print(f"Runda {session.round}. {_describe_step(state)}")
+            answer = input("  [Enter = OK, k = kör till syn, q = avsluta] ").strip().lower()
             if answer == "q":
                 break
-            entry = session.advance()
-            bid_name = rules.name(entry.bid)
-            truth = "sant" if entry.truth else "bluff"
-            print(f"  {entry.player_name} säger {bid_name} ({truth}): “{entry.line}”")
-            verdict = entry.referee
-            if verdict.ok:
-                print(f"  Domaren: OK – {verdict.comment}")
+            if answer == "k":
+                for entry in session.run_to_call():
+                    _print_entry(entry)
             else:
-                print(f"  Domaren: INVÄNDNING – {' '.join(verdict.objections)}")
+                entry = session.advance()
+                if entry is not None:
+                    _print_entry(entry)
             print()
     except (KeyboardInterrupt, EOFError):
         print()
     finally:
         session.stop()
 
+    if session.result:
+        result = session.result
+        print(
+            f"\nSyn! Tärningarna visade {rules.name(result.shown)} mot budet "
+            f"{rules.name(result.bid)}. {result.loser} förlorar {result.lives} liv."
+        )
     print("\nLogg:")
     for e in session.log:
         verdict = "OK" if e.referee.ok else "invändning"
         print(
-            f"  R{e.round}: {e.player_name} slog {rules.name(e.shown)}, sade "
-            f"{rules.name(e.bid)} – domare: {verdict}"
+            f"  R{e.round}: {e.player_name} [{e.action}] {rules.name(e.bid)} "
+            f"– domare: {verdict}"
         )
     return 0
 

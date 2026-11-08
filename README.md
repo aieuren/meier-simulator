@@ -14,9 +14,10 @@ roller kan spela hela spel mot varandra.
 - **Fyra spelarroller** – Ärlig-Adolf, Rackar-Rakel, Kalkylerande-Karin och Trygge-Tor.
 - **Domaragent** – Domare-Doris övervakar att alla följer reglerna och säger OK eller
   kommer med invändningar.
-- **Interaktiv spelsession** – fyra agenter spelar mot varandra. Slumpen avgör
-  ordningen och vem som börjar. Tärningsslaget måste bekräftas (OK) innan spelaren
-  i tur får svara. Varje svar sparas i en logg.
+- **Interaktiv spelsession** – fyra agenter spelar mot varandra i ett fullt flöde
+  fram till en syn. Slumpen avgör ordningen och vem som börjar. Varje steg
+  bekräftas med OK, eller så körs hela flödet fram till synen på en gång. Varje
+  svar sparas i en logg.
 - **Spelmotor** – flera oberoende agenter spelar ett fullt Majer-spel mot varandra.
 - **Kommandoradsgränssnitt** – kör agenten, en session eller ett helt spel.
 - **Regelmotor** – fullständig poängordning, budjämförelse, syn-avgörande och
@@ -85,17 +86,29 @@ python -m majer.cli session
 I webbappen finns sektionen **"Fyra agenter spelar mot varandra"**:
 
 1. Klicka **Ny session**. Slumpen avgör spelordningen och vem som börjar.
-2. Tärningsslaget visas. Klicka **OK – låt spelaren svara** för att bekräfta.
-3. Spelaren i tur ger sitt svar. Domaren granskar svaret och säger OK eller
-   kommer med en invändning.
-4. Nästa spelares tärningsslag läggs fram och väntar på nästa OK.
+2. Ett steg visas i taget. Klicka **OK – nästa steg** för att utföra det, eller
+   **Kör till syn** för att spela hela vägen fram till en syn på en gång.
+3. Flödet följer reglerna:
+   - Den som börjar **slår och tittar i smyg**, sedan säger ett bud.
+   - Nästa spelare **slår** (höjer utan att titta), **synar** eller **skickar
+     vidare**.
+   - Kommer bägaren ett helt varv tillbaka till budgivaren måste denne **höja**.
+     Är budet Mejer slår budgivaren i stället om och börjar en ny runda.
+   - Vid en **syn** lyfts locket. Visar tärningarna lägre än budet förlorar
+     budgivaren ett liv, annars den som synade. Mejer kostar dubbelt.
+4. Domaren granskar varje svar och säger **OK** eller kommer med en invändning.
 
-Varje svar hamnar i loggen: tärningsutfallet, vem som svarade, vad spelaren sade
-och domarens utlåtande.
+Varje steg hamnar i loggen: tärningsutfallet (med tärningssymboler), vem som
+svarade, vad spelaren sade (bud, replik) och domarens utlåtande. Vid en syn visas
+resultatet och vem som förlorade liv. Livsställningen syns i spelordningen.
 
-> **Obs:** Grinden (att tärningsslaget måste bekräftas med OK innan spelaren
-> svarar) är tillfällig. Den finns för att vi ska kunna kontrollera att allt
-> fungerar. Ett framtida läge kan köra hela rundor automatiskt.
+Tärningsslaget visas i en egen panel som **indata** – både vid budet och när en
+spelare ska svara på ett bud, så att du ser vad spelaren hade att utgå från.
+Aktuellt bud visas i en separat panel.
+
+> **Obs:** Grinden (att varje steg måste bekräftas med OK) är till för att vi ska
+> kunna kontrollera att allt fungerar. **Kör till syn** och ett framtida
+> automatläge kör flera steg utan att du behöver trycka.
 
 ## API
 
@@ -107,7 +120,8 @@ och domarens utlåtande.
 | GET | `/api/health` | Status och vald LLM-leverantör |
 | POST | `/api/session/new` | Ny session: slumpad ordning, domare, första slaget |
 | GET | `/api/session` | Hela sessionens tillstånd och logg |
-| POST | `/api/session/advance` | OK på tärningsslaget: spelaren svarar, domaren granskar |
+| POST | `/api/session/advance` | OK på aktuellt steg: utför det |
+| POST | `/api/session/run` | Kör hela flödet fram till en syn |
 | POST | `/api/session/stop` | Avsluta sessionen |
 
 Exempel:
@@ -156,7 +170,7 @@ majer/
   rules.py            Regler: poängordning, jämförelse, syn, slumpat slag
   llm.py              LLM-klient (Anthropic + OpenHands-fallback)
   game.py             Spelmotor för flera oberoende agenter
-  session.py          Interaktiv session: OK-grind, domare, logg
+  session.py          Interaktiv session: fullt flöde, domare, logg
   cli.py              Kommandoradsgränssnitt
   agents/
     base.py           Agent-grundklass och roll

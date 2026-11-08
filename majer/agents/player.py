@@ -180,6 +180,71 @@ class MajerPlayerAgent(Agent):
             corrected=proposed != bid,
         )
 
+    def announce_blind(self, dice: tuple[int, int], *, previous_bid: int) -> Announcement:
+        """Spelaren **slår** utan att titta och måste säga ett strikt högre bud.
+
+        Tärningarna ``dice`` ligger under bägaren men spelaren ser dem inte. De
+        används bara för att kunna avgöra en eventuell syn senare.
+        """
+        if not rules.is_valid_value(previous_bid):
+            raise ValueError(f"{previous_bid} är inte ett giltigt bud")
+        shown = rules.read_dice(*dice)
+        higher = rules.higher_options(previous_bid)
+
+        context = self._blind_announce_context(previous_bid, higher)
+        data = self.respond(context)
+
+        proposed = self._raw_bid(data.get("bid"))
+        bid = self._coerce_blind_bid(data.get("bid"), previous_bid, higher)
+        line = str(data.get("line") or self._default_line(bid, shown)).strip()
+        reasoning = str(data.get("reasoning") or "").strip()
+
+        return Announcement(
+            dice=(dice[0], dice[1]),
+            shown=shown,
+            bid=bid,
+            truth=bid == shown,
+            line=line,
+            reasoning=reasoning,
+            role=self.role.key,
+            proposed=proposed,
+            corrected=proposed != bid,
+        )
+
+    def _blind_announce_context(self, previous_bid: int, higher: list[int]) -> str:
+        return "\n".join(
+            [
+                "SITUATIONEN",
+                f"Du slår bägaren utan att titta på tärningarna. Det förra budet är "
+                f"{rules.name(previous_bid)}.",
+                "Du MÅSTE säga ett strikt högre bud än det förra, vad tärningarna än visar.",
+                f"Giltiga bud: {', '.join(rules.name(v) for v in higher) or 'inga (budet är högst)'}.",
+                "",
+                "UPPGIFT",
+                "Säg ett högre bud. Du får inte titta på tärningarna.",
+                "",
+                "Svara med JSON:",
+                '{"bid": <heltal, ett giltigt Majer-utfall högre än det förra>, '
+                '"line": "<repliken du säger>", '
+                '"reasoning": "<kort motivering>"}',
+            ]
+        )
+
+    def _coerce_blind_bid(self, value: object, previous_bid: int, higher: list[int]) -> int:
+        """Se till att ett blind-bud är giltigt och strikt högre."""
+        bid: int | None = None
+        if isinstance(value, int) and not isinstance(value, bool) and rules.is_valid_value(value):
+            bid = value
+        elif isinstance(value, str):
+            digits = "".join(ch for ch in value if ch.isdigit())
+            if digits and rules.is_valid_value(int(digits)):
+                bid = int(digits)
+
+        if bid is None or not rules.is_higher(bid, previous_bid):
+            # Minsta möjliga höjning om modellen inte gav ett giltigt högre bud.
+            bid = higher[-1] if higher else previous_bid
+        return bid
+
     @staticmethod
     def _raw_bid(value: object) -> int | None:
         """Modellens råa bud som heltal, även om det är ogiltigt."""
