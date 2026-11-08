@@ -216,18 +216,56 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 .bid-by { color: var(--muted); font-size: 0.85rem; }
 
 .log-title { margin: 1.4rem 0 0.6rem; font-size: 0.95rem; color: var(--accent); text-transform: uppercase; letter-spacing: 1px; }
-.log { display: grid; gap: 0.6rem; }
+.log {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 26rem;
+  overflow-y: auto;
+  padding-right: 0.2rem;
+}
 
 .log-row {
   background: var(--panel-2);
   border: 1px solid var(--line);
   border-radius: 10px;
-  padding: 0.7rem 0.9rem;
+  padding: 0.6rem 0.9rem;
 }
 .log-head { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; font-size: 0.9rem; }
 .log-player { font-weight: 700; }
 .log-dice { color: var(--muted); }
-.log-dice .die { font-size: 1.1rem; padding: 0; background: none; }
+.log-dice .die { font-size: 1.4rem; padding: 0; background: none; color: var(--accent); }
+.log-dice strong { color: var(--accent); font-size: 1.05rem; }
+
+/* Tärningsutfall: indata-raden som OK-knappen hör till. */
+.log-row.is-roll {
+  border-left: 4px solid var(--accent);
+  background: rgba(255, 196, 0, 0.06);
+}
+.log-row.is-roll .log-action { color: var(--muted); }
+
+/* Spelarens svar: bara siffra eller åtgärd. */
+.log-row.is-action { border-left: 4px solid var(--line); }
+.log-row.is-action.is-call { border-left-color: var(--bad); background: rgba(239, 107, 107, 0.08); }
+.log-action { color: var(--muted); }
+.log-row.is-action strong { font-size: 1.05rem; }
+.log-prev { color: var(--muted); font-size: 0.85rem; }
+
+/* OK-knappen ligger sist i loggen, vid senaste tärningsutfallet. */
+.pending-ctl {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  background: var(--panel-2);
+  border: 2px dashed var(--accent);
+  border-radius: 10px;
+  padding: 0.7rem 0.9rem;
+  margin-top: 0.3rem;
+}
+.pending-what { color: var(--muted); font-size: 0.9rem; }
+.pending-ctl button { margin-left: auto; }
+.pending-ctl #runBtn { margin-left: 0; }
 .log-bid.truth { color: var(--good); }
 .log-bid.lie { color: var(--bad); }
 .log-referee { margin-left: auto; padding: 0.1rem 0.55rem; border-radius: 999px; font-size: 0.8rem; font-weight: 700; }

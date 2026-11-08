@@ -256,10 +256,6 @@ function renderSession(data) {
   const pending = data.pending || {};
 
   if (finished) {
-    $("okBtn").hidden = true;
-    $("runBtn").hidden = true;
-    $("dicePanel").hidden = true;
-    $("bidPanel").hidden = true;
     $("turnInfo").innerHTML += ` <span class="muted">(avslutad)</span>`;
   } else {
     const cur = data.current || {};
@@ -273,37 +269,35 @@ function renderSession(data) {
       cur.name,
       "?"
     )}</strong> – ${what}`;
-    $("okBtn").hidden = false;
-    $("runBtn").hidden = false;
-
-    // Tärningsslaget – alltid synligt som indata till spelaren i rundan.
-    if (pending.shown_name !== undefined) {
-      $("dicePanel").hidden = false;
-      $("dicePanelTitle").textContent =
-        data.step_kind === "roll"
-          ? "Tärningsslaget (indata till budet)"
-          : "Tärningarna under bägaren (indata till synen)";
-      $("diceFaces").innerHTML = diceFaces(pending.dice);
-      $("diceReadout").innerHTML = `<strong>${pending.shown_name}</strong> <span class="muted">(tärning ${textOr(
-        (pending.dice || [])[0],
-        "?"
-      )} och ${textOr((pending.dice || [])[1], "?")})</span>`;
-    } else {
-      $("dicePanel").hidden = true;
-    }
-
-    // Aktuellt bud (när någon ska svara) – visas separat från tärningarna.
-    if (pending.bid_name !== undefined && data.step_kind !== "roll") {
-      $("bidPanel").hidden = false;
-      $("bidValue").innerHTML = `<strong>${pending.bid_name}</strong>`;
-      $("bidBy").textContent = `sagt av ${textOr(pending.bidder, "?")}`;
-    } else {
-      $("bidPanel").hidden = true;
-    }
   }
 
   renderResult(data.result);
   renderLog(data.log);
+  placeControls(data, pending);
+}
+
+// Flytta OK-knappen till tärningsutfallet i loggen och visa vad som väntar.
+function placeControls(data, pending) {
+  const ctl = $("pendingCtl");
+  const log = $("log");
+  const what = $("pendingWhat");
+
+  if (data.phase === "finished") {
+    ctl.hidden = true;
+    what.textContent = "";
+    return;
+  }
+
+  ctl.hidden = false;
+  if (data.step_kind === "roll") {
+    what.textContent = `${textOr((data.current || {}).name, "?")} ska säga sitt bud`;
+  } else if (data.step_kind === "raise") {
+    what.textContent = `${textOr((data.current || {}).name, "?")} måste höja`;
+  } else {
+    what.textContent = `${textOr((data.current || {}).name, "?")} ska svara på budet`;
+  }
+  log.appendChild(ctl);
+  log.scrollTop = log.scrollHeight;
 }
 
 function renderResult(result) {
@@ -331,66 +325,84 @@ function renderResult(result) {
 
 function renderLog(entries) {
   const box = $("log");
+  const ctl = $("pendingCtl");
+  // Behåll OK-panelen (den ligger inuti loggen) när vi bygger om raderna.
+  [...box.children].forEach((c) => {
+    if (c.id !== "pendingCtl") c.remove();
+  });
+
   if (!entries || entries.length === 0) {
-    box.innerHTML = '<p class="hint">Ingen logg än.</p>';
+    box.insertAdjacentHTML("afterbegin", '<p class="hint">Ingen logg än.</p>');
     return;
   }
-  box.innerHTML = "";
-  // Nyaste först.
-  const actionLabel = {
-    bud: "säger (tittade i smyg)",
-    "slå": "slår – höjer utan att titta",
-    höja: "måste höja",
-    skicka: "skickar vidare",
-    syna: "synar",
-  };
-  [...entries].reverse().forEach((e) => {
+
+  // Bygg alla rader i ordning (äldst först) och sätt dem ovanför OK-panelen.
+  const frag = document.createDocumentFragment();
+  entries.forEach((e) => {
     const row = document.createElement("div");
-    row.className = "log-row" + (e.action === "syna" ? " is-call" : "");
+
+    // Tärningsutfall: en egen rad med tärningarna som indata.
+    if (e.kind === "roll") {
+      row.className = "log-row is-roll";
+      const who = e.player_name ? `<span class="log-player">${e.player_name}</span> slår` : "Tärningsslag";
+      row.innerHTML = `
+        <div class="log-head">
+          <span class="log-action">${who}</span>
+          <span class="log-dice">${diceFaces(e.dice)} <strong>${textOr(e.shown_name, "?")}</strong></span>
+        </div>
+      `;
+      frag.appendChild(row);
+      return;
+    }
+
+    // Spelarens svar: bara siffran eller åtgärden – ingen replik.
+    row.className = "log-row is-action" + (e.action === "syna" ? " is-call" : "");
     const ref = e.referee || {};
     const refClass = ref.ok ? "ok" : "objection";
     const refText = ref.ok ? "Domaren: OK" : "Domaren: invändning";
     const refDetail = ref.ok
-      ? ref.comment
-        ? `<div class="log-reasoning">${ref.comment}</div>`
-        : ""
+      ? ""
       : `<div class="ref-detail">${(ref.objections || []).join(" ")}</div>`;
     const corrected = e.corrected
       ? `<span class="log-corrected" title="Modellen föreslog ${e.proposed}">korrigerat bud</span>`
       : "";
-    const label = actionLabel[e.action] || textOr(e.action, "svarar");
-    const bidText =
-      e.action === "skicka"
-        ? `vidare med ${textOr(e.bid_name, "?")}`
-        : `säger <strong>${textOr(e.bid_name, "?")}</strong>`;
+
+    let main;
+    if (e.action === "syna") {
+      main = `<span class="log-action">Synar</span>`;
+    } else if (e.action === "skicka") {
+      main = `<span class="log-action">Skickar vidare</span> <strong>${textOr(e.bid_name, "?")}</strong>`;
+    } else if (e.action === "slå") {
+      main = `<span class="log-action">Slår (utan att titta)</span> <strong>${textOr(e.bid_name, "?")}</strong>`;
+    } else if (e.action === "höja") {
+      main = `<span class="log-action">Höjer</span> <strong>${textOr(e.bid_name, "?")}</strong>`;
+    } else {
+      main = `<span class="log-action">Säger</span> <strong>${textOr(e.bid_name, "?")}</strong>`;
+    }
     const prev =
-      e.previous_bid_name && e.action !== "bud"
+      e.previous_bid_name && (e.action === "slå" || e.action === "höja")
         ? `<span class="log-prev">(över ${e.previous_bid_name})</span>`
         : "";
     const truthTag =
       e.action === "bud" || e.action === "slå" || e.action === "höja"
         ? `<span class="log-bid ${e.lie ? "lie" : "truth"}">${e.lie ? "bluff" : "sant"}</span>`
         : "";
-    const diceTag =
-      e.shown_name !== undefined
-        ? `<span class="log-dice" title="tärningarna">${diceFaces(e.dice)} ${e.shown_name}</span>`
-        : "";
+    const who = e.player_name ? `<span class="log-player">${e.player_name}</span>` : "";
+
     row.innerHTML = `
       <div class="log-head">
-        <span class="log-player">${textOr(e.player_name, "?")}</span>
-        ${diceTag}
-        <span class="log-action">${label}</span>
-        ${bidText} ${prev}
+        ${who}
+        ${main} ${prev}
         ${truthTag}
         <span class="log-referee ${refClass}">${refText}</span>
       </div>
-      <div class="log-line">“${textOr(e.line, "")}”</div>
-      ${e.reasoning ? `<div class="log-reasoning">${e.reasoning}</div>` : ""}
-      ${corrected ? `<div class="log-reasoning">${corrected}</div>` : ""}
+      ${corrected}
       ${refDetail}
     `;
-    box.appendChild(row);
+    frag.appendChild(row);
   });
+  box.insertBefore(frag, ctl && ctl.parentNode === box ? ctl : null);
+  box.scrollTop = box.scrollHeight;
 }
 
 boot();

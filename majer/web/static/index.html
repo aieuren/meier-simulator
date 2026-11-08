@@ -74,29 +74,21 @@
     </p>
     <div class="session-controls">
       <button id="newSessionBtn" class="primary">Ny session</button>
-      <button id="okBtn" hidden>OK – nästa steg</button>
-      <button id="runBtn" hidden>Kör till syn</button>
     </div>
 
     <div id="sessionStatus" class="session-status" hidden>
       <div class="turn" id="turnInfo"></div>
-
-      <div class="dice-panel" id="dicePanel" hidden>
-        <div class="panel-title" id="dicePanelTitle">Tärningsslaget (indata)</div>
-        <div class="dice-faces" id="diceFaces"></div>
-        <div class="dice-readout" id="diceReadout"></div>
-      </div>
-
-      <div class="bid-panel" id="bidPanel" hidden>
-        <div class="panel-title">Aktuellt bud</div>
-        <div class="bid-value" id="bidValue"></div>
-        <div class="bid-by" id="bidBy"></div>
-      </div>
     </div>
 
     <h3 class="log-title">Logg</h3>
     <div id="log" class="log">
       <p class="hint">Ingen logg än. Starta en session.</p>
+    </div>
+
+    <div id="pendingCtl" class="pending-ctl" hidden>
+      <span class="pending-what" id="pendingWhat"></span>
+      <button id="okBtn">OK – nästa steg</button>
+      <button id="runBtn">Kör till syn</button>
     </div>
   </section>
 </main>

@@ -33,19 +33,28 @@ from .agents.referee import RefereeAgent, Verdict
 
 @dataclass
 class LogEntry:
-    """En rad i loggen: ett svar från en spelare och domarens utlåtande."""
+    """En rad i loggen.
 
+    Två slag av rader:
+
+    - ``kind == "roll"``: ett tärningsutfall (indata). Ingen spelare har svarat
+      än. Detta är steget där OK-knappen hör hemma.
+    - ``kind == "action"``: en spelares svar – ett bud, en blind höjning, en
+      syn eller ett skickande.
+    """
+
+    kind: str  # "roll" eller "action"
     round: int
-    player: str  # rollens nyckel
-    player_name: str
     dice: tuple[int, int]
     shown: int
-    bid: int
-    truth: bool
-    line: str
-    reasoning: str
-    referee: Verdict
-    action: str = "bud"  # "bud", "slå", "skicka", "syna", "höja"
+    action: str = "bud"  # "bud", "slå", "skicka", "syna", "höja" (endast action)
+    player: str | None = None  # rollens nyckel (endast action)
+    player_name: str | None = None
+    bid: int | None = None  # sagt bud (endast action)
+    truth: bool = False
+    line: str = ""
+    reasoning: str = ""
+    referee: Verdict | None = None
     previous_bid: int | None = None
     proposed: int | None = None  # rå bud från modellen
     corrected: bool = False  # korrigerades budet?
@@ -53,19 +62,20 @@ class LogEntry:
 
     def to_dict(self) -> dict:
         return {
+            "kind": self.kind,
             "round": self.round,
-            "player": self.player,
-            "player_name": self.player_name,
             "dice": list(self.dice),
             "shown": self.shown,
             "shown_name": rules.name(self.shown),
+            "action": self.action,
+            "player": self.player,
+            "player_name": self.player_name,
             "bid": self.bid,
-            "bid_name": rules.name(self.bid),
+            "bid_name": rules.name(self.bid) if self.bid is not None else None,
             "truth": self.truth,
-            "lie": not self.truth,
+            "lie": (not self.truth) if self.bid is not None else None,
             "line": self.line,
             "reasoning": self.reasoning,
-            "action": self.action,
             "previous_bid": self.previous_bid,
             "previous_bid_name": rules.name(self.previous_bid)
             if self.previous_bid is not None
@@ -73,7 +83,7 @@ class LogEntry:
             "proposed": self.proposed,
             "corrected": self.corrected,
             "blind": self.blind,
-            "referee": self.referee.to_dict(),
+            "referee": self.referee.to_dict() if self.referee else None,
         }
 
 
@@ -158,12 +168,26 @@ class Session:
         return self.players[idx].name
 
     def _prepare_round(self, *, starter: int) -> None:
-        """Starta en ny runda: den som börjar slår och tittar i smyg."""
+        """Starta en ny runda: den som börjar slår och tittar i smyg.
+
+        Tärningsutfallet loggas direkt som en egen rad (indata). Budet läggs
+        sedan på som en egen rad när spelaren har svarat.
+        """
         self.pending_dice = rules.roll(self.rng)
         self.step_kind = "roll"
         self.actor = starter
         self.bidder = starter
         self.pending_bid = None
+        shown = rules.read_dice(*self.pending_dice)
+        self.log.append(
+            LogEntry(
+                kind="roll",
+                round=self.round,
+                dice=self.pending_dice,
+                shown=shown,
+                player_name=self.players[starter].name,
+            )
+        )
 
     def _prepare_action(self, *, actor: int) -> None:
         """Nästa spelare ska agera mot ett bud (slå/syna/skicka)."""
@@ -276,13 +300,13 @@ class Session:
 
         # Skicka vidare: samma bud går vidare.
         verdict = self.referee.review_decision("skicka", bid=bid, line=decision.line)
-        dice = self.pending_dice or (1, 1)
         entry = LogEntry(
+            kind="action",
             round=self.round,
+            dice=self.pending_dice or (1, 1),
+            shown=rules.read_dice(*(self.pending_dice or (1, 1))),
             player=player.role.key,
             player_name=player.name,
-            dice=dice,
-            shown=rules.read_dice(*dice),
             bid=bid,
             truth=False,
             line=decision.line,
@@ -346,14 +370,15 @@ class Session:
 
         verdict = self.referee.review_decision("syna", bid=bid, line="")
         entry = LogEntry(
+            kind="action",
             round=self.round,
-            player=caller_agent.role.key,
-            player_name=caller_agent.name,
             dice=dice,
             shown=shown,
+            player=caller_agent.role.key,
+            player_name=caller_agent.name,
             bid=bid,
             truth=False,
-            line=f"Syn! {result.describe()}",
+            line="",
             reasoning="",
             referee=verdict,
             action="syna",
@@ -393,6 +418,7 @@ class Session:
         blind: bool,
     ) -> LogEntry:
         entry = LogEntry(
+            kind="action",
             round=self.round,
             player=player.role.key,
             player_name=player.name,

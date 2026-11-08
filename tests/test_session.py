@@ -273,6 +273,46 @@ def test_raise_step_pending_has_bid_and_dice():
     assert isinstance(pending["dice"], list) and len(pending["dice"]) == 2
 
 
+def test_log_starts_with_roll_entry_before_any_bid():
+    players = [make_player(k) for k in ("a", "b")]
+    session = Session.new(players, make_referee(), seed=4)
+    log = session.to_dict()["log"]
+    assert len(log) == 1
+    assert log[0]["kind"] == "roll"
+    assert log[0]["shown_name"]
+    # Ännu inget bud i loggen.
+    assert all(row["kind"] == "roll" for row in log)
+
+
+def test_new_round_logs_a_fresh_roll_entry():
+    players = [
+        make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b")
+    ]
+    session = Session.new(players, make_referee(), seed=3)
+    session.advance()  # bud
+    session.advance()  # syn -> ny runda, nytt tärningsutfall
+    kinds = [row["kind"] for row in session.to_dict()["log"]]
+    # roll, action(bud), action(syna), roll(ny runda)
+    assert kinds == ["roll", "action", "action", "roll"]
+
+
+def test_run_to_call_log_is_ordered_downward():
+    players = [
+        make_player(
+            k, ScriptedLLM(bids=[11, 22, 33, 44], actions=["skicka", "skicka", "syna"])
+        )
+        for k in ("a", "b", "c", "d")
+    ]
+    session = Session.new(players, make_referee(), seed=11)
+    session.run_to_call()
+    log = session.to_dict()["log"]
+    rounds = [row["round"] for row in log]
+    # Rundnumret får aldrig gå bakåt: loggen byggs nedåt.
+    assert rounds == sorted(rounds)
+    # Varje action följer efter ett tärningsutfall.
+    assert log[0]["kind"] == "roll"
+
+
 def test_log_entries_always_have_frontend_fields():
     players = [
         make_player(
@@ -282,20 +322,23 @@ def test_log_entries_always_have_frontend_fields():
     ]
     session = Session.new(players, make_referee(), seed=11)
     session.run_to_call()
-    for row in session.to_dict()["log"]:
-        for key in (
-            "player_name",
-            "action",
-            "bid",
-            "bid_name",
-            "shown",
-            "shown_name",
-            "dice",
-            "line",
-            "truth",
-            "lie",
-            "referee",
-        ):
+    log = session.to_dict()["log"]
+    # Loggen byggs nedåt: tärningsutfallet kommer före budet på det.
+    kinds = [row["kind"] for row in log]
+    assert kinds[0] == "roll"
+    assert kinds[1] == "action"
+    for row in log:
+        for key in ("kind", "round", "dice", "shown", "shown_name"):
             assert key in row, f"loggposten saknar {key}"
         assert len(row["dice"]) == 2
-        assert "ok" in row["referee"]
+
+    for row in log:
+        if row["kind"] == "roll":
+            # Tärningsutfallet är ren indata: inget bud, ingen domare.
+            assert row["player_name"]
+            assert row["bid"] is None
+            assert row["referee"] is None
+        else:
+            assert row["player_name"]
+            assert row["action"]
+            assert row["referee"] is not None and "ok" in row["referee"]

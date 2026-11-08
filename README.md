@@ -98,13 +98,14 @@ I webbappen finns sektionen **"Fyra agenter spelar mot varandra"**:
      budgivaren ett liv, annars den som synade. Mejer kostar dubbelt.
 4. Domaren granskar varje svar och säger **OK** eller kommer med en invändning.
 
-Varje steg hamnar i loggen: tärningsutfallet (med tärningssymboler), vem som
-svarade, vad spelaren sade (bud, replik) och domarens utlåtande. Vid en syn visas
+Loggen byggs **nedåt**: äldst överst, nyast nederst. Varje runda börjar med en
+rad för tärningsutfallet (indata) med tärningssymboler. Därefter följer en rad
+per svar – bara siffran som sägs, eller **Synar** / **Skickar vidare** / **Slår**
+/ **Höjer** – och domarens utlåtande. Inga repliker visas. Vid en syn visas
 resultatet och vem som förlorade liv. Livsställningen syns i spelordningen.
 
-Tärningsslaget visas i en egen panel som **indata** – både vid budet och när en
-spelare ska svara på ett bud, så att du ser vad spelaren hade att utgå från.
-Aktuellt bud visas i en separat panel.
+**OK-knappen** ligger i loggen, direkt under det senaste tärningsutfallet. Den
+bekräftar steget så att nästa rad läggs till.
 
 > **Obs:** Grinden (att varje steg måste bekräftas med OK) är till för att vi ska
 > kunna kontrollera att allt fungerar. **Kör till syn** och ett framtida

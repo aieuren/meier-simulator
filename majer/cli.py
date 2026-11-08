@@ -82,17 +82,18 @@ def _describe_step(state: dict) -> str:
 def _print_entry(entry) -> None:
     action = entry.action
     if action == "syna":
-        print(f"  {entry.player_name} synar! {entry.line}")
+        print(f"  {entry.player_name}: Synar")
     elif action == "skicka":
-        print(f"  {entry.player_name} skickar vidare {rules.name(entry.bid)}: “{entry.line}”")
+        print(f"  {entry.player_name}: Skickar vidare {rules.name(entry.bid)}")
+    elif action == "slå":
+        print(f"  {entry.player_name}: Slår (utan att titta) {rules.name(entry.bid)}")
+    elif action == "höja":
+        print(f"  {entry.player_name}: Höjer {rules.name(entry.bid)}")
     else:
-        truth = "sant" if entry.truth else "bluff"
-        print(
-            f"  {entry.player_name} säger {rules.name(entry.bid)} ({truth}): “{entry.line}”"
-        )
+        print(f"  {entry.player_name}: Säger {rules.name(entry.bid)}")
     verdict = entry.referee
     if verdict.ok:
-        print(f"  Domaren: OK – {verdict.comment}")
+        print("  Domaren: OK")
     else:
         print(f"  Domaren: INVÄNDNING – {' '.join(verdict.objections)}")
 

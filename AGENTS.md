@@ -19,8 +19,11 @@ lower bid). Multiple agents with distinct roles can also play full games.
   sees another's secret dice.
 - `majer/session.py` – interactive session: full flow to a call (roll → blind
   raise / pass → forced raise → call), random player order, referee review, and
-  the log of every answer. `advance()` does one gated step; `run_to_call()` runs
-  the whole flow to the next call.
+  the log. The log is built downward: each round starts with a `kind="roll"`
+  entry (the dice, pure input), then one `kind="action"` entry per answer (bid,
+  blind raise, pass, or call). `advance()` does one gated step; `run_to_call()`
+  runs the whole flow to the next call. The web UI moves the OK button into the
+  log so it sits under the latest dice roll.
 - `majer/agents/base.py` – `Agent`/`Role` base classes.
 - `majer/agents/player.py` – `MajerPlayerAgent` and the role registry.
 - `majer/agents/referee.py` – `RefereeAgent` (Domare-Doris). Judges each answer.
