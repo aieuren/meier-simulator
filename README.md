@@ -1,0 +1,136 @@
+# Majer – LLM-baserade AI-spelare
+
+En webapplikation och ett Python-bibliotek med **oberoende, LLM-baserade
+AI-agenter** som spelar tärningsspelet **Majer** (Mejer/Mia/Mire/Kuriki/Kunito).
+
+Fokus för första versionen: en agent som simulerar en spelare. Givet utfallet av
+ett tärningsslag med två tärningar bestämmer agenten hur spelaren svarar – den
+säger sanningen, ett högre eller ett lägre resultat. Fler agenter med olika
+roller kan spela hela spel mot varandra.
+
+## Vad som finns
+
+- **Webbapp** – skriv in tärningsutfallet (två tärningar) och se spelarens svar.
+- **Fyra roller** – Ärlig-Adolf, Rackar-Rakel, Kalkylerande-Karin och Trygge-Tor.
+- **Spelmotor** – flera oberoende agenter spelar ett fullt Majer-spel mot varandra.
+- **Kommandoradsgränssnitt** – kör agenten eller ett helt spel från terminalen.
+- **Regelmotor** – fullständig poängordning, budjämförelse och syn-avgörande.
+
+## Regler (sammanfattning)
+
+- Två tärningar läses som ett tal med den högsta tärningen först: 2 och 5 blir 52.
+- 21 kallas **Mejer** och är högst. Sedan faller ordningen ner till 31 (lägst).
+- Spelaren skakar, tittar i smyg och säger ett resultat: sant, högre eller lägre.
+- Nästa spelare kan **Slå** (säga ett högre bud), **Syna** (lyfta locket) eller
+  **Skicka vidare** (samma bud).
+- Vid syn: visar tärningarna lägre än budet förlorar budgivaren ett liv. Visar de
+  samma eller högre förlorar den som synade ett liv.
+- **Mejer kostar dubbelt** – om budet är Mejer, eller om tärningarna visar Mejer
+  när någon synar, förlorar man två liv.
+- När man mist tre liv är man ute. Sist kvar vinner.
+- Kommer bägaren ett helt varv tillbaka till budgivaren måste denne höja. Är
+  budet Mejer får spelaren i stället slå om och börja en ny runda.
+
+Poängordning (högst först):
+21, 11, 22, 33, 44, 55, 66, 65, 64, 63, 62, 61, 54, 53, 52, 51, 43, 42, 41, 32, 31.
+
+## Kom igång
+
+```bash
+pip install -r requirements.txt
+
+# Starta webbappen på port 12000
+python -m uvicorn majer.web.app:app --host 0.0.0.0 --port 12000
+```
+
+Öppna sedan `http://localhost:12000`.
+
+### Kommandoradsgränssnitt
+
+```bash
+# Givet tärningsslaget 2 och 5: hur svarar spelaren?
+python -m majer.cli announce 2 5 --role rackar
+
+# Om spelaren slår efter ett tidigare bud (måste höja)
+python -m majer.cli announce 2 5 --role kalkyl --previous-bid 43
+
+# Spelaren möter en motståndares bud
+python -m majer.cli decide 43 --role trygg
+
+# Spela ett helt spel med flera oberoende agenter
+python -m majer.cli play rackar kalkyl trygg
+```
+
+### Roller
+
+| Nyckel | Namn | Stil |
+|---|---|---|
+| `arling` | Ärlig-Adolf | Spelar rakt och ärligt |
+| `rackar` | Rackar-Rakel | Bluffar högt, tar risker |
+| `kalkyl` | Kalkylerande-Karin | Matematisk, väger risk mot vinst |
+| `trygg` | Trygge-Tor | Feg och defensiv |
+
+## API
+
+| Metod | Väg | Beskrivning |
+|---|---|---|
+| GET | `/api/roles` | Roller och poängordning |
+| POST | `/api/announce` | Givet tärningsutfall: spelarens svar |
+| POST | `/api/decide` | Givet ett bud: Slå, Syna eller Skicka vidare |
+| GET | `/api/health` | Status och vald LLM-leverantör |
+
+Exempel:
+
+```bash
+curl -X POST http://localhost:12000/api/announce \
+  -H "Content-Type: application/json" \
+  -d '{"die1": 2, "die2": 5, "role": "rackar"}'
+```
+
+## LLM-konfiguration
+
+Agenterna föredrar ditt **Anthropic-konto (Claude)**. Sätt nyckeln och kör:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+export MAJER_MODEL=claude-sonnet-4-5   # valfritt
+python -m uvicorn majer.web.app:app --port 12000
+```
+
+Saknas `ANTHROPIC_API_KEY` faller klienten tillbaka på en OpenAI-liknande proxy
+(OpenHands agent-server), som används i Agent Canvas-miljön. Se `majer/llm.py`.
+
+Miljövariabler:
+
+| Variabel | Betydelse |
+|---|---|
+| `ANTHROPIC_API_KEY` | Claude-nyckel (föredras) |
+| `ANTHROPIC_BASE_URL` | Egen Anthropic-bas-URL (valfritt) |
+| `MAJER_MODEL` | Modellnamn |
+| `MAJER_BASE_URL` | Bas-URL för OpenAI-liknande proxy |
+
+## Tester
+
+```bash
+python -m pytest tests/ -q
+```
+
+Testerna täcker regelmotorn (poängordning, budjämförelse, syn-avgörande, Mejer
+dubbelt) och agentens logik med en fejkad LLM – inga riktiga modellanrop behövs.
+
+## Projektstruktur
+
+```
+majer/
+  rules.py            Regler: poängordning, jämförelse, syn-avgörande
+  llm.py              LLM-klient (Anthropic + OpenHands-fallback)
+  game.py             Spelmotor för flera oberoende agenter
+  cli.py              Kommandoradsgränssnitt
+  agents/
+    base.py           Agent-grundklass och roll
+    player.py         Majer-spelaragenten och rollerna
+  web/
+    app.py            FastAPI-app
+    static/           Frontend (HTML/CSS/JS)
+tests/                Enhetstester
+```

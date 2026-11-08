@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Majer – AI-spelaren</title>
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+<header>
+  <h1>Majer <span>– AI-spelaren</span></h1>
+  <p class="tagline">Skriv in tärningsutfallet och se hur den LLM-baserade spelaren svarar.</p>
+</header>
+
+<main>
+  <section class="card">
+    <h2>1. Tärningsslaget</h2>
+    <p class="hint">Två tärningar, 1–6. Läses med den högsta först (2 och 5 blir 52).</p>
+    <div class="dice-row">
+      <label>Die 1
+        <select id="die1"></select>
+      </label>
+      <label>Die 2
+        <select id="die2"></select>
+      </label>
+      <div class="dice-preview" id="dicePreview">–</div>
+    </div>
+
+    <h2>2. Agentens roll</h2>
+    <div id="roleList" class="roles"></div>
+
+    <details class="advanced">
+      <summary>Avancerat: slår efter ett tidigare bud</summary>
+      <p class="hint">Om spelaren slår efter någon annan måste budet vara strikt högre.</p>
+      <label class="inline">Tidigare bud
+        <select id="previousBid">
+          <option value="">– inget –</option>
+        </select>
+      </label>
+    </details>
+
+    <button id="announceBtn" class="primary">Se spelarens svar</button>
+  </section>
+
+  <section class="card" id="resultCard" hidden>
+    <h2>Spelarens svar</h2>
+    <div class="verdict" id="verdict"></div>
+    <div class="say" id="say"></div>
+    <dl class="facts" id="facts"></dl>
+    <div class="reasoning" id="reasoning"></div>
+  </section>
+
+  <section class="card">
+    <h2>Bonus: spelaren möter ett bud</h2>
+    <p class="hint">Vad gör spelaren när en motståndare säger ett bud?</p>
+    <label class="inline">Motståndarens bud
+      <select id="oppBid"></select>
+    </label>
+    <button id="decideBtn">Slå, syna eller skicka vidare?</button>
+    <div class="verdict" id="decision" hidden></div>
+  </section>
+
+  <section class="card">
+    <h2>Poängordning</h2>
+    <div id="ranking" class="ranking"></div>
+  </section>
+</main>
+
+<footer>
+  <p>Majer spelas med två tärningar. 21 (Mejer) är högst, 31 lägst. Mejer kostar dubbelt.</p>
+</footer>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
