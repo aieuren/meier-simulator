@@ -64,6 +64,32 @@
     <h2>Poängordning</h2>
     <div id="ranking" class="ranking"></div>
   </section>
+
+  <section class="card" id="sessionCard">
+    <h2>Fyra agenter spelar mot varandra</h2>
+    <p class="hint">
+      Slumpen avgör ordningen och vem som börjar. Bekräfta tärningsslaget med
+      <strong>OK</strong> innan spelaren i tur ger sitt svar. Domaren granskar varje svar.
+    </p>
+    <div class="session-controls">
+      <button id="newSessionBtn" class="primary">Ny session</button>
+      <button id="okBtn" hidden>OK – låt spelaren svara</button>
+    </div>
+
+    <div id="sessionStatus" class="session-status" hidden>
+      <div class="turn" id="turnInfo"></div>
+      <div class="dice-box" id="pendingDice" hidden>
+        <span class="dice-label">Tärningsslaget</span>
+        <span class="dice-value" id="pendingValue">–</span>
+        <span class="dice-detail" id="pendingDetail"></span>
+      </div>
+    </div>
+
+    <h3 class="log-title">Logg</h3>
+    <div id="log" class="log">
+      <p class="hint">Ingen logg än. Starta en session.</p>
+    </div>
+  </section>
 </main>
 
 <footer>

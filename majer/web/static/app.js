@@ -57,6 +57,8 @@ async function boot() {
   $("die2").onchange = updatePreview;
   $("announceBtn").onclick = doAnnounce;
   $("decideBtn").onclick = doDecide;
+  $("newSessionBtn").onclick = newSession;
+  $("okBtn").onclick = advanceSession;
 }
 
 function readDice(a, b) {
@@ -167,6 +169,106 @@ async function doDecide() {
   } finally {
     btn.disabled = false;
   }
+}
+
+// -- Interaktiv spelsession -------------------------------------------------
+
+async function newSession() {
+  const btn = $("newSessionBtn");
+  btn.disabled = true;
+  btn.textContent = "Startar…";
+  try {
+    const res = await fetch("/api/session/new", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ roles: ["arling", "rackar", "kalkyl", "trygg"] }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Fel");
+    renderSession(data);
+  } catch (err) {
+    $("log").innerHTML = `<p class="error">Fel: ${err.message}</p>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Ny session";
+  }
+}
+
+async function advanceSession() {
+  const btn = $("okBtn");
+  btn.disabled = true;
+  btn.textContent = "Spelaren svarar…";
+  try {
+    const res = await fetch("/api/session/advance", { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Fel");
+    renderSession(data);
+  } catch (err) {
+    $("log").insertAdjacentHTML("afterbegin", `<p class="error">Fel: ${err.message}</p>`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "OK – låt spelaren svara";
+  }
+}
+
+function renderSession(data) {
+  $("sessionStatus").hidden = false;
+
+  // Ordning
+  const orderNames = data.order.map((p) => p.name).join(" → ");
+  $("turnInfo").innerHTML = `<span class="muted">Spelordning:</span> ${orderNames}`;
+
+  const finished = data.phase === "finished";
+  if (finished) {
+    $("okBtn").hidden = true;
+    $("pendingDice").hidden = true;
+    $("turnInfo").innerHTML += ` <span class="muted">(avslutad)</span>`;
+  } else {
+    const cur = data.current;
+    $("turnInfo").innerHTML += `<br><span class="muted">I tur:</span> <strong>${cur.name}</strong>`;
+    if (data.pending) {
+      $("okBtn").hidden = false;
+      $("pendingDice").hidden = false;
+      $("pendingValue").textContent = data.pending.shown_name;
+      $("pendingDetail").textContent = `(tärning ${data.pending.dice[0]} och ${data.pending.dice[1]})`;
+    }
+  }
+
+  renderLog(data.log);
+}
+
+function renderLog(entries) {
+  const box = $("log");
+  if (!entries || entries.length === 0) {
+    box.innerHTML = '<p class="hint">Ingen logg än.</p>';
+    return;
+  }
+  box.innerHTML = "";
+  // Nyaste först.
+  [...entries].reverse().forEach((e) => {
+    const row = document.createElement("div");
+    row.className = "log-row";
+    const ref = e.referee || {};
+    const refClass = ref.ok ? "ok" : "objection";
+    const refText = ref.ok ? "Domaren: OK" : "Domaren: invändning";
+    const refDetail = ref.ok ? "" : `<div class="ref-detail">${(ref.objections || []).join(" ")}</div>`;
+    const corrected = e.corrected
+      ? `<span class="log-corrected" title="Modellen föreslog ${e.proposed}">korrigerat bud</span>`
+      : "";
+    row.innerHTML = `
+      <div class="log-head">
+        <span class="log-player">${e.player_name}</span>
+        <span class="log-dice">🎲 ${e.shown_name}</span>
+        <span class="log-bid ${e.lie ? "lie" : "truth"}">säger ${e.bid_name}</span>
+        ${corrected}
+        <span class="log-referee ${refClass}">${refText}</span>
+      </div>
+      <div class="log-line">“${e.line || ""}”</div>
+      <div class="log-reasoning">${e.reasoning || ""}</div>
+      ${refDetail}
+    `;
+    box.appendChild(row);
+  });
 }
 
 boot();

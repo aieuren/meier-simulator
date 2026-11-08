@@ -11,10 +11,16 @@ roller kan spela hela spel mot varandra.
 ## Vad som finns
 
 - **Webbapp** – skriv in tärningsutfallet (två tärningar) och se spelarens svar.
-- **Fyra roller** – Ärlig-Adolf, Rackar-Rakel, Kalkylerande-Karin och Trygge-Tor.
+- **Fyra spelarroller** – Ärlig-Adolf, Rackar-Rakel, Kalkylerande-Karin och Trygge-Tor.
+- **Domaragent** – Domare-Doris övervakar att alla följer reglerna och säger OK eller
+  kommer med invändningar.
+- **Interaktiv spelsession** – fyra agenter spelar mot varandra. Slumpen avgör
+  ordningen och vem som börjar. Tärningsslaget måste bekräftas (OK) innan spelaren
+  i tur får svara. Varje svar sparas i en logg.
 - **Spelmotor** – flera oberoende agenter spelar ett fullt Majer-spel mot varandra.
-- **Kommandoradsgränssnitt** – kör agenten eller ett helt spel från terminalen.
-- **Regelmotor** – fullständig poängordning, budjämförelse och syn-avgörande.
+- **Kommandoradsgränssnitt** – kör agenten, en session eller ett helt spel.
+- **Regelmotor** – fullständig poängordning, budjämförelse, syn-avgörande och
+  slumpade tärningsslag.
 
 ## Regler (sammanfattning)
 
@@ -59,6 +65,9 @@ python -m majer.cli decide 43 --role trygg
 
 # Spela ett helt spel med flera oberoende agenter
 python -m majer.cli play rackar kalkyl trygg
+
+# Interaktiv session med OK-grind, domare och logg
+python -m majer.cli session
 ```
 
 ### Roller
@@ -69,6 +78,24 @@ python -m majer.cli play rackar kalkyl trygg
 | `rackar` | Rackar-Rakel | Bluffar högt, tar risker |
 | `kalkyl` | Kalkylerande-Karin | Matematisk, väger risk mot vinst |
 | `trygg` | Trygge-Tor | Feg och defensiv |
+| `domare` | Domare-Doris | Domare (inte en spelare) |
+
+## Interaktiv spelsession
+
+I webbappen finns sektionen **"Fyra agenter spelar mot varandra"**:
+
+1. Klicka **Ny session**. Slumpen avgör spelordningen och vem som börjar.
+2. Tärningsslaget visas. Klicka **OK – låt spelaren svara** för att bekräfta.
+3. Spelaren i tur ger sitt svar. Domaren granskar svaret och säger OK eller
+   kommer med en invändning.
+4. Nästa spelares tärningsslag läggs fram och väntar på nästa OK.
+
+Varje svar hamnar i loggen: tärningsutfallet, vem som svarade, vad spelaren sade
+och domarens utlåtande.
+
+> **Obs:** Grinden (att tärningsslaget måste bekräftas med OK innan spelaren
+> svarar) är tillfällig. Den finns för att vi ska kunna kontrollera att allt
+> fungerar. Ett framtida läge kan köra hela rundor automatiskt.
 
 ## API
 
@@ -78,6 +105,10 @@ python -m majer.cli play rackar kalkyl trygg
 | POST | `/api/announce` | Givet tärningsutfall: spelarens svar |
 | POST | `/api/decide` | Givet ett bud: Slå, Syna eller Skicka vidare |
 | GET | `/api/health` | Status och vald LLM-leverantör |
+| POST | `/api/session/new` | Ny session: slumpad ordning, domare, första slaget |
+| GET | `/api/session` | Hela sessionens tillstånd och logg |
+| POST | `/api/session/advance` | OK på tärningsslaget: spelaren svarar, domaren granskar |
+| POST | `/api/session/stop` | Avsluta sessionen |
 
 Exempel:
 
@@ -122,13 +153,15 @@ dubbelt) och agentens logik med en fejkad LLM – inga riktiga modellanrop behö
 
 ```
 majer/
-  rules.py            Regler: poängordning, jämförelse, syn-avgörande
+  rules.py            Regler: poängordning, jämförelse, syn, slumpat slag
   llm.py              LLM-klient (Anthropic + OpenHands-fallback)
   game.py             Spelmotor för flera oberoende agenter
+  session.py          Interaktiv session: OK-grind, domare, logg
   cli.py              Kommandoradsgränssnitt
   agents/
     base.py           Agent-grundklass och roll
     player.py         Majer-spelaragenten och rollerna
+    referee.py        Domaragenten (Domare-Doris)
   web/
     app.py            FastAPI-app
     static/           Frontend (HTML/CSS/JS)

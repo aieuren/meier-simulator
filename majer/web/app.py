@@ -18,13 +18,18 @@ from .. import rules
 from ..agents.player import ROLES, get_role
 from ..llm import LLMClient, LLMError
 from ..agents.player import MajerPlayerAgent
+from ..agents.referee import RefereeAgent
+from ..session import Session
 
 STATIC_DIR = Path(__file__).parent / "static"
 
-app = FastAPI(title="Majer-agenten", version="1.0.0")
+app = FastAPI(title="Majer-agenten", version="1.1.0")
 
 # En agent per roll, skapade på begäran så att LLM-klienten återanvänds.
 _agents: dict[str, MajerPlayerAgent] = {}
+
+# Den aktiva interaktiva sessionen (en åt gången).
+_session: Session | None = None
 
 
 def _get_agent(role_key: str) -> MajerPlayerAgent:
@@ -119,6 +124,66 @@ def decide(req: DecideRequest) -> dict:
 def health() -> dict:
     cfg = LLMClient().config
     return {"status": "ok", "provider": cfg.provider, "model": cfg.model}
+
+
+# -- Interaktiv spelsession ------------------------------------------------
+
+
+class NewSessionRequest(BaseModel):
+    roles: list[str] = Field(
+        default_factory=lambda: list(ROLES),
+        description="Roller som spelar. Standard: alla fyra.",
+    )
+    seed: int | None = Field(None, description="Slumpfrö för reproducerbarhet")
+
+
+def _require_session() -> Session:
+    if _session is None:
+        raise HTTPException(status_code=404, detail="Ingen aktiv session. Skapa en först.")
+    return _session
+
+
+@app.post("/api/session/new")
+def session_new(req: NewSessionRequest) -> dict:
+    """Skapa en ny session: slumpad ordning, domare och första tärningsslag."""
+    global _session
+    roles = req.roles or list(ROLES)
+    for key in roles:
+        if key not in ROLES:
+            raise HTTPException(status_code=400, detail=f"Okänd roll: {key}")
+    if len(roles) < 2:
+        raise HTTPException(status_code=400, detail="Minst två roller krävs")
+
+    players = [_get_agent(key) for key in roles]
+    referee = RefereeAgent(llm=LLMClient())
+    _session = Session.new(players, referee, seed=req.seed)
+    return _session.to_dict()
+
+
+@app.get("/api/session")
+def session_state() -> dict:
+    """Hämta hela sessionens tillstånd, inklusive loggen."""
+    return _require_session().to_dict()
+
+
+@app.post("/api/session/advance")
+def session_advance() -> dict:
+    """Bekräfta (OK) tärningsslaget och låt spelaren i tur svara."""
+    session = _require_session()
+    try:
+        session.advance()
+    except LLMError as exc:
+        raise HTTPException(status_code=502, detail=f"LLM-fel: {exc}") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return session.to_dict()
+
+
+@app.post("/api/session/stop")
+def session_stop() -> dict:
+    session = _require_session()
+    session.stop()
+    return session.to_dict()
 
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

@@ -169,5 +169,50 @@ button:disabled { opacity: 0.55; cursor: wait; }
 
 footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1rem 1.2rem 2rem; }
 
+/* -- Interaktiv spelsession -- */
+.session-controls { display: flex; gap: 0.7rem; flex-wrap: wrap; }
+.session-controls .primary { width: auto; margin-top: 0; }
+#okBtn { background: var(--good); color: #06231a; border-color: var(--good); font-weight: 700; }
+#okBtn:hover { background: #5fd79c; }
+
+.session-status { margin-top: 1rem; }
+.turn { margin-bottom: 0.7rem; }
+.muted { color: var(--muted); }
+
+.dice-box {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  background: var(--panel-2);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 0.7rem 1rem;
+}
+.dice-label { color: var(--muted); font-size: 0.85rem; }
+.dice-value { font-size: 1.8rem; font-weight: 700; color: var(--accent); }
+.dice-detail { color: var(--muted); font-size: 0.85rem; }
+
+.log-title { margin: 1.4rem 0 0.6rem; font-size: 0.95rem; color: var(--accent); text-transform: uppercase; letter-spacing: 1px; }
+.log { display: grid; gap: 0.6rem; }
+
+.log-row {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.7rem 0.9rem;
+}
+.log-head { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; font-size: 0.9rem; }
+.log-player { font-weight: 700; }
+.log-dice { color: var(--muted); }
+.log-bid.truth { color: var(--good); }
+.log-bid.lie { color: var(--bad); }
+.log-referee { margin-left: auto; padding: 0.1rem 0.55rem; border-radius: 999px; font-size: 0.8rem; font-weight: 700; }
+.log-referee.ok { background: rgba(76, 195, 138, 0.18); color: var(--good); }
+.log-referee.objection { background: rgba(239, 107, 107, 0.18); color: var(--bad); }
+.log-line { font-style: italic; margin: 0.4rem 0 0.2rem; }
+.log-reasoning { color: var(--muted); font-size: 0.85rem; }
+.ref-detail { color: var(--bad); font-size: 0.85rem; margin-top: 0.3rem; }
+.log-corrected { font-size: 0.78rem; color: var(--accent); border: 1px dashed var(--accent); border-radius: 6px; padding: 0 0.4rem; }
+
 .error { color: var(--bad); }
 .loading { color: var(--muted); font-style: italic; }

@@ -4,6 +4,7 @@ Exempel:
     python -m majer.cli announce 2 5 --role rackar
     python -m majer.cli decide 43 --role trygg
     python -m majer.cli play rackar kalkyl trygg
+    python -m majer.cli session
 """
 
 from __future__ import annotations
@@ -13,7 +14,9 @@ import sys
 
 from . import rules
 from .agents.player import ROLES, get_role, MajerPlayerAgent
+from .agents.referee import RefereeAgent
 from .game import Game
+from .session import Session
 
 
 def _cmd_announce(args: argparse.Namespace) -> int:
@@ -56,6 +59,53 @@ def _cmd_play(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_session(args: argparse.Namespace) -> int:
+    roles = args.roles or list(ROLES)
+    players = [MajerPlayerAgent(role=get_role(key)) for key in roles]
+    referee = RefereeAgent()
+    session = Session.new(players, referee, seed=args.seed)
+
+    print("Spelordning: " + " → ".join(players[i].name for i in session.order))
+    print("Tryck Enter (OK) för att bekräfta tärningsslaget och låta spelaren svara.")
+    print("Skriv 'q' för att avsluta.\n")
+
+    try:
+        while not session.finished:
+            pending = session.to_dict()["pending"]
+            current = session.current_player.name
+            print(f"Runda {session.round} – {current} i tur.")
+            print(
+                f"  Tärningsslaget visar {pending['shown_name']} "
+                f"(tärning {pending['dice'][0]} och {pending['dice'][1]})."
+            )
+            answer = input("  [Enter = OK, q = avsluta] ").strip().lower()
+            if answer == "q":
+                break
+            entry = session.advance()
+            bid_name = rules.name(entry.bid)
+            truth = "sant" if entry.truth else "bluff"
+            print(f"  {entry.player_name} säger {bid_name} ({truth}): “{entry.line}”")
+            verdict = entry.referee
+            if verdict.ok:
+                print(f"  Domaren: OK – {verdict.comment}")
+            else:
+                print(f"  Domaren: INVÄNDNING – {' '.join(verdict.objections)}")
+            print()
+    except (KeyboardInterrupt, EOFError):
+        print()
+    finally:
+        session.stop()
+
+    print("\nLogg:")
+    for e in session.log:
+        verdict = "OK" if e.referee.ok else "invändning"
+        print(
+            f"  R{e.round}: {e.player_name} slog {rules.name(e.shown)}, sade "
+            f"{rules.name(e.bid)} – domare: {verdict}"
+        )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="majer", description="Majer med LLM-agenter")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -77,6 +127,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_play.add_argument("roles", nargs="+", choices=list(ROLES))
     p_play.add_argument("--seed", type=int, default=None)
     p_play.set_defaults(func=_cmd_play)
+
+    p_sess = sub.add_parser(
+        "session", help="Interaktiv session: OK-grind på tärningsslaget, domare och logg"
+    )
+    p_sess.add_argument("roles", nargs="*", choices=list(ROLES))
+    p_sess.add_argument("--seed", type=int, default=None)
+    p_sess.set_defaults(func=_cmd_session)
 
     return parser
 

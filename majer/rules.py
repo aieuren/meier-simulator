@@ -7,6 +7,7 @@ Två tärningar läses som ett tvåsiffrigt tal med den högsta tärningen förs
 
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass
 
 # Rangordning, högst först. Index 0 är Mejer (21), index 20 är lägst (31).
@@ -38,6 +39,12 @@ RANKING: tuple[int, ...] = (
 _RANK_INDEX: dict[int, int] = {value: i for i, value in enumerate(RANKING)}
 
 MEJER = 21
+
+
+def roll(rng: random.Random | None = None) -> tuple[int, int]:
+    """Slå två tärningar slumpmässigt. Returnerar (tärning 1, tärning 2)."""
+    r = rng or random
+    return r.randint(1, 6), r.randint(1, 6)
 
 
 def read_dice(a: int, b: int) -> int:

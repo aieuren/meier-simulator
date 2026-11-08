@@ -77,11 +77,13 @@ class Announcement:
 
     dice: tuple[int, int]
     shown: int  # vad tärningarna faktiskt visar
-    bid: int  # vad spelaren säger
+    bid: int  # vad spelaren säger (efter regelkorrigering)
     truth: bool  # säger spelaren sanningen?
     line: str  # repliken spelaren säger
     reasoning: str  # varför
     role: str
+    proposed: int | None = None  # rå värdet modellen föreslog (kan vara ogiltigt)
+    corrected: bool = False  # behövde budet korrigeras för att följa reglerna?
 
     def to_dict(self) -> dict:
         return {
@@ -95,6 +97,8 @@ class Announcement:
             "line": self.line,
             "reasoning": self.reasoning,
             "role": self.role,
+            "proposed": self.proposed,
+            "corrected": self.corrected,
         }
 
 
@@ -159,6 +163,7 @@ class MajerPlayerAgent(Agent):
         context = self._announce_context(dice, shown, previous_bid, higher)
         data = self.respond(context)
 
+        proposed = self._raw_bid(data.get("bid"))
         bid = self._coerce_bid(data.get("bid"), shown, previous_bid, higher)
         line = str(data.get("line") or self._default_line(bid, shown)).strip()
         reasoning = str(data.get("reasoning") or "").strip()
@@ -171,7 +176,22 @@ class MajerPlayerAgent(Agent):
             line=line,
             reasoning=reasoning,
             role=self.role.key,
+            proposed=proposed,
+            corrected=proposed != bid,
         )
+
+    @staticmethod
+    def _raw_bid(value: object) -> int | None:
+        """Modellens råa bud som heltal, även om det är ogiltigt."""
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, int):
+            return value
+        if isinstance(value, str):
+            digits = "".join(ch for ch in value if ch.isdigit())
+            if digits:
+                return int(digits)
+        return None
 
     def _announce_context(
         self,

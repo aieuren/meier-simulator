@@ -17,11 +17,26 @@ lower bid). Multiple agents with distinct roles can also play full games.
   `ANTHROPIC_API_KEY`; falls back to the OpenHands agent-server proxy.
 - `majer/game.py` – multi-agent game engine. Keeps each agent isolated; no agent
   sees another's secret dice.
+- `majer/session.py` – interactive session: random player order, OK-gate on the
+  dice roll, referee review, and the log of every answer.
 - `majer/agents/base.py` – `Agent`/`Role` base classes.
 - `majer/agents/player.py` – `MajerPlayerAgent` and the role registry.
+- `majer/agents/referee.py` – `RefereeAgent` (Domare-Doris). Judges each answer.
 - `majer/web/app.py` + `majer/web/static/` – web UI and JSON API.
-- `majer/cli.py` – command line entry points.
+- `majer/cli.py` – command line entry points (`announce`, `decide`, `play`,
+  `session`).
 - `tests/` – unit tests. No real LLM calls; `FakeLLM`/`ScriptedAgent` are used.
+
+## Referee design (important)
+
+The referee judges the answer the player *actually gave*: the model's raw
+proposal (`Announcement.proposed`), not the value after rule coercion. This is
+what makes objections meaningful — otherwise the player agent's own coercion
+would make every answer trivially legal.
+
+The formal rule checks are authoritative. The LLM layer may add a comment or
+sharpen a verdict, but it can never approve a formal rule breach (see
+`RefereeAgent._llm_second_opinion`). Keep that property when editing.
 
 ## Commands
 
