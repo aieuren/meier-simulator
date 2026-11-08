@@ -43,14 +43,27 @@ Poängordning (högst först):
 
 ## Kom igång
 
-```bash
-pip install -r requirements.txt
+Enklast: kör startskriptet. Det installerar beroenden om de saknas och startar
+webbappen.
 
-# Starta webbappen på port 12000
-python -m uvicorn majer.web.app:app --host 0.0.0.0 --port 12000
+```bash
+./run.sh                # startar i förgrunden (Ctrl-C stoppar)
+./run.sh --background   # startar i bakgrunden, loggar till /tmp/majer_web.log
+./run.sh --check        # kontrollerar bara att beroenden och port är redo
 ```
 
 Öppna sedan `http://localhost:12000`.
+
+Manuellt, om du hellre vill:
+
+```bash
+pip install -r requirements.txt
+python -m uvicorn majer.web.app:app --host 0.0.0.0 --port 12000
+```
+
+> **Efter en omstart av miljön:** globalt installerade paket försvinner, och
+> `python -m uvicorn` svarar då "No module named uvicorn". Kör `./run.sh` igen –
+> skriptet upptäcker att paketen saknas och installerar om dem automatiskt.
 
 ### Kommandoradsgränssnitt
 

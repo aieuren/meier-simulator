@@ -68,8 +68,15 @@ the model thinks longer). `LLMClient.last_usage` reports the real count.
 ## Environment restarts wipe global packages
 
 Dependencies are installed globally (no venv). After a container restart,
-`python3 -m uvicorn` fails with "No module named uvicorn". Reinstall with
-`pip install -r requirements.txt`, then restart the server:
+`python3 -m uvicorn` fails with "No module named uvicorn", and pip's scripts
+land in `~/.local/bin` (not always on PATH).
+
+Fix: run `./run.sh`. It checks imports, installs from `requirements.txt` if
+anything is missing, then starts the server. Use `./run.sh --background` to
+detach (log at `/tmp/majer_web.log`) and `./run.sh --check` to test only.
+It also refuses to double-start if `/api/health` already answers on the port.
+
+Manual fallback: `pip install -r requirements.txt`, then
 `python3 -m uvicorn majer.web.app:app --host 0.0.0.0 --port 12000`.
 
 ## Referee design (important)
