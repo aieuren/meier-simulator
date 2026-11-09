@@ -176,7 +176,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 #okBtn:hover { background: #5fd79c; }
 
 .session-status { margin-top: 1rem; }
-.turn { margin-bottom: 0.7rem; }
+.session-note { margin-bottom: 0.7rem; font-size: 0.9rem; color: #6b7280; }
 .muted { color: var(--muted); }
 
 .dice-panel {

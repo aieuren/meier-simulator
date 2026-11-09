@@ -19,13 +19,15 @@ lower bid). Multiple agents with distinct roles can also play full games.
   Self-heals the agent-server LLM profile (see gotcha below).
 - `majer/game.py` – multi-agent game engine. Keeps each agent isolated; no agent
   sees another's secret dice.
-- `majer/session.py` – interactive session: full flow to a call (roll → blind
-  raise / pass → forced raise → call), random player order, referee review, and
-  the log. The log is built downward: each round starts with a `kind="roll"`
+- `majer/session.py` – interactive session: full flow to a call (roll → raise
+  (new shake) / pass → forced raise → call), random player order, referee review,
+  and the log. The log is built downward: each shake starts with a `kind="roll"`
   entry (the dice, pure input), then one `kind="action"` entry per answer (bid,
-  blind raise, pass, or call). `advance()` does one gated step; `run_to_call()`
-  runs the whole flow to the next call. The web UI moves the OK button into the
-  log so it sits under the latest dice roll.
+  raise, pass, or call). `advance()` does one gated step; `run_to_call()` runs the
+  whole flow to the next call. The web UI moves the OK button into the log so it
+  sits under the latest dice roll. When a raise is not strictly higher than the
+  previous bid, `_enforce_bid` lets the referee stop it and the smallest legal
+  raise takes over.
 - `majer/agents/base.py` – `Agent`/`Role` base classes.
 - `majer/agents/player.py` – `MajerPlayerAgent` and the role registry.
 - `majer/agents/referee.py` – `RefereeAgent` (Domare-Doris). Judges each answer.
@@ -40,6 +42,17 @@ Higher is *not* the larger number. The order is `21` (Mejer, highest), then
 `11, 22, 33, 44, 55, 66`, then `65, 64, …` down to `31` (lowest). So `33` is
 higher than `44`, and `55` is higher than `66`. Always compare with
 `rules.is_higher` / `rules.compare` — never with `<`/`>` on the raw value.
+
+## Slå = a fresh shake, not a peek (gotcha)
+
+The three choices are: **slå** (shake the cup again and name a higher bid
+without looking), **syna** (lift the lid) and **skicka** (pass the same bid).
+So slå is *not* a peek at the old dice — the player shakes a brand new roll, and
+the bid must be strictly higher than the previous one whatever the dice show.
+This is why the engine logs a fresh `kind="roll"` entry before every slå, and
+why `announce_blind` (not `announce`) is used for it. A slå that is not strictly
+higher is stopped by the referee: `Session._enforce_bid` lets the smallest legal
+raise take over and records the objection.
 
 ## Agent Canvas: LLM profiles vanish on container restart (gotcha)
 

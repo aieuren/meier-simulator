@@ -9,8 +9,8 @@ Flödet följer reglerna:
 
 1. Första spelaren slår och **tittar i smyg** – säger sanningen, ett högre eller
    ett lägre resultat.
-2. Nästa spelare väljer **Slå** (höjer utan att titta), **Syna** (lyfter locket)
-   eller **Skicka vidare** (samma bud).
+2. Nästa spelare väljer **Slå** (skakar bägaren på nytt och säger ett högre bud),
+   **Syna** (lyfter locket) eller **Skicka vidare** (samma bud).
 3. När bägaren kommer ett helt varv tillbaka till budgivaren måste denne höja.
    Är budet Mejer får spelaren i stället slå om och börja en ny runda.
 4. Vid en syn lyfts locket: visar tärningarna lägre än budet förlorar budgivaren
@@ -24,7 +24,7 @@ att allt fungerar. ``run_to_call`` kör hela flödet fram till en syn på en gå
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from . import rules
 from .agents.player import MajerPlayerAgent
@@ -58,7 +58,7 @@ class LogEntry:
     previous_bid: int | None = None
     proposed: int | None = None  # rå bud från modellen
     corrected: bool = False  # korrigerades budet?
-    blind: bool = False  # slog spelaren utan att titta?
+    blind: bool = False  # slog spelaren bägaren på nytt (fick inte lyfta locket)?
 
     def to_dict(self) -> dict:
         return {
@@ -178,16 +178,23 @@ class Session:
         self.actor = starter
         self.bidder = starter
         self.pending_bid = None
-        shown = rules.read_dice(*self.pending_dice)
-        self.log.append(
-            LogEntry(
-                kind="roll",
-                round=self.round,
-                dice=self.pending_dice,
-                shown=shown,
-                player_name=self.players[starter].name,
-            )
+        self._log_roll(
+            player=self.players[starter].name,
+            dice=self.pending_dice,
+            shown=rules.read_dice(*self.pending_dice),
         )
+
+    def _log_roll(self, *, player: str, dice: tuple[int, int], shown: int) -> LogEntry:
+        """Logga ett tärningsutfall som en egen rad (indata till spelaren)."""
+        entry = LogEntry(
+            kind="roll",
+            round=self.round,
+            dice=dice,
+            shown=shown,
+            player_name=player,
+        )
+        self.log.append(entry)
+        return entry
 
     def _prepare_action(self, *, actor: int) -> None:
         """Nästa spelare ska agera mot ett bud (slå/syna/skicka)."""
@@ -200,8 +207,24 @@ class Session:
         self.step_kind = "raise"
 
     def _next_actor(self, idx: int) -> int:
+        """Nästa spelare i sittordning som fortfarande är med."""
         pos = self.order.index(idx)
-        return self.order[(pos + 1) % len(self.order)]
+        n = len(self.order)
+        for step in range(1, n + 1):
+            cand = self.order[(pos + step) % n]
+            if self.lives[cand] > 0:
+                return cand
+        return idx
+
+    def _previous_active(self, idx: int) -> int:
+        """Närmaste spelare före ``idx`` i sittordning som fortfarande är med."""
+        pos = self.order.index(idx)
+        n = len(self.order)
+        for step in range(1, n + 1):
+            cand = self.order[(pos - step) % n]
+            if self.lives[cand] > 0:
+                return cand
+        return idx
 
     def _active_indices(self) -> list[int]:
         return [i for i in self.order if self.lives[i] > 0]
@@ -278,9 +301,10 @@ class Session:
         if decision.action == "syna":
             return self._resolve_call(player)
 
-        if decision.action == "slå" and decision.bid is not None:
-            dice = self.pending_dice
-            assert dice is not None
+        if decision.action == "slå":
+            # Spelaren skakar bägaren på nytt: ett färskt slag, och locket lyfts inte.
+            dice = rules.roll(self.rng)
+            self._log_roll(player=player.name, dice=dice, shown=rules.read_dice(*dice))
             ann = player.announce_blind(dice, previous_bid=bid)
             verdict = self.referee.review_announcement(
                 dice,
@@ -290,9 +314,11 @@ class Session:
                 proposed=ann.proposed,
                 corrected=ann.corrected,
             )
+            ann, verdict = self._enforce_bid(ann, verdict, previous_bid=bid)
             entry = self._log_entry(
                 player, dice, ann, verdict, action="slå", previous_bid=bid, blind=True
             )
+            self.pending_dice = dice
             self.pending_bid = ann.bid
             self.bidder = self.actor
             self._after_bid(actor=self.actor)
@@ -334,12 +360,38 @@ class Session:
             proposed=ann.proposed,
             corrected=ann.corrected,
         )
+        ann, verdict = self._enforce_bid(ann, verdict, previous_bid=bid)
         entry = self._log_entry(
             player, dice, ann, verdict, action="höja", previous_bid=bid, blind=False
         )
         self.pending_bid = ann.bid
         self._after_bid(actor=self.bidder)
         return entry
+
+    def _enforce_bid(self, ann, verdict: Verdict, *, previous_bid: int):
+        """Domaren stoppar ett olagligt bud innan det får stå kvar.
+
+        Ett bud som inte är strikt högre än det förra får aldrig stå. Minsta
+        lagliga höjning tar över och invändningen sparas i domarens utlåtande.
+        """
+        if verdict.ok:
+            return ann, verdict
+        higher = rules.higher_options(previous_bid)
+        if not higher:
+            # Ingen höjning finns (budet är Mejer) – kan inte korrigeras här.
+            return ann, verdict
+        corrected_bid = higher[-1]
+        verdict = Verdict(
+            ok=True,
+            objections=[],
+            comment=(
+                "Domaren stoppade budet: "
+                + " ".join(verdict.objections)
+                + f" Budet räknas som {rules.name(corrected_bid)}."
+            ),
+            source="regler",
+        )
+        return replace(ann, bid=corrected_bid, truth=False, corrected=True), verdict
 
     def _after_bid(self, *, actor: int) -> None:
         """Efter ett bud: gå vidare till nästa spelare – eller hela varvet runt."""
@@ -366,7 +418,7 @@ class Session:
 
         result = rules.resolve_call(bid, shown)
         loser_idx = caller_idx if result.caller_loses else bidder_idx
-        self.lives[loser_idx] -= result.lives
+        self.lives[loser_idx] = max(0, self.lives[loser_idx] - result.lives)
 
         verdict = self.referee.review_decision("syna", bid=bid, line="")
         entry = LogEntry(
@@ -400,9 +452,10 @@ class Session:
             self._finish()
             return entry
 
-        # Nästa runda: föregående spelare (budgivaren) börjar. Slår om.
+        # Nästa runda: bägaren går till föregående spelare (före den som förlorade
+        # livet), som slår och börjar en ny runda.
         self.round += 1
-        self._prepare_round(starter=bidder_idx)
+        self._prepare_round(starter=self._previous_active(loser_idx))
         return entry
 
     # -- Hjälpare för loggposter -------------------------------------------

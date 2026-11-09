@@ -6,7 +6,8 @@ svarar. Spelaren har tittat i smyg på tärningarna och ska säga ett resultat t
 nästa spelare – sanningen, ett högre eller ett lägre.
 
 Agenten kan också fatta beslut när den möter ett bud från en annan spelare:
-**Slå**, **Syna** eller **Skicka vidare**.
+**Slå** (skaka bägaren på nytt och säga ett högre bud), **Syna** eller
+**Skicka vidare**.
 """
 
 from __future__ import annotations
@@ -154,8 +155,10 @@ class MajerPlayerAgent(Agent):
     def announce(self, dice: tuple[int, int], *, previous_bid: int | None = None) -> Announcement:
         """Bestäm spelarens bud givet utfallet av ett tärningsslag.
 
-        ``previous_bid`` är det senaste budet i rundan om spelaren slår efter en
-        annan spelare. Då måste budet vara strikt högre.
+        ``previous_bid`` är det senaste budet i rundan om spelaren höjer efter
+        ett helt varv och alltså redan har tittat på tärningarna. Då måste budet
+        vara strikt högre. Att **slå** mot ett bud går i stället via
+        :meth:`announce_blind`, för då får spelaren inte titta på tärningarna.
         """
         shown = rules.read_dice(*dice)
         higher = rules.higher_options(previous_bid) if previous_bid is not None else []
@@ -181,10 +184,12 @@ class MajerPlayerAgent(Agent):
         )
 
     def announce_blind(self, dice: tuple[int, int], *, previous_bid: int) -> Announcement:
-        """Spelaren **slår** utan att titta och måste säga ett strikt högre bud.
+        """Spelaren **slår** och måste säga ett strikt högre bud.
 
-        Tärningarna ``dice`` ligger under bägaren men spelaren ser dem inte. De
-        används bara för att kunna avgöra en eventuell syn senare.
+        Spelaren skakar bägaren själv och får inte lyfta på locket – bägaren är
+        stängd och budet måste vara strikt högre oavsett vad tärningarna visar.
+        Tärningarna ``dice`` är det nya slaget; de används bara för att kunna
+        avgöra en eventuell syn senare.
         """
         if not rules.is_valid_value(previous_bid):
             raise ValueError(f"{previous_bid} är inte ett giltigt bud")
@@ -215,13 +220,13 @@ class MajerPlayerAgent(Agent):
         return "\n".join(
             [
                 "SITUATIONEN",
-                f"Du slår bägaren utan att titta på tärningarna. Det förra budet är "
-                f"{rules.name(previous_bid)}.",
+                f"Du slår bägaren och måste säga ett strikt högre bud än {rules.name(previous_bid)}.",
+                "Du skakar bägaren själv och lyfter inte på locket – du ser inte tärningarna.",
                 "Du MÅSTE säga ett strikt högre bud än det förra, vad tärningarna än visar.",
                 f"Giltiga bud: {', '.join(rules.name(v) for v in higher) or 'inga (budet är högst)'}.",
                 "",
                 "UPPGIFT",
-                "Säg ett högre bud. Du får inte titta på tärningarna.",
+                "Säg ett högre bud. Du får inte lyfta på locket.",
                 "",
                 "Svara med JSON:",
                 '{"bid": <heltal, ett giltigt Majer-utfall högre än det förra>, '
@@ -231,7 +236,11 @@ class MajerPlayerAgent(Agent):
         )
 
     def _coerce_blind_bid(self, value: object, previous_bid: int, higher: list[int]) -> int:
-        """Se till att ett blind-bud är giltigt och strikt högre."""
+        """Se till att ett slag-bud är giltigt och strikt högre."""
+        if not higher:
+            raise ValueError(
+                f"Kan inte slå: {rules.name(previous_bid)} är högst, det finns inget högre bud"
+            )
         bid: int | None = None
         if isinstance(value, int) and not isinstance(value, bool) and rules.is_valid_value(value):
             bid = value
@@ -242,7 +251,7 @@ class MajerPlayerAgent(Agent):
 
         if bid is None or not rules.is_higher(bid, previous_bid):
             # Minsta möjliga höjning om modellen inte gav ett giltigt högre bud.
-            bid = higher[-1] if higher else previous_bid
+            bid = higher[-1]
         return bid
 
     @staticmethod

@@ -33,7 +33,7 @@ class ScriptedLLM:
         if "domare" in system.lower():
             return '{"ok": true, "comment": "Godkänt."}'
 
-        # Blind höjning (utan att titta) eller vanligt bud.
+        # Slag (bägaren skakas på nytt) eller vanligt bud.
         if "MÅSTE säga" in user or "utan att titta" in user:
             bid = self._next_bid(52)
             return '{"bid": %s, "line": "Jag höjer.", "reasoning": "test"}' % bid
@@ -141,6 +141,115 @@ def test_full_loop_forces_bidder_to_raise():
     assert entry.previous_bid == 44
     assert rules.is_higher(33, 44)
     assert session.to_dict()["step_kind"] == "action"
+
+
+def test_slag_logs_fresh_roll_before_action():
+    # Att slå är att skaka bägaren på nytt: ett färskt slag loggas före budet.
+    players = [
+        make_player(k, ScriptedLLM(bids=[44], actions=["slå"])) for k in ("a", "b")
+    ]
+    session = Session.new(players, make_referee(), seed=3)
+    session.advance()  # bud 44
+    entry = session.advance()  # nästa spelare slår
+    kinds = [row["kind"] for row in session.to_dict()["log"]]
+    assert kinds == ["roll", "action", "roll", "action"]
+    assert entry.action == "slå"
+    assert entry.blind is True
+
+
+def test_referee_stops_illegal_slag_and_corrects_bid():
+    # ScriptedLLM föreslår 66 när den slår, men 66 är lägre än budet 44.
+    # Domaren ska stoppa budet och minsta lagliga höjning tar över.
+    players = [
+        make_player(k, ScriptedLLM(bids=[44], actions=["slå"])) for k in ("a", "b")
+    ]
+    session = Session.new(players, make_referee(), seed=3)
+    session.advance()  # bud 44
+    entry = session.advance()  # slår med ett för lågt bud
+
+    assert entry.action == "slå"
+    assert entry.bid == 33  # minsta lagliga höjning över 44
+    assert entry.previous_bid == 44
+    assert rules.is_higher(entry.bid, entry.previous_bid)
+    assert entry.corrected is True
+    assert entry.referee.ok is True
+    assert "stoppade" in entry.referee.comment.lower()
+    # Budet som står i sessionen är det korrigerade.
+    assert session.to_dict()["pending"]["bid"] == 33
+
+
+def test_bid_never_decreases_when_slagging():
+    players = [
+        make_player(k, ScriptedLLM(bids=[44], actions=["slå"])) for k in ("a", "b")
+    ]
+    session = Session.new(players, make_referee(), seed=3)
+    session.advance()  # bud 44
+    for _ in range(6):
+        state = session.to_dict()
+        if state["phase"] == "finished" or state.get("result"):
+            break
+        entry = session.advance()
+        if entry is not None and entry.action == "slå":
+            assert entry.previous_bid is not None
+            assert rules.is_higher(entry.bid, entry.previous_bid)
+
+
+def test_forced_raise_is_stopped_if_not_higher():
+    # Budgivaren måste höja men föreslår 43, som är lägre än 44.
+    players = [
+        make_player(k, ScriptedLLM(bids=[44, 43], actions=["skicka"]))
+        for k in ("a", "b")
+    ]
+    session = Session.new(players, make_referee(), seed=3)
+    session.advance()  # bud 44
+    session.advance()  # skicka -> tvingad höjning
+    entry = session.advance()  # höjningen stoppas och korrigeras
+    assert entry.action == "höja"
+    assert rules.is_higher(entry.bid, entry.previous_bid)
+    assert entry.corrected is True
+    assert entry.referee.ok is True
+
+
+def test_out_player_is_skipped_in_turn_order():
+    players = [make_player(k) for k in ("a", "b", "c")]
+    session = Session.new(players, make_referee(), seed=1)
+    session.order = [0, 1, 2]
+    session.lives = [3, 0, 3]  # spelare 1 är ute
+    assert session._next_actor(0) == 2
+    assert session._previous_active(0) == 2
+    assert session._previous_active(2) == 0
+
+
+def test_new_round_starts_with_previous_active_before_loser():
+    players = [
+        make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b", "c")
+    ]
+    session = Session.new(players, make_referee(), seed=5)
+    session.order = [0, 1, 2]
+    session.advance()  # a bjuder 66
+    session.advance()  # b synar -> någon tappar ett liv
+
+    result = session.result
+    assert result is not None
+    loser_idx = next(i for i, p in enumerate(players) if p.name == result.loser)
+    expected = session._previous_active(loser_idx)
+    # Nästa runda börjar hos spelaren före den som förlorade livet.
+    assert session.actor == expected
+    last = session.to_dict()["log"][-1]
+    assert last["kind"] == "roll"
+    assert last["player_name"] == players[expected].name
+
+
+def test_lives_never_go_negative_on_mejer_call():
+    # Mejer kostar två liv. Med bara ett liv kvar får livet aldrig bli negativt.
+    players = [
+        make_player(k, ScriptedLLM(bids=[21], actions=["syna"])) for k in ("a", "b")
+    ]
+    session = Session.new(players, make_referee(), seed=3, lives=1)
+    session.advance()  # bud Mejer
+    session.advance()  # syn -> två livs kostnad, men bara ett finns
+    assert all(lives >= 0 for lives in session.lives)
+    assert session.to_dict()["phase"] == "finished"
 
 
 def test_call_resolves_lives_and_result():

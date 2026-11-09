@@ -103,7 +103,7 @@ I webbappen finns sektionen **"Fyra agenter spelar mot varandra"**:
    **Kör till syn** för att spela hela vägen fram till en syn på en gång.
 3. Flödet följer reglerna:
    - Den som börjar **slår och tittar i smyg**, sedan säger ett bud.
-   - Nästa spelare **slår** (höjer utan att titta), **synar** eller **skickar
+   - Nästa spelare **slår** (skakar bägaren på nytt och säger ett högre bud), **synar** eller **skickar
      vidare**.
    - Kommer bägaren ett helt varv tillbaka till budgivaren måste denne **höja**.
      Är budet Mejer slår budgivaren i stället om och börjar en ny runda.

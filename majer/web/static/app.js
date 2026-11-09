@@ -246,30 +246,10 @@ function textOr(value, fallback) {
 function renderSession(data) {
   $("sessionStatus").hidden = false;
 
-  // Spelordning med liv.
-  const orderNames = (data.order || [])
-    .map((p) => `${textOr(p.name, "?")} <span class="muted">(${textOr(p.lives, "?")} liv)</span>`)
-    .join(" → ");
-  $("turnInfo").innerHTML = `<span class="muted">Spelordning:</span> ${orderNames}`;
-
   const finished = data.phase === "finished";
   const pending = data.pending || {};
 
-  if (finished) {
-    $("turnInfo").innerHTML += ` <span class="muted">(avslutad)</span>`;
-  } else {
-    const cur = data.current || {};
-    const what =
-      data.step_kind === "roll"
-        ? "slår och ska säga sitt bud"
-        : data.step_kind === "raise"
-        ? "måste höja – bägaren har gått ett helt varv"
-        : "ska svara på budet";
-    $("turnInfo").innerHTML += `<br><span class="muted">I tur:</span> <strong>${textOr(
-      cur.name,
-      "?"
-    )}</strong> – ${what}`;
-  }
+  $("sessionNote").textContent = finished ? "Sessionen är avslutad." : "";
 
   renderResult(data.result);
   renderLog(data.log);
@@ -373,7 +353,7 @@ function renderLog(entries) {
     } else if (e.action === "skicka") {
       main = `<span class="log-action">Skickar vidare</span> <strong>${textOr(e.bid_name, "?")}</strong>`;
     } else if (e.action === "slå") {
-      main = `<span class="log-action">Slår (utan att titta)</span> <strong>${textOr(e.bid_name, "?")}</strong>`;
+      main = `<span class="log-action">Slår</span> <strong>${textOr(e.bid_name, "?")}</strong>`;
     } else if (e.action === "höja") {
       main = `<span class="log-action">Höjer</span> <strong>${textOr(e.bid_name, "?")}</strong>`;
     } else {

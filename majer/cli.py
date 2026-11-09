@@ -86,7 +86,7 @@ def _print_entry(entry) -> None:
     elif action == "skicka":
         print(f"  {entry.player_name}: Skickar vidare {rules.name(entry.bid)}")
     elif action == "slå":
-        print(f"  {entry.player_name}: Slår (utan att titta) {rules.name(entry.bid)}")
+        print(f"  {entry.player_name}: Slår {rules.name(entry.bid)}")
     elif action == "höja":
         print(f"  {entry.player_name}: Höjer {rules.name(entry.bid)}")
     else:
