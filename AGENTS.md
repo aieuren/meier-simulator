@@ -138,6 +138,11 @@ python -m mejer.cli play rackar kalkyl trygg
   managed proxy key; set `ANTHROPIC_API_KEY` to use a real Claude account.
 - Never print the session API key. Read it from the process env if needed.
 - The web app is served on port 12000 in this environment.
+- Git remote: `https://github.com/aieuren/mejer-simulator.git` (branch `main`).
+  The repo was renamed from `majer-simulator`; GitHub redirects the old name.
+  `git push` needs auth: a repo-local `credential.helper` reads
+  `$GITHUB_PUSH_TOKEN` (not stored on disk), since `$GITHUB_TOKEN` lacks write
+  access to this repo.
 - Secrets for this conversation live in the agent-server, not the shell:
   `GET/PUT /api/settings/secrets[/{name}]` manages them, and
   `POST /api/conversations/{id}/secrets` attaches one to a running conversation.
