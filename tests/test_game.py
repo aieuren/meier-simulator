@@ -2,10 +2,10 @@
 
 import pytest
 
-from mejeri import rules
-from mejeri.agents.base import Agent, Role
-from mejeri.agents.player import ActionDecision, Announcement
-from mejeri.game import Game
+from mejer import rules
+from mejer.agents.base import Agent, Role
+from mejer.agents.player import ActionDecision, Announcement
+from mejer.game import Game
 
 
 class ScriptedAgent(Agent):

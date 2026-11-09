@@ -1,4 +1,4 @@
-"""Tester för Mejeri-spelaragenten med en fejkad LLM.
+"""Tester för Mejer-spelaragenten med en fejkad LLM.
 
 Vi testar agentens logik (tolkning av LLM-svar, regelkoercion) utan att
 anropa en riktig modell.
@@ -6,8 +6,8 @@ anropa en riktig modell.
 
 import json
 
-from mejeri.agents.player import ROLES, MejeriPlayerAgent, get_role
-from mejeri.llm import LLMClient
+from mejer.agents.player import ROLES, MejerPlayerAgent, get_role
+from mejer.llm import LLMClient
 
 
 class FakeLLM(LLMClient):
@@ -25,7 +25,7 @@ class FakeLLM(LLMClient):
 
 
 def make_agent(payload, role="kalkyl"):
-    return MejeriPlayerAgent(role=get_role(role), llm=FakeLLM(payload))
+    return MejerPlayerAgent(role=get_role(role), llm=FakeLLM(payload))
 
 
 def test_announce_parses_valid_bid():
@@ -53,7 +53,7 @@ def test_announce_falls_back_to_truth_on_invalid_bid():
 
 def test_announce_forces_higher_bid_when_required():
     # Modellen föreslår ett för lågt bud trots att den måste höja.
-    from mejeri import rules
+    from mejer import rules
 
     agent = make_agent({"bid": 41, "line": "41", "reasoning": ""})
     ann = agent.announce((2, 1), previous_bid=52)  # tärningarna visar 21 (Mejer)
@@ -96,7 +96,7 @@ def test_decide_raise_gets_higher_bid():
 def test_decide_raise_with_invalid_bid_picks_higher():
     agent = make_agent({"action": "slå", "bid": 11, "line": "", "reasoning": ""})
     decision = agent.decide(52)  # måste höja över 52
-    from mejeri import rules
+    from mejer import rules
 
     assert decision.bid is not None
     assert rules.is_higher(decision.bid, 52)

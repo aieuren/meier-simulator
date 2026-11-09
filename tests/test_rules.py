@@ -1,8 +1,8 @@
-"""Tester för Mejeri-reglerna."""
+"""Tester för Mejer-reglerna."""
 
 import pytest
 
-from mejeri import rules
+from mejer import rules
 
 
 def test_read_dice_high_first():

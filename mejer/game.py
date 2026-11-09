@@ -1,4 +1,4 @@
-"""Spelmotor för Mejeri.
+"""Spelmotor för Mejer.
 
 Motorn håller ordning på spelare, liv, bud och turen, och låter oberoende
 agenter spela mot varandra. Varje agent får bara den information en riktig
@@ -12,7 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from . import rules
-from .agents.player import MejeriPlayerAgent
+from .agents.player import MejerPlayerAgent
 
 
 class GameError(RuntimeError):
@@ -22,7 +22,7 @@ class GameError(RuntimeError):
 @dataclass
 class PlayerState:
     name: str
-    agent: MejeriPlayerAgent
+    agent: MejerPlayerAgent
     lives: int = 3
     out: bool = False
 
@@ -48,7 +48,7 @@ class Turn:
 
 @dataclass
 class Game:
-    """Ett pågående Mejeri-spel."""
+    """Ett pågående Mejer-spel."""
 
     players: list[PlayerState]
     rng: random.Random = field(default_factory=random.Random)
@@ -57,9 +57,9 @@ class Game:
     on_log: "Callable[[str], None] | None" = None
 
     @classmethod
-    def new(cls, agents: list[MejeriPlayerAgent], *, seed: int | None = None) -> "Game":
+    def new(cls, agents: list[MejerPlayerAgent], *, seed: int | None = None) -> "Game":
         if len(agents) < 2:
-            raise GameError("Mejeri kräver minst två spelare")
+            raise GameError("Mejer kräver minst två spelare")
         players = [PlayerState(name=a.name, agent=a) for a in agents]
         return cls(players=players, rng=random.Random(seed))
 

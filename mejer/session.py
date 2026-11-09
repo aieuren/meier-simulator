@@ -1,4 +1,4 @@
-"""Interaktiv spelsession för Mejeri – ett fullt flöde fram till en syn.
+"""Interaktiv spelsession för Mejer – ett fullt flöde fram till en syn.
 
 Flera oberoende agenter spelar mot varandra, steg för steg. Slumpen avgör
 ordningen på spelarna och vem som börjar. Varje svar sparas i en logg med
@@ -27,7 +27,7 @@ import random
 from dataclasses import dataclass, field, replace
 
 from . import rules
-from .agents.player import MejeriPlayerAgent
+from .agents.player import MejerPlayerAgent
 from .agents.referee import RefereeAgent, Verdict
 
 
@@ -115,9 +115,9 @@ class CallResult:
 
 @dataclass
 class Session:
-    """En pågående interaktiv Mejeri-session med flera agenter."""
+    """En pågående interaktiv Mejer-session med flera agenter."""
 
-    players: list[MejeriPlayerAgent]
+    players: list[MejerPlayerAgent]
     referee: RefereeAgent
     order: list[int] = field(default_factory=list)
     round: int = 1
@@ -137,14 +137,14 @@ class Session:
     @classmethod
     def new(
         cls,
-        players: list[MejeriPlayerAgent],
+        players: list[MejerPlayerAgent],
         referee: RefereeAgent,
         *,
         seed: int | None = None,
         lives: int = 3,
     ) -> "Session":
         if len(players) < 2:
-            raise ValueError("En Mejeri-session kräver minst två spelare")
+            raise ValueError("En Mejer-session kräver minst två spelare")
         rng = random.Random(seed)
         # Slumpen avgör ordningen på spelarna (och därmed vem som börjar).
         order = list(range(len(players)))
@@ -161,7 +161,7 @@ class Session:
 
     # -- Hjälpare -----------------------------------------------------------
     @property
-    def current_player(self) -> MejeriPlayerAgent:
+    def current_player(self) -> MejerPlayerAgent:
         return self.players[self.actor]
 
     def name_of(self, idx: int) -> str:
@@ -428,7 +428,7 @@ class Session:
             self._prepare_action(actor=nxt)
 
     # -- Steg 4: synen -----------------------------------------------------
-    def _resolve_call(self, caller_agent: MejeriPlayerAgent) -> LogEntry:
+    def _resolve_call(self, caller_agent: MejerPlayerAgent) -> LogEntry:
         bid = self.pending_bid
         dice = self.pending_dice
         assert bid is not None and dice is not None
@@ -481,7 +481,7 @@ class Session:
     # -- Hjälpare för loggposter -------------------------------------------
     def _log_entry(
         self,
-        player: MejeriPlayerAgent,
+        player: MejerPlayerAgent,
         dice: tuple[int, int],
         ann,
         verdict: Verdict,

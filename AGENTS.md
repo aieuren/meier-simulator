@@ -1,25 +1,25 @@
 # AGENTS.md
 
-Repository memory for the Mejeri AI-agent project.
+Repository memory for the Mejer AI-agent project.
 
 ## What this project is
 
 A Python library plus FastAPI web app where independent, LLM-based AI agents
-play the Swedish dice game **Mejeri**. The core deliverable: given the outcome of
+play the Swedish dice game **Mejer**. The core deliverable: given the outcome of
 a two-dice roll, an agent decides how the player responds (truth, higher, or
 lower bid). Multiple agents with distinct roles can also play full games.
 
 ## Layout
 
-- `mejeri/rules.py` – game rules. Single source of truth for the ranking order,
+- `mejer/rules.py` – game rules. Single source of truth for the ranking order,
   bid comparison, and call resolution. Change rules here only.
-- `mejeri/llm.py` – LLM client. Prefers Anthropic (Claude) via
+- `mejer/llm.py` – LLM client. Prefers Anthropic (Claude) via
   `ANTHROPIC_API_KEY`; falls back to the OpenHands agent-server proxy.
   `LLMClient.last_usage` holds the token count from the last call.
   Self-heals the agent-server LLM profile (see gotcha below).
-- `mejeri/game.py` – multi-agent game engine. Keeps each agent isolated; no agent
+- `mejer/game.py` – multi-agent game engine. Keeps each agent isolated; no agent
   sees another's secret dice.
-- `mejeri/session.py` – interactive session: full flow to a call (roll → raise
+- `mejer/session.py` – interactive session: full flow to a call (roll → raise
   (new shake) / pass → forced raise → call), random player order, referee review,
   and the log. The log is built downward: each shake starts with a `kind="roll"`
   entry (the dice, pure input), then one `kind="action"` entry per answer (bid,
@@ -30,20 +30,20 @@ lower bid). Multiple agents with distinct roles can also play full games.
   *Till slut på runda* and *Till syn* buttons run multiple steps at once. When a
   raise is not strictly higher than the previous bid, `_enforce_bid` lets the
   referee stop it and the smallest legal raise takes over.
-- `mejeri/agents/base.py` – `Agent`/`Role` base classes.
-- `mejeri/agents/player.py` – `MejeriPlayerAgent` and the role registry.
-- `mejeri/agents/referee.py` – `RefereeAgent` (Domare-Doris). Judges each answer.
-- `mejeri/web/app.py` + `mejeri/web/static/` – web UI and JSON API. The UI has
+- `mejer/agents/base.py` – `Agent`/`Role` base classes.
+- `mejer/agents/player.py` – `MejerPlayerAgent` and the role registry.
+- `mejer/agents/referee.py` – `RefereeAgent` (Domare-Doris). Judges each answer.
+- `mejer/web/app.py` + `mejer/web/static/` – web UI and JSON API. The UI has
   three tabs: *Enskild spelare* (one player answers a roll), *Fyra agenter* (the
   interactive session), and *Hela spel* (per-game log, placeholder for now).
   Tab switching just toggles `[hidden]` on `.tab-panel`; note the
   `.tab-panel[hidden] { display: none }` rule — a bare `display: grid` would
   otherwise override `hidden` and show every panel at once.
-- `mejeri/cli.py` – command line entry points (`announce`, `decide`, `play`,
+- `mejer/cli.py` – command line entry points (`announce`, `decide`, `play`,
   `session`).
 - `tests/` – unit tests. No real LLM calls; `FakeLLM`/`ScriptedAgent` are used.
 
-## Mejeri ranking is non-numeric (gotcha)
+## Mejer ranking is non-numeric (gotcha)
 
 Higher is *not* the larger number. The order is `21` (Mejer, highest), then
 `11, 22, 33, 44, 55, 66`, then `65, 64, …` down to `31` (lowest). So `33` is
@@ -70,7 +70,7 @@ a container restart wipes them. Then every call fails with
 `404 {"detail":"Profile '<name>' not found"}`, and the web app looks dead.
 
 `LLMClient` self-heals: on that 404 it recreates the profile and retries once.
-The profile points at a concrete model (`MEJERI_PROFILE_MODEL`, default
+The profile points at a concrete model (`MEJER_PROFILE_MODEL`, default
 `openhands/deepseek-v4.1-flash`). Note the model-name forms:
 
 - `openhands_Default` – a *profile* name; must exist in the agent server.
@@ -93,11 +93,11 @@ land in `~/.local/bin` (not always on PATH).
 
 Fix: run `./run.sh`. It checks imports, installs from `requirements.txt` if
 anything is missing, then starts the server. Use `./run.sh --background` to
-detach (log at `/tmp/mejeri_web.log`) and `./run.sh --check` to test only.
+detach (log at `/tmp/mejer_web.log`) and `./run.sh --check` to test only.
 It also refuses to double-start if `/api/health` already answers on the port.
 
 Manual fallback: `pip install -r requirements.txt`, then
-`python3 -m uvicorn mejeri.web.app:app --host 0.0.0.0 --port 12000`.
+`python3 -m uvicorn mejer.web.app:app --host 0.0.0.0 --port 12000`.
 
 ## Referee design (important)
 
@@ -115,9 +115,9 @@ sharpen a verdict, but it can never approve a formal rule breach (see
 ```bash
 pip install -r requirements.txt
 python -m pytest tests/ -q                     # run tests (fast, no network)
-python -m uvicorn mejeri.web.app:app --port 12000
-python -m mejeri.cli announce 2 5 --role rackar
-python -m mejeri.cli play rackar kalkyl trygg
+python -m uvicorn mejer.web.app:app --port 12000
+python -m mejer.cli announce 2 5 --role rackar
+python -m mejer.cli play rackar kalkyl trygg
 ```
 
 ## Conventions

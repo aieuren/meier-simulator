@@ -1,7 +1,8 @@
-# Mejeri – LLM-baserade AI-spelare
+# Mejer – LLM-baserade AI-spelare
 
 En webapplikation och ett Python-bibliotek med **oberoende, LLM-baserade
-AI-agenter** som spelar tärningsspelet **Mejeri** (Mejer/Mia/Mire/Kuriki/Kunito).
+AI-agenter** som spelar tärningsspelet **Mejer** (också kallat Mia, Mire,
+Kuriki och Kunito).
 
 Fokus för första versionen: en agent som simulerar en spelare. Givet utfallet av
 ett tärningsslag med två tärningar bestämmer agenten hur spelaren svarar – den
@@ -21,7 +22,7 @@ roller kan spela hela spel mot varandra.
   fram till en syn. Slumpen avgör ordningen och vem som börjar. Varje steg
   bekräftas med **Ett drag**, eller så körs flödet vidare med **Till slut på
   runda** eller **Till syn**. Varje svar sparas i en logg.
-- **Spelmotor** – flera oberoende agenter spelar ett fullt Mejeri-spel mot varandra.
+- **Spelmotor** – flera oberoende agenter spelar ett fullt Mejer-spel mot varandra.
 - **Kommandoradsgränssnitt** – kör agenten, en session eller ett helt spel.
 - **Regelmotor** – fullständig poängordning, budjämförelse, syn-avgörande och
   slumpade tärningsslag.
@@ -51,7 +52,7 @@ webbappen.
 
 ```bash
 ./run.sh                # startar i förgrunden (Ctrl-C stoppar)
-./run.sh --background   # startar i bakgrunden, loggar till /tmp/mejeri_web.log
+./run.sh --background   # startar i bakgrunden, loggar till /tmp/mejer_web.log
 ./run.sh --check        # kontrollerar bara att beroenden och port är redo
 ```
 
@@ -61,7 +62,7 @@ Manuellt, om du hellre vill:
 
 ```bash
 pip install -r requirements.txt
-python -m uvicorn mejeri.web.app:app --host 0.0.0.0 --port 12000
+python -m uvicorn mejer.web.app:app --host 0.0.0.0 --port 12000
 ```
 
 > **Efter en omstart av miljön:** globalt installerade paket försvinner, och
@@ -72,19 +73,19 @@ python -m uvicorn mejeri.web.app:app --host 0.0.0.0 --port 12000
 
 ```bash
 # Givet tärningsslaget 2 och 5: hur svarar spelaren?
-python -m mejeri.cli announce 2 5 --role rackar
+python -m mejer.cli announce 2 5 --role rackar
 
 # Om spelaren slår efter ett tidigare bud (måste höja)
-python -m mejeri.cli announce 2 5 --role kalkyl --previous-bid 43
+python -m mejer.cli announce 2 5 --role kalkyl --previous-bid 43
 
 # Spelaren möter en motståndares bud
-python -m mejeri.cli decide 43 --role trygg
+python -m mejer.cli decide 43 --role trygg
 
 # Spela ett helt spel med flera oberoende agenter
-python -m mejeri.cli play rackar kalkyl trygg
+python -m mejer.cli play rackar kalkyl trygg
 
 # Interaktiv session med steg-grind, domare och logg
-python -m mejeri.cli session
+python -m mejer.cli session
 ```
 
 ### Roller
@@ -157,12 +158,12 @@ Agenterna föredrar ditt **Anthropic-konto (Claude)**. Sätt nyckeln och kör:
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
-export MEJERI_MODEL=claude-sonnet-4-5   # valfritt
-python -m uvicorn mejeri.web.app:app --port 12000
+export MEJER_MODEL=claude-sonnet-4-5   # valfritt
+python -m uvicorn mejer.web.app:app --port 12000
 ```
 
 Saknas `ANTHROPIC_API_KEY` faller klienten tillbaka på en OpenAI-liknande proxy
-(OpenHands agent-server), som används i Agent Canvas-miljön. Se `mejeri/llm.py`.
+(OpenHands agent-server), som används i Agent Canvas-miljön. Se `mejer/llm.py`.
 
 Miljövariabler:
 
@@ -170,9 +171,9 @@ Miljövariabler:
 |---|---|
 | `ANTHROPIC_API_KEY` | Claude-nyckel (föredras) |
 | `ANTHROPIC_BASE_URL` | Egen Anthropic-bas-URL (valfritt) |
-| `MEJERI_MODEL` | Modellnamn |
-| `MEJERI_BASE_URL` | Bas-URL för OpenAI-liknande proxy |
-| `MEJERI_PROFILE_MODEL` | Konkret modell som profilen `openhands_<namn>` pekar på |
+| `MEJER_MODEL` | Modellnamn |
+| `MEJER_BASE_URL` | Bas-URL för OpenAI-liknande proxy |
+| `MEJER_PROFILE_MODEL` | Konkret modell som profilen `openhands_<namn>` pekar på |
 
 > **Obs (Agent Canvas):** agent-servern håller sina LLM-profiler i minnet. Startas
 > containern om försvinner de, och modellnamnet `openhands_Default` slutar
@@ -189,7 +190,7 @@ Klienten sparar tokenräkningen från senaste anropet i `LLMClient.last_usage`
   av vår egen text (våra prompter är ~1 000–1 500 tecken).
 - Att be modellen om fältet `reasoning` kostar extra **utdata-tokens**, ungefär
   200–600 fler, och mer när modellen resonerar längre.
-- Ett vanligt Mejeri-svar landar därför kring **17 900 prompt + 200–700
+- Ett vanligt Mejer-svar landar därför kring **17 900 prompt + 200–700
   completion ≈ 18 000–19 000 tokens totalt**.
 
 ## Tester
@@ -204,7 +205,7 @@ dubbelt) och agentens logik med en fejkad LLM – inga riktiga modellanrop behö
 ## Projektstruktur
 
 ```
-mejeri/
+mejer/
   rules.py            Regler: poängordning, jämförelse, syn, slumpat slag
   llm.py              LLM-klient (Anthropic + OpenHands-fallback)
   game.py             Spelmotor för flera oberoende agenter
@@ -212,7 +213,7 @@ mejeri/
   cli.py              Kommandoradsgränssnitt
   agents/
     base.py           Agent-grundklass och roll
-    player.py         Mejeri-spelaragenten och rollerna
+    player.py         Mejer-spelaragenten och rollerna
     referee.py        Domaragenten (Domare-Doris)
   web/
     app.py            FastAPI-app
