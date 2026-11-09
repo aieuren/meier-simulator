@@ -1,1 +1,0 @@
-"""Webbapp för Majer-agenten."""

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mejeri – AI-spelaren</title>
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+<header>
+  <h1>Mejeri <span>– AI-spelaren</span></h1>
+  <p class="tagline">LLM-baserade agenter som spelar tärningsspelet Mejeri.</p>
+</header>
+
+<nav class="tabs" role="tablist" aria-label="Flikar">
+  <button class="tab active" data-tab="tab-spelare" role="tab" aria-selected="true">Enskild spelare</button>
+  <button class="tab" data-tab="tab-agenter" role="tab" aria-selected="false">Fyra agenter</button>
+  <button class="tab" data-tab="tab-spel" role="tab" aria-selected="false">Hela spel</button>
+</nav>
+
+<main>
+  <!-- Flik 1: en enskild spelare svarar på ett tärningsutfall -->
+  <div class="tab-panel" id="tab-spelare">
+    <section class="card">
+      <h2>1. Tärningsslaget</h2>
+      <p class="hint">Två tärningar, 1–6. Läses med den högsta först (2 och 5 blir 52).</p>
+      <div class="dice-row">
+        <label>Die 1
+          <select id="die1"></select>
+        </label>
+        <label>Die 2
+          <select id="die2"></select>
+        </label>
+        <div class="dice-preview" id="dicePreview">–</div>
+      </div>
+
+      <h2>2. Agentens roll</h2>
+      <div id="roleList" class="roles"></div>
+
+      <details class="advanced">
+        <summary>Avancerat: slår efter ett tidigare bud</summary>
+        <p class="hint">Om spelaren slår efter någon annan måste budet vara strikt högre.</p>
+        <label class="inline">Tidigare bud
+          <select id="previousBid">
+            <option value="">– inget –</option>
+          </select>
+        </label>
+      </details>
+
+      <button id="announceBtn" class="primary">Se spelarens svar</button>
+    </section>
+
+    <section class="card" id="resultCard" hidden>
+      <h2>Spelarens svar</h2>
+      <div class="verdict" id="verdict"></div>
+      <div class="say" id="say"></div>
+      <dl class="facts" id="facts"></dl>
+      <div class="reasoning" id="reasoning"></div>
+    </section>
+
+    <section class="card">
+      <h2>Bonus: spelaren möter ett bud</h2>
+      <p class="hint">Vad gör spelaren när en motståndare säger ett bud?</p>
+      <label class="inline">Motståndarens bud
+        <select id="oppBid"></select>
+      </label>
+      <button id="decideBtn">Slå, syna eller skicka vidare?</button>
+      <div class="verdict" id="decision" hidden></div>
+    </section>
+
+    <section class="card">
+      <h2>Poängordning</h2>
+      <div id="ranking" class="ranking"></div>
+    </section>
+  </div>
+
+  <!-- Flik 2: fyra agenter spelar mot varandra, steg för steg -->
+  <div class="tab-panel" id="tab-agenter" hidden>
+    <section class="card" id="sessionCard">
+      <h2>Fyra agenter spelar mot varandra</h2>
+      <p class="hint">
+        Slumpen avgör ordningen och vem som börjar. Bekräfta varje steg med
+        <strong>OK</strong> – eller kör hela flödet fram till en syn på en gång.
+        Domaren granskar varje svar.
+      </p>
+      <div class="session-controls">
+        <button id="newSessionBtn" class="primary">Ny session</button>
+      </div>
+
+      <div id="sessionStatus" class="session-status" hidden>
+        <div class="session-note" id="sessionNote"></div>
+      </div>
+
+      <h3 class="log-title">Logg</h3>
+      <div id="log" class="log">
+        <p class="hint">Ingen logg än. Starta en session.</p>
+      </div>
+
+      <div id="pendingCtl" class="pending-ctl" hidden>
+        <span class="pending-what" id="pendingWhat"></span>
+        <button id="okBtn">OK – nästa steg</button>
+        <button id="runBtn">Kör till syn</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- Flik 3: logg per helt spel (innehåll kommer) -->
+  <div class="tab-panel" id="tab-spel" hidden>
+    <section class="card">
+      <h2>Logg per helt spel</h2>
+      <p class="hint">
+        Här samlas en logg för varje spelat spel från början till slut.
+      </p>
+      <div class="placeholder" id="gameLogPlaceholder">
+        <p>Inget innehåll än.</p>
+        <p class="muted">Fliken fylls på när innehållet är klart.</p>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer>
+  <p>Mejeri spelas med två tärningar. 21 (Mejer) är högst, 31 lägst. Mejer kostar dubbelt.</p>
+</footer>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

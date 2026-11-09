@@ -1,0 +1,1 @@
+"""Webbapp för Mejeri-agenten."""

@@ -1,4 +1,4 @@
-"""LLM-klient för Majer-agenterna.
+"""LLM-klient för Mejeri-agenterna.
 
 Klienten föredrar ett riktigt Anthropic-konto (Claude) via ``ANTHROPIC_API_KEY``.
 Saknas den faller den tillbaka på OpenHands agent-server-proxyn, som finns i
@@ -55,15 +55,15 @@ class LLMConfig:
         if anthropic_key:
             return cls(
                 provider="anthropic",
-                model=os.environ.get("MAJER_MODEL", "claude-sonnet-4-5"),
+                model=os.environ.get("MEJERI_MODEL", "claude-sonnet-4-5"),
                 api_key=anthropic_key,
                 base_url=os.environ.get("ANTHROPIC_BASE_URL", ""),
             )
 
         # Agent-servern på localhost proxar den hanterade nyckeln och kräver
         # endast sessionsnyckeln i X-Session-API-Key.
-        base_url = os.environ.get("MAJER_BASE_URL", "http://127.0.0.1:60000")
-        model = os.environ.get("MAJER_MODEL", "openhands_Default")
+        base_url = os.environ.get("MEJERI_BASE_URL", "http://127.0.0.1:60000")
+        model = os.environ.get("MEJERI_MODEL", "openhands_Default")
         return cls(provider="openhands", model=model, base_url=base_url)
 
 
@@ -203,12 +203,12 @@ class LLMClient:
 
         Agent-serverns profiler ligger i minnet och försvinner när containern
         startas om. Profilen pekar i sin tur på en konkret modell
-        (``MAJER_PROFILE_MODEL``, standard ``openhands/deepseek-v4.1-flash``).
+        (``MEJERI_PROFILE_MODEL``, standard ``openhands/deepseek-v4.1-flash``).
         """
         name = self.config.profile_name
         if not name:
             return
-        target = os.environ.get("MAJER_PROFILE_MODEL", "openhands/deepseek-v4.1-flash")
+        target = os.environ.get("MEJERI_PROFILE_MODEL", "openhands/deepseek-v4.1-flash")
         headers = {"Content-Type": "application/json", "X-Session-API-Key": _session_api_key()}
         body = {"llm": {"model": target}, "include_secrets": True}
         try:

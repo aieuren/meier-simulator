@@ -1,7 +1,7 @@
-"""Agenter för Majer."""
+"""Agenter för Mejeri."""
 
 from .base import Agent, Role
-from .player import ROLES, ActionDecision, Announcement, MajerPlayerAgent, get_role
+from .player import ROLES, ActionDecision, Announcement, MejeriPlayerAgent, get_role
 from .referee import REFEREE_ROLE, RefereeAgent, Verdict
 
 __all__ = [
@@ -9,7 +9,7 @@ __all__ = [
     "Role",
     "ROLES",
     "get_role",
-    "MajerPlayerAgent",
+    "MejeriPlayerAgent",
     "Announcement",
     "ActionDecision",
     "RefereeAgent",

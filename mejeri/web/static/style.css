@@ -39,6 +39,48 @@ h1 span { color: var(--accent); font-weight: 500; }
 
 .tagline { color: var(--muted); margin: 0.4rem 0 0; }
 
+/* -- Flikar -- */
+.tabs {
+  display: flex;
+  gap: 0.4rem;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 1.2rem;
+  flex-wrap: wrap;
+}
+
+.tab {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-bottom: none;
+  border-radius: 10px 10px 0 0;
+  color: var(--muted);
+  padding: 0.6rem 1.1rem;
+  font-size: 0.95rem;
+}
+
+.tab:hover { background: var(--panel-2); }
+
+.tab.active {
+  background: var(--panel);
+  color: var(--accent);
+  border-color: var(--line);
+  font-weight: 700;
+}
+
+.tab-panel { display: grid; gap: 1.1rem; }
+/* display:grid ovan åsidosätter annars [hidden] och dolda paneler syns. */
+.tab-panel[hidden] { display: none; }
+
+.placeholder {
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  padding: 2rem 1.2rem;
+  text-align: center;
+  color: var(--muted);
+}
+.placeholder p { margin: 0.2rem 0; }
+
 main {
   max-width: 760px;
   margin: 0 auto;

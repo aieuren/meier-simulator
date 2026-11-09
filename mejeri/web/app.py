@@ -1,4 +1,4 @@
-"""FastAPI-webbapp för Majer-agenterna.
+"""FastAPI-webbapp för Mejeri-agenterna.
 
 Webbappen låter dig skriva in tärningsutfallet (två tärningar) och få
 spelarens svar från en LLM-baserad agent. Du kan välja roll och ange ett
@@ -17,24 +17,24 @@ from pydantic import BaseModel, Field
 from .. import rules
 from ..agents.player import ROLES, get_role
 from ..llm import LLMClient, LLMError
-from ..agents.player import MajerPlayerAgent
+from ..agents.player import MejeriPlayerAgent
 from ..agents.referee import RefereeAgent
 from ..session import Session
 
 STATIC_DIR = Path(__file__).parent / "static"
 
-app = FastAPI(title="Majer-agenten", version="1.1.0")
+app = FastAPI(title="Mejeri-agenten", version="1.1.0")
 
 # En agent per roll, skapade på begäran så att LLM-klienten återanvänds.
-_agents: dict[str, MajerPlayerAgent] = {}
+_agents: dict[str, MejeriPlayerAgent] = {}
 
 # Den aktiva interaktiva sessionen (en åt gången).
 _session: Session | None = None
 
 
-def _get_agent(role_key: str) -> MajerPlayerAgent:
+def _get_agent(role_key: str) -> MejeriPlayerAgent:
     if role_key not in _agents:
-        _agents[role_key] = MajerPlayerAgent(role=get_role(role_key), llm=LLMClient())
+        _agents[role_key] = MejeriPlayerAgent(role=get_role(role_key), llm=LLMClient())
     return _agents[role_key]
 
 

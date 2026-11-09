@@ -3,6 +3,8 @@ const $ = (id) => document.getElementById(id);
 let state = { role: "kalkyl", ranking: [] };
 
 async function boot() {
+  setupTabs();
+
   // Fyll tärningsval
   for (const sel of [$("die1"), $("die2")]) {
     for (let i = 1; i <= 6; i++) {
@@ -60,6 +62,22 @@ async function boot() {
   $("newSessionBtn").onclick = newSession;
   $("okBtn").onclick = advanceSession;
   $("runBtn").onclick = runToCall;
+}
+
+function setupTabs() {
+  const tabs = document.querySelectorAll(".tab");
+  tabs.forEach((tab) => {
+    tab.onclick = () => {
+      tabs.forEach((t) => {
+        const on = t === tab;
+        t.classList.toggle("active", on);
+        t.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      document.querySelectorAll(".tab-panel").forEach((p) => {
+        p.hidden = p.id !== tab.dataset.tab;
+      });
+    };
+  });
 }
 
 function readDice(a, b) {

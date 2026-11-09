@@ -1,7 +1,7 @@
-# Majer – LLM-baserade AI-spelare
+# Mejeri – LLM-baserade AI-spelare
 
 En webapplikation och ett Python-bibliotek med **oberoende, LLM-baserade
-AI-agenter** som spelar tärningsspelet **Majer** (Mejer/Mia/Mire/Kuriki/Kunito).
+AI-agenter** som spelar tärningsspelet **Mejeri** (Mejer/Mia/Mire/Kuriki/Kunito).
 
 Fokus för första versionen: en agent som simulerar en spelare. Givet utfallet av
 ett tärningsslag med två tärningar bestämmer agenten hur spelaren svarar – den
@@ -10,7 +10,10 @@ roller kan spela hela spel mot varandra.
 
 ## Vad som finns
 
-- **Webbapp** – skriv in tärningsutfallet (två tärningar) och se spelarens svar.
+- **Webbapp med tre flikar:**
+  - **Enskild spelare** – skriv in tärningsutfallet (två tärningar) och se spelarens svar.
+  - **Fyra agenter** – fyra agenter spelar mot varandra i ett fullt flöde fram till en syn.
+  - **Hela spel** – en logg per spelat spel från början till slut (innehållet kommer).
 - **Fyra spelarroller** – Ärlig-Adolf, Rackar-Rakel, Kalkylerande-Karin och Trygge-Tor.
 - **Domaragent** – Domare-Doris övervakar att alla följer reglerna och säger OK eller
   kommer med invändningar.
@@ -18,7 +21,7 @@ roller kan spela hela spel mot varandra.
   fram till en syn. Slumpen avgör ordningen och vem som börjar. Varje steg
   bekräftas med OK, eller så körs hela flödet fram till synen på en gång. Varje
   svar sparas i en logg.
-- **Spelmotor** – flera oberoende agenter spelar ett fullt Majer-spel mot varandra.
+- **Spelmotor** – flera oberoende agenter spelar ett fullt Mejeri-spel mot varandra.
 - **Kommandoradsgränssnitt** – kör agenten, en session eller ett helt spel.
 - **Regelmotor** – fullständig poängordning, budjämförelse, syn-avgörande och
   slumpade tärningsslag.
@@ -48,7 +51,7 @@ webbappen.
 
 ```bash
 ./run.sh                # startar i förgrunden (Ctrl-C stoppar)
-./run.sh --background   # startar i bakgrunden, loggar till /tmp/majer_web.log
+./run.sh --background   # startar i bakgrunden, loggar till /tmp/mejeri_web.log
 ./run.sh --check        # kontrollerar bara att beroenden och port är redo
 ```
 
@@ -58,7 +61,7 @@ Manuellt, om du hellre vill:
 
 ```bash
 pip install -r requirements.txt
-python -m uvicorn majer.web.app:app --host 0.0.0.0 --port 12000
+python -m uvicorn mejeri.web.app:app --host 0.0.0.0 --port 12000
 ```
 
 > **Efter en omstart av miljön:** globalt installerade paket försvinner, och
@@ -69,19 +72,19 @@ python -m uvicorn majer.web.app:app --host 0.0.0.0 --port 12000
 
 ```bash
 # Givet tärningsslaget 2 och 5: hur svarar spelaren?
-python -m majer.cli announce 2 5 --role rackar
+python -m mejeri.cli announce 2 5 --role rackar
 
 # Om spelaren slår efter ett tidigare bud (måste höja)
-python -m majer.cli announce 2 5 --role kalkyl --previous-bid 43
+python -m mejeri.cli announce 2 5 --role kalkyl --previous-bid 43
 
 # Spelaren möter en motståndares bud
-python -m majer.cli decide 43 --role trygg
+python -m mejeri.cli decide 43 --role trygg
 
 # Spela ett helt spel med flera oberoende agenter
-python -m majer.cli play rackar kalkyl trygg
+python -m mejeri.cli play rackar kalkyl trygg
 
 # Interaktiv session med OK-grind, domare och logg
-python -m majer.cli session
+python -m mejeri.cli session
 ```
 
 ### Roller
@@ -152,12 +155,12 @@ Agenterna föredrar ditt **Anthropic-konto (Claude)**. Sätt nyckeln och kör:
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
-export MAJER_MODEL=claude-sonnet-4-5   # valfritt
-python -m uvicorn majer.web.app:app --port 12000
+export MEJERI_MODEL=claude-sonnet-4-5   # valfritt
+python -m uvicorn mejeri.web.app:app --port 12000
 ```
 
 Saknas `ANTHROPIC_API_KEY` faller klienten tillbaka på en OpenAI-liknande proxy
-(OpenHands agent-server), som används i Agent Canvas-miljön. Se `majer/llm.py`.
+(OpenHands agent-server), som används i Agent Canvas-miljön. Se `mejeri/llm.py`.
 
 Miljövariabler:
 
@@ -165,9 +168,9 @@ Miljövariabler:
 |---|---|
 | `ANTHROPIC_API_KEY` | Claude-nyckel (föredras) |
 | `ANTHROPIC_BASE_URL` | Egen Anthropic-bas-URL (valfritt) |
-| `MAJER_MODEL` | Modellnamn |
-| `MAJER_BASE_URL` | Bas-URL för OpenAI-liknande proxy |
-| `MAJER_PROFILE_MODEL` | Konkret modell som profilen `openhands_<namn>` pekar på |
+| `MEJERI_MODEL` | Modellnamn |
+| `MEJERI_BASE_URL` | Bas-URL för OpenAI-liknande proxy |
+| `MEJERI_PROFILE_MODEL` | Konkret modell som profilen `openhands_<namn>` pekar på |
 
 > **Obs (Agent Canvas):** agent-servern håller sina LLM-profiler i minnet. Startas
 > containern om försvinner de, och modellnamnet `openhands_Default` slutar
@@ -184,7 +187,7 @@ Klienten sparar tokenräkningen från senaste anropet i `LLMClient.last_usage`
   av vår egen text (våra prompter är ~1 000–1 500 tecken).
 - Att be modellen om fältet `reasoning` kostar extra **utdata-tokens**, ungefär
   200–600 fler, och mer när modellen resonerar längre.
-- Ett vanligt Majer-svar landar därför kring **17 900 prompt + 200–700
+- Ett vanligt Mejeri-svar landar därför kring **17 900 prompt + 200–700
   completion ≈ 18 000–19 000 tokens totalt**.
 
 ## Tester
@@ -199,7 +202,7 @@ dubbelt) och agentens logik med en fejkad LLM – inga riktiga modellanrop behö
 ## Projektstruktur
 
 ```
-majer/
+mejeri/
   rules.py            Regler: poängordning, jämförelse, syn, slumpat slag
   llm.py              LLM-klient (Anthropic + OpenHands-fallback)
   game.py             Spelmotor för flera oberoende agenter
@@ -207,7 +210,7 @@ majer/
   cli.py              Kommandoradsgränssnitt
   agents/
     base.py           Agent-grundklass och roll
-    player.py         Majer-spelaragenten och rollerna
+    player.py         Mejeri-spelaragenten och rollerna
     referee.py        Domaragenten (Domare-Doris)
   web/
     app.py            FastAPI-app

@@ -1,10 +1,10 @@
-"""Kommandoradsgränssnitt för Majer-agenterna.
+"""Kommandoradsgränssnitt för Mejeri-agenterna.
 
 Exempel:
-    python -m majer.cli announce 2 5 --role rackar
-    python -m majer.cli decide 43 --role trygg
-    python -m majer.cli play rackar kalkyl trygg
-    python -m majer.cli session
+    python -m mejeri.cli announce 2 5 --role rackar
+    python -m mejeri.cli decide 43 --role trygg
+    python -m mejeri.cli play rackar kalkyl trygg
+    python -m mejeri.cli session
 """
 
 from __future__ import annotations
@@ -13,14 +13,14 @@ import argparse
 import sys
 
 from . import rules
-from .agents.player import ROLES, get_role, MajerPlayerAgent
+from .agents.player import ROLES, get_role, MejeriPlayerAgent
 from .agents.referee import RefereeAgent
 from .game import Game
 from .session import Session
 
 
 def _cmd_announce(args: argparse.Namespace) -> int:
-    agent = MajerPlayerAgent(role=get_role(args.role))
+    agent = MejeriPlayerAgent(role=get_role(args.role))
     ann = agent.announce((args.die1, args.die2), previous_bid=args.previous_bid)
     print(f"Roll:        {agent.name}")
     print(f"Tärningarna: {rules.read_dice(args.die1, args.die2)} ({args.die1} och {args.die2})")
@@ -36,7 +36,7 @@ def _cmd_announce(args: argparse.Namespace) -> int:
 
 
 def _cmd_decide(args: argparse.Namespace) -> int:
-    agent = MajerPlayerAgent(role=get_role(args.role))
+    agent = MejeriPlayerAgent(role=get_role(args.role))
     decision = agent.decide(args.bid, lives=args.lives)
     print(f"Roll:      {agent.name}")
     print(f"Motståndarens bud: {rules.name(args.bid)}")
@@ -51,7 +51,7 @@ def _cmd_decide(args: argparse.Namespace) -> int:
 
 
 def _cmd_play(args: argparse.Namespace) -> int:
-    agents = [MajerPlayerAgent(role=get_role(key)) for key in args.roles]
+    agents = [MejeriPlayerAgent(role=get_role(key)) for key in args.roles]
     game = Game.new(agents, seed=args.seed)
     game.on_log = lambda line: print(line, flush=True)
     winner = game.play()
@@ -100,7 +100,7 @@ def _print_entry(entry) -> None:
 
 def _cmd_session(args: argparse.Namespace) -> int:
     roles = args.roles or list(ROLES)
-    players = [MajerPlayerAgent(role=get_role(key)) for key in roles]
+    players = [MejeriPlayerAgent(role=get_role(key)) for key in roles]
     referee = RefereeAgent()
     session = Session.new(players, referee, seed=args.seed)
 
@@ -145,7 +145,7 @@ def _cmd_session(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="majer", description="Majer med LLM-agenter")
+    parser = argparse.ArgumentParser(prog="mejeri", description="Mejeri med LLM-agenter")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_ann = sub.add_parser("announce", help="Givet ett tärningsslag: spelarens svar")

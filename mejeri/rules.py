@@ -1,4 +1,4 @@
-"""Regler för tärningsspelet Majer (Mejer/Mia/Mire/Kuriki/Kunito).
+"""Regler för tärningsspelet Mejeri (Mejer/Mia/Mire/Kuriki/Kunito).
 
 Två tärningar läses som ett tvåsiffrigt tal med den högsta tärningen först:
 2 och 5 blir 52. Alla 21 möjliga utfall har en fast rangordning där 21
@@ -64,7 +64,7 @@ def read_dice(a: int, b: int) -> int:
 def dice_from_value(value: int) -> tuple[int, int]:
     """Motsatt riktning av :func:`read_dice`. Returnerar (högsta, lägsta)."""
     if value not in _RANK_INDEX:
-        raise ValueError(f"{value} är inte ett giltigt Majer-utfall")
+        raise ValueError(f"{value} är inte ett giltigt Mejeri-utfall")
     hi, lo = divmod(value, 10)
     return hi, lo
 
@@ -82,7 +82,7 @@ def rank(value: int) -> int:
     try:
         return _RANK_INDEX[value]
     except KeyError:
-        raise ValueError(f"{value} är inte ett giltigt Majer-utfall") from None
+        raise ValueError(f"{value} är inte ett giltigt Mejeri-utfall") from None
 
 
 def compare(a: int, b: int) -> int:

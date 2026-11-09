@@ -1,6 +1,6 @@
 """Tester för domaragenten."""
 
-from majer.agents.referee import RefereeAgent, Verdict
+from mejeri.agents.referee import RefereeAgent, Verdict
 
 
 class SilentLLM:

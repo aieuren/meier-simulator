@@ -1,4 +1,4 @@
-"""Domaragent för Majer.
+"""Domaragent för Mejeri.
 
 Domaren är också en LLM-baserad agent, men till skillnad från spelarna är dess
 uppgift att *övervaka* att reglerna följs. Den granskar varje svar en spelare ger
@@ -23,7 +23,7 @@ REFEREE_ROLE = Role(
     name="Domare-Doris",
     description="Opartisk domare som övervakar att alla följer reglerna.",
     style=(
-        "Du är en sträng men rättvis domare i tärningsspelet Majer. Du kontrollerar "
+        "Du är en sträng men rättvis domare i tärningsspelet Mejeri. Du kontrollerar "
         "att varje bud är ett giltigt utfall, att den som slår alltid höjer, och att "
         "syn och Mejer hanteras rätt. Du säger kort och tydligt om svaret är ok eller "
         "om det finns en invändning."
@@ -59,7 +59,7 @@ class RefereeAgent(Agent):
     def system_prompt(self) -> str:
         ranking = ", ".join(rules.name(v) for v in rules.RANKING)
         return (
-            f"Du är domaren {self.role.name} i tärningsspelet Majer.\n"
+            f"Du är domaren {self.role.name} i tärningsspelet Mejeri.\n"
             f"Roll: {self.role.description}\n\n"
             "REGLER\n"
             "- Två tärningar läses med den högsta först: 2 och 5 blir 52.\n"
@@ -95,7 +95,7 @@ class RefereeAgent(Agent):
         objections: list[str] = []
 
         if not rules.is_valid_value(answer):
-            objections.append(f"Budet {answer} är inte ett giltigt Majer-utfall.")
+            objections.append(f"Budet {answer} är inte ett giltigt Mejeri-utfall.")
         elif previous_bid is not None:
             if not rules.is_valid_value(previous_bid):
                 objections.append(f"Det tidigare budet {previous_bid} är ogiltigt.")

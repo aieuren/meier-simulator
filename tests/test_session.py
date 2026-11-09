@@ -2,11 +2,11 @@
 
 import pytest
 
-from majer import rules
-from majer.agents.base import Role
-from majer.agents.player import MajerPlayerAgent
-from majer.agents.referee import RefereeAgent
-from majer.session import Session
+from mejeri import rules
+from mejeri.agents.base import Role
+from mejeri.agents.player import MejeriPlayerAgent
+from mejeri.agents.referee import RefereeAgent
+from mejeri.session import Session
 
 
 class ScriptedLLM:
@@ -60,7 +60,7 @@ class ScriptedLLM:
 
 def make_player(key, llm=None):
     role = Role(key=key, name=f"Spelare-{key}", description="test", style="spela")
-    return MajerPlayerAgent(role=role, llm=llm or ScriptedLLM())
+    return MejeriPlayerAgent(role=role, llm=llm or ScriptedLLM())
 
 
 def make_referee():
@@ -125,7 +125,7 @@ def test_skicka_passes_bid_and_forces_raise_with_two_players():
 
 
 def test_full_loop_forces_bidder_to_raise():
-    # 33 är högre än 44 i Majer-ordningen, så budgivaren kan höja till 33.
+    # 33 är högre än 44 i Mejeri-ordningen, så budgivaren kan höja till 33.
     players = [
         make_player(k, ScriptedLLM(bids=[44, 33], actions=["skicka"]))
         for k in ("a", "b")

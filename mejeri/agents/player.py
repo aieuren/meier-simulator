@@ -1,6 +1,6 @@
-"""Majer-spelaragenten.
+"""Mejeri-spelaragenten.
 
-Agenten simulerar en spelare i tärningsspelet Majer. Den centrala uppgiften är:
+Agenten simulerar en spelare i tärningsspelet Mejeri. Den centrala uppgiften är:
 givet utfallet av ett tärningsslag med två tärningar, bestäm hur spelaren
 svarar. Spelaren har tittat i smyg på tärningarna och ska säga ett resultat till
 nästa spelare – sanningen, ett högre eller ett lägre.
@@ -124,8 +124,8 @@ class ActionDecision:
         }
 
 
-class MajerPlayerAgent(Agent):
-    """En oberoende LLM-baserad Majer-spelare."""
+class MejeriPlayerAgent(Agent):
+    """En oberoende LLM-baserad Mejeri-spelare."""
 
     def __init__(self, role: Role, llm: LLMClient | None = None):
         super().__init__(role=role, llm=llm or LLMClient())
@@ -134,7 +134,7 @@ class MajerPlayerAgent(Agent):
     def system_prompt(self) -> str:
         ranking = ", ".join(rules.name(v) for v in rules.RANKING)
         return (
-            f"Du spelar tärningsspelet Majer som spelaren {self.role.name}.\n"
+            f"Du spelar tärningsspelet Mejeri som spelaren {self.role.name}.\n"
             f"Roll: {self.role.description}\n"
             f"Spelstil: {self.role.style}\n\n"
             "REGLER\n"
@@ -229,7 +229,7 @@ class MajerPlayerAgent(Agent):
                 "Säg ett högre bud. Du får inte lyfta på locket.",
                 "",
                 "Svara med JSON:",
-                '{"bid": <heltal, ett giltigt Majer-utfall högre än det förra>, '
+                '{"bid": <heltal, ett giltigt Mejeri-utfall högre än det förra>, '
                 '"line": "<repliken du säger>", '
                 '"reasoning": "<kort motivering>"}',
             ]
@@ -295,7 +295,7 @@ class MajerPlayerAgent(Agent):
             "ett högre eller ett lägre resultat.",
             "",
             "Svara med JSON:",
-            '{"bid": <heltal, ett giltigt Majer-utfall>, '
+            '{"bid": <heltal, ett giltigt Mejeri-utfall>, '
             '"line": "<repliken du säger>", '
             '"reasoning": "<kort motivering>"}',
         ]
