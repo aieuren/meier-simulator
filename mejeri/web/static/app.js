@@ -61,7 +61,8 @@ async function boot() {
   $("decideBtn").onclick = doDecide;
   $("newSessionBtn").onclick = newSession;
   $("okBtn").onclick = advanceSession;
-  $("runBtn").onclick = runToCall;
+  $("roundBtn").onclick = () => runSession("/api/session/round", "roundBtn", "Spelar…", "Till slut på runda");
+  $("runBtn").onclick = () => runSession("/api/session/run", "runBtn", "Spelar…", "Till syn");
 }
 
 function setupTabs() {
@@ -226,16 +227,17 @@ async function advanceSession() {
     $("log").insertAdjacentHTML("afterbegin", `<p class="error">Fel: ${err.message}</p>`);
   } finally {
     btn.disabled = false;
-    btn.textContent = "OK – nästa steg";
+    btn.textContent = "Ett drag";
   }
 }
 
-async function runToCall() {
-  const btn = $("runBtn");
+// Kör flödet vidare med ett anrop: till rundans slut eller till en syn.
+async function runSession(path, btnId, busyLabel, idleLabel) {
+  const btn = $(btnId);
   btn.disabled = true;
-  btn.textContent = "Spelar…";
+  btn.textContent = busyLabel;
   try {
-    const res = await fetch("/api/session/run", { method: "POST" });
+    const res = await fetch(path, { method: "POST" });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || "Fel");
     renderSession(data);
@@ -243,7 +245,7 @@ async function runToCall() {
     $("log").insertAdjacentHTML("afterbegin", `<p class="error">Fel: ${err.message}</p>`);
   } finally {
     btn.disabled = false;
-    btn.textContent = "Kör till syn";
+    btn.textContent = idleLabel;
   }
 }
 

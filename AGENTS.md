@@ -23,11 +23,13 @@ lower bid). Multiple agents with distinct roles can also play full games.
   (new shake) / pass → forced raise → call), random player order, referee review,
   and the log. The log is built downward: each shake starts with a `kind="roll"`
   entry (the dice, pure input), then one `kind="action"` entry per answer (bid,
-  raise, pass, or call). `advance()` does one gated step; `run_to_call()` runs the
-  whole flow to the next call. The web UI moves the OK button into the log so it
-  sits under the latest dice roll. When a raise is not strictly higher than the
-  previous bid, `_enforce_bid` lets the referee stop it and the smallest legal
-  raise takes over.
+  raise, pass, or call). `advance()` does one gated step; `run_to_round_end()`
+  runs to the end of the current round (a call, or a new round after Mejer), and
+  `run_to_call()` runs the whole flow to the next call. The web UI moves the
+  *Ett drag* button into the log so it sits under the latest dice roll; the
+  *Till slut på runda* and *Till syn* buttons run multiple steps at once. When a
+  raise is not strictly higher than the previous bid, `_enforce_bid` lets the
+  referee stop it and the smallest legal raise takes over.
 - `mejeri/agents/base.py` – `Agent`/`Role` base classes.
 - `mejeri/agents/player.py` – `MejeriPlayerAgent` and the role registry.
 - `mejeri/agents/referee.py` – `RefereeAgent` (Domare-Doris). Judges each answer.

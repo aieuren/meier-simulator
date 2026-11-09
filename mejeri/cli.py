@@ -105,18 +105,24 @@ def _cmd_session(args: argparse.Namespace) -> int:
     session = Session.new(players, referee, seed=args.seed)
 
     print("Spelordning: " + " → ".join(players[i].name for i in session.order))
-    print("Tryck Enter (OK) för nästa steg. Skriv 'k' för att köra fram till en syn.")
+    print("Tryck Enter (Ett drag) för nästa steg.")
+    print("Skriv 'r' för att köra fram till rundans slut, 'k' för att köra till en syn.")
     print("Skriv 'q' för att avsluta.\n")
 
     try:
         while not session.finished and session.step_kind:
             state = session.to_dict()
             print(f"Runda {session.round}. {_describe_step(state)}")
-            answer = input("  [Enter = OK, k = kör till syn, q = avsluta] ").strip().lower()
+            answer = input(
+                "  [Enter = ett drag, r = till slut på runda, k = till syn, q = avsluta] "
+            ).strip().lower()
             if answer == "q":
                 break
             if answer == "k":
                 for entry in session.run_to_call():
+                    _print_entry(entry)
+            elif answer == "r":
+                for entry in session.run_to_round_end():
                     _print_entry(entry)
             else:
                 entry = session.advance()

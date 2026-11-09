@@ -301,6 +301,28 @@ def test_run_to_call_reaches_a_call():
     assert any(e.action == "syna" for e in created)
 
 
+def test_run_to_round_end_stops_after_a_call():
+    players = [
+        make_player(k, ScriptedLLM(bids=[11], actions=["syna"])) for k in ("a", "b", "c", "d")
+    ]
+    session = Session.new(players, make_referee(), seed=11)
+    start_round = session.round
+    created = session.run_to_round_end()
+    # Synen avslutar rundan och en ny runda har börjat.
+    assert any(e.action == "syna" for e in created)
+    assert session.round == start_round + 1
+
+
+def test_run_to_round_end_starts_a_new_round_with_a_roll():
+    players = [
+        make_player(k, ScriptedLLM(bids=[11], actions=["syna"])) for k in ("a", "b", "c", "d")
+    ]
+    session = Session.new(players, make_referee(), seed=11)
+    session.run_to_round_end()
+    assert session.step_kind == "roll"
+    assert session.to_dict()["log"][-1]["kind"] == "roll"
+
+
 def test_session_finishes_when_one_player_left():
     players = [
         make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b")

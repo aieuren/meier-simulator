@@ -305,9 +305,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
   padding: 0.7rem 0.9rem;
   margin-top: 0.3rem;
 }
-.pending-what { color: var(--muted); font-size: 0.9rem; }
-.pending-ctl button { margin-left: auto; }
-.pending-ctl #runBtn { margin-left: 0; }
+.pending-what { color: var(--muted); font-size: 0.9rem; margin-right: auto; }
 .log-bid.truth { color: var(--good); }
 .log-bid.lie { color: var(--bad); }
 .log-referee { margin-left: auto; padding: 0.1rem 0.55rem; border-radius: 999px; font-size: 0.8rem; font-weight: 700; }

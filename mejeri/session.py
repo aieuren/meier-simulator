@@ -269,6 +269,26 @@ class Session:
                 created.append(entry)
         return created
 
+    def run_to_round_end(self, *, max_steps: int = 200) -> list[LogEntry]:
+        """Kör flödet fram till rundans slut.
+
+        En runda tar slut när någon synar (någon förlorar ett liv) eller när
+        budet Mejer går ett helt varv tillbaka och budgivaren slår om. Båda
+        fallen startar en ny runda, så vi kör tills rundnumret ändras – eller
+        tills spelet tar slut.
+        """
+        created: list[LogEntry] = []
+        start_round = self.round
+        steps = 0
+        while not self.finished and self.step_kind and steps < max_steps:
+            steps += 1
+            entry = self.advance()
+            if entry is not None:
+                created.append(entry)
+            if self.round != start_round:
+                break
+        return created
+
     # -- Steg 1: tärningsslaget (första budet) -----------------------------
     def _resolve_roll(self) -> LogEntry:
         dice = self.pending_dice

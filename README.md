@@ -19,8 +19,8 @@ roller kan spela hela spel mot varandra.
   kommer med invändningar.
 - **Interaktiv spelsession** – fyra agenter spelar mot varandra i ett fullt flöde
   fram till en syn. Slumpen avgör ordningen och vem som börjar. Varje steg
-  bekräftas med OK, eller så körs hela flödet fram till synen på en gång. Varje
-  svar sparas i en logg.
+  bekräftas med **Ett drag**, eller så körs flödet vidare med **Till slut på
+  runda** eller **Till syn**. Varje svar sparas i en logg.
 - **Spelmotor** – flera oberoende agenter spelar ett fullt Mejeri-spel mot varandra.
 - **Kommandoradsgränssnitt** – kör agenten, en session eller ett helt spel.
 - **Regelmotor** – fullständig poängordning, budjämförelse, syn-avgörande och
@@ -83,7 +83,7 @@ python -m mejeri.cli decide 43 --role trygg
 # Spela ett helt spel med flera oberoende agenter
 python -m mejeri.cli play rackar kalkyl trygg
 
-# Interaktiv session med OK-grind, domare och logg
+# Interaktiv session med steg-grind, domare och logg
 python -m mejeri.cli session
 ```
 
@@ -102,8 +102,9 @@ python -m mejeri.cli session
 I webbappen finns sektionen **"Fyra agenter spelar mot varandra"**:
 
 1. Klicka **Ny session**. Slumpen avgör spelordningen och vem som börjar.
-2. Ett steg visas i taget. Klicka **OK – nästa steg** för att utföra det, eller
-   **Kör till syn** för att spela hela vägen fram till en syn på en gång.
+2. Ett steg visas i taget. Klicka **Ett drag** för att utföra det,
+   **Till slut på runda** för att köra fram till rundans slut (en syn eller en
+   ny runda), eller **Till syn** för att spela hela vägen fram till en syn.
 3. Flödet följer reglerna:
    - Den som börjar **slår och tittar i smyg**, sedan säger ett bud.
    - Nästa spelare **slår** (skakar bägaren på nytt och säger ett högre bud), **synar** eller **skickar
@@ -120,12 +121,12 @@ per svar – bara siffran som sägs, eller **Synar** / **Skickar vidare** / **Sl
 / **Höjer** – och domarens utlåtande. Inga repliker visas. Vid en syn visas
 resultatet och vem som förlorade liv. Livsställningen syns i spelordningen.
 
-**OK-knappen** ligger i loggen, direkt under det senaste tärningsutfallet. Den
-bekräftar steget så att nästa rad läggs till.
+**Knappen "Ett drag"** ligger i loggen, direkt under det senaste
+tärningsutfallet. Den utför steget så att nästa rad läggs till.
 
-> **Obs:** Grinden (att varje steg måste bekräftas med OK) är till för att vi ska
-> kunna kontrollera att allt fungerar. **Kör till syn** och ett framtida
-> automatläge kör flera steg utan att du behöver trycka.
+> **Obs:** Grinden (att varje steg måste bekräftas) är till för att vi ska
+> kunna kontrollera att allt fungerar. **Till slut på runda** och **Till syn**
+> kör flera steg utan att du behöver trycka.
 
 ## API
 
@@ -137,7 +138,8 @@ bekräftar steget så att nästa rad läggs till.
 | GET | `/api/health` | Status och vald LLM-leverantör |
 | POST | `/api/session/new` | Ny session: slumpad ordning, domare, första slaget |
 | GET | `/api/session` | Hela sessionens tillstånd och logg |
-| POST | `/api/session/advance` | OK på aktuellt steg: utför det |
+| POST | `/api/session/advance` | Ett drag: utför aktuellt steg |
+| POST | `/api/session/round` | Kör flödet fram till rundans slut |
 | POST | `/api/session/run` | Kör hela flödet fram till en syn |
 | POST | `/api/session/stop` | Avsluta sessionen |
 
