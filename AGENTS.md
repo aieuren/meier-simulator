@@ -118,3 +118,9 @@ python -m majer.cli play rackar kalkyl trygg
   managed proxy key; set `ANTHROPIC_API_KEY` to use a real Claude account.
 - Never print the session API key. Read it from the process env if needed.
 - The web app is served on port 12000 in this environment.
+- Secrets for this conversation live in the agent-server, not the shell:
+  `GET/PUT /api/settings/secrets[/{name}]` manages them, and
+  `POST /api/conversations/{id}/secrets` attaches one to a running conversation.
+  A secret added mid-conversation is not injected until it is attached this way.
+  Names must be valid shell identifiers (letters, digits, underscore) — a hyphen
+  makes the value unusable as an environment variable.
