@@ -2,8 +2,7 @@
 
 Flera oberoende agenter spelar mot varandra, steg för steg. Slumpen avgör
 ordningen på spelarna och vem som börjar. Varje svar sparas i en logg med
-tärningsutfallet, vem som svarade, vad spelaren svarade och om domaren godkänner
-svaret eller har invändningar.
+tärningsutfallet, vem som svarade och vad spelaren svarade.
 
 Flödet följer reglerna:
 
@@ -31,7 +30,6 @@ from dataclasses import dataclass, field, replace
 
 from . import rules
 from .agents.player import MejerPlayerAgent
-from .agents.referee import RefereeAgent, Verdict
 
 
 @dataclass
@@ -59,7 +57,6 @@ class LogEntry:
     truth: bool = False
     line: str = ""
     reasoning: str = ""
-    referee: Verdict | None = None
     previous_bid: int | None = None
     proposed: int | None = None  # rå bud från modellen
     corrected: bool = False  # korrigerades budet?
@@ -92,7 +89,6 @@ class LogEntry:
             "blind": self.blind,
             "lives_lost": self.lives_lost,
             "lives_left": self.lives_left,
-            "referee": self.referee.to_dict() if self.referee else None,
         }
 
 
@@ -129,7 +125,6 @@ class Session:
     """En pågående interaktiv Mejer-session med flera agenter."""
 
     players: list[MejerPlayerAgent]
-    referee: RefereeAgent
     order: list[int] = field(default_factory=list)
     round: int = 1
     lives: list[int] = field(default_factory=list)
@@ -150,7 +145,6 @@ class Session:
     def new(
         cls,
         players: list[MejerPlayerAgent],
-        referee: RefereeAgent,
         *,
         seed: int | None = None,
         lives: int = 3,
@@ -163,7 +157,6 @@ class Session:
         rng.shuffle(order)
         session = cls(
             players=players,
-            referee=referee,
             order=order,
             lives=[lives] * len(players),
             rng=rng,
@@ -308,16 +301,8 @@ class Session:
         assert dice is not None
         player = self.players[self.actor]
         ann = player.announce(dice)
-        verdict = self.referee.review_announcement(
-            dice,
-            ann.bid,
-            previous_bid=None,
-            line=ann.line,
-            proposed=ann.proposed,
-            corrected=ann.corrected,
-        )
         entry = self._log_entry(
-            player, dice, ann, verdict, action="bud", previous_bid=None, blind=False
+            player, dice, ann, action="bud", previous_bid=None, blind=False
         )
         self.pending_bid = ann.bid
         self.bidder = self.actor
@@ -340,17 +325,9 @@ class Session:
             dice = rules.roll(self.rng)
             self._log_roll(player=player.name, dice=dice, shown=rules.read_dice(*dice))
             ann = player.announce_blind(dice, previous_bid=bid)
-            verdict = self.referee.review_announcement(
-                dice,
-                ann.bid,
-                previous_bid=bid,
-                line=ann.line,
-                proposed=ann.proposed,
-                corrected=ann.corrected,
-            )
-            ann, verdict = self._enforce_bid(ann, verdict, previous_bid=bid)
+            ann = self._enforce_bid(ann, previous_bid=bid)
             entry = self._log_entry(
-                player, dice, ann, verdict, action="slå", previous_bid=bid, blind=True
+                player, dice, ann, action="slå", previous_bid=bid, blind=True
             )
             self.pending_dice = dice
             self.pending_bid = ann.bid
@@ -360,7 +337,6 @@ class Session:
             return entry
 
         # Skicka vidare: samma bud går vidare. Spelaren tar över ansvaret för budet.
-        verdict = self.referee.review_decision("skicka", bid=bid, line=decision.line)
         entry = LogEntry(
             kind="action",
             round=self.round,
@@ -372,7 +348,6 @@ class Session:
             truth=False,
             line=decision.line,
             reasoning=decision.reasoning,
-            referee=verdict,
             action="skicka",
             previous_bid=bid,
         )
@@ -388,47 +363,30 @@ class Session:
         assert bid is not None and dice is not None
         player = self.players[self.bidder]
         ann = player.announce(dice, previous_bid=bid)
-        verdict = self.referee.review_announcement(
-            dice,
-            ann.bid,
-            previous_bid=bid,
-            line=ann.line,
-            proposed=ann.proposed,
-            corrected=ann.corrected,
-        )
-        ann, verdict = self._enforce_bid(ann, verdict, previous_bid=bid)
+        ann = self._enforce_bid(ann, previous_bid=bid)
         entry = self._log_entry(
-            player, dice, ann, verdict, action="höja", previous_bid=bid, blind=False
+            player, dice, ann, action="höja", previous_bid=bid, blind=False
         )
         self.pending_bid = ann.bid
         self.holder = self.bidder
         self._after_bid(actor=self.bidder)
         return entry
 
-    def _enforce_bid(self, ann, verdict: Verdict, *, previous_bid: int):
-        """Domaren stoppar ett olagligt bud innan det får stå kvar.
+    def _enforce_bid(self, ann, *, previous_bid: int):
+        """Se till att ett bud som står kvar är strikt högre än det förra.
 
-        Ett bud som inte är strikt högre än det förra får aldrig stå. Minsta
-        lagliga höjning tar över och invändningen sparas i domarens utlåtande.
+        Spelaragenten korrigerar redan ett olagligt bud (se
+        ``MejerPlayerAgent._coerce_bid``), men budet som *står* får aldrig vara
+        lägre än det förra. Minsta lagliga höjning tar över i så fall, och
+        ``corrected`` markeras så att loggen visar att budet rättades.
         """
-        if verdict.ok:
-            return ann, verdict
+        if rules.is_valid_value(ann.bid) and rules.is_higher(ann.bid, previous_bid):
+            return ann
         higher = rules.higher_options(previous_bid)
         if not higher:
             # Ingen höjning finns (budet är Mejer) – kan inte korrigeras här.
-            return ann, verdict
-        corrected_bid = higher[-1]
-        verdict = Verdict(
-            ok=True,
-            objections=[],
-            comment=(
-                "Domaren stoppade budet: "
-                + " ".join(verdict.objections)
-                + f" Budet räknas som {rules.name(corrected_bid)}."
-            ),
-            source="regler",
-        )
-        return replace(ann, bid=corrected_bid, truth=False, corrected=True), verdict
+            return ann
+        return replace(ann, bid=higher[-1], truth=False, corrected=True)
 
     def _after_bid(self, *, actor: int) -> None:
         """Efter ett bud: gå vidare till nästa spelare – eller hela varvet runt."""
@@ -460,7 +418,6 @@ class Session:
         loser_idx = caller_idx if result.caller_loses else holder_idx
         self.lives[loser_idx] = max(0, self.lives[loser_idx] - result.lives)
 
-        verdict = self.referee.review_decision("syna", bid=bid, line="")
         entry = LogEntry(
             kind="action",
             round=self.round,
@@ -472,7 +429,6 @@ class Session:
             truth=False,
             line="",
             reasoning="",
-            referee=verdict,
             action="syna",
             previous_bid=bid,
         )
@@ -524,7 +480,6 @@ class Session:
         player: MejerPlayerAgent,
         dice: tuple[int, int],
         ann,
-        verdict: Verdict,
         *,
         action: str,
         previous_bid: int | None,
@@ -541,7 +496,6 @@ class Session:
             truth=ann.truth,
             line=ann.line,
             reasoning=ann.reasoning,
-            referee=verdict,
             action=action,
             previous_bid=previous_bid,
             proposed=ann.proposed,

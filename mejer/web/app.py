@@ -18,7 +18,6 @@ from .. import rules
 from ..agents.player import ROLES, get_role
 from ..llm import LLMClient, LLMError
 from ..agents.player import MejerPlayerAgent
-from ..agents.referee import REFEREE_ROLE, RefereeAgent
 from ..session import Session
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -78,12 +77,6 @@ def list_roles() -> dict:
             {"key": r.key, "name": r.name, "description": r.description, "style": r.style}
             for r in ROLES.values()
         ],
-        "referee": {
-            "key": REFEREE_ROLE.key,
-            "name": REFEREE_ROLE.name,
-            "description": REFEREE_ROLE.description,
-            "style": REFEREE_ROLE.style,
-        },
         "ranking": [{"value": v, "name": rules.name(v)} for v in rules.RANKING],
     }
 
@@ -164,7 +157,7 @@ def _require_session() -> Session:
 
 @app.post("/api/session/new")
 def session_new(req: NewSessionRequest) -> dict:
-    """Skapa en ny session: slumpad ordning, domare och första tärningsslag."""
+    """Skapa en ny session: slumpad ordning och första tärningsslag."""
     global _session
     roles = req.roles or list(ROLES)
     for key in roles:
@@ -174,8 +167,7 @@ def session_new(req: NewSessionRequest) -> dict:
         raise HTTPException(status_code=400, detail="Minst två roller krävs")
 
     players = [_get_agent(key) for key in roles]
-    referee = RefereeAgent(llm=LLMClient())
-    _session = Session.new(players, referee, seed=req.seed)
+    _session = Session.new(players, seed=req.seed)
     return _session.to_dict()
 
 

@@ -20,8 +20,8 @@ lower bid). Multiple agents with distinct roles can also play full games.
 - `mejer/game.py` – multi-agent game engine. Keeps each agent isolated; no agent
   sees another's secret dice.
 - `mejer/session.py` – interactive session: full flow to a call (roll → raise
-  (new shake) / pass → forced raise → call), random player order, referee review,
-  and the log. The log is built downward: each shake starts with a `kind="roll"`
+  (new shake) / pass → forced raise → call), random player order, and the log.
+  The log is built downward: each shake starts with a `kind="roll"`
   entry (the dice, pure input), then one `kind="action"` entry per answer (bid,
   raise, pass, or call), and after a call a `kind="life"` entry (who lost how
   many lives, and how many remain). `advance()` does one gated step;
@@ -30,8 +30,7 @@ lower bid). Multiple agents with distinct roles can also play full games.
   The web UI moves the *Ett drag* button into the log so it sits under the
   latest dice roll; the *Till slut på runda* and *Till syn* buttons run multiple
   steps at once. When a raise is not strictly higher than the previous bid,
-  `_enforce_bid` lets the referee stop it and the smallest legal raise takes
-  over.
+  `_enforce_bid` replaces it with the smallest legal raise.
 - Call responsibility: the player who loses a life on a call is the one who
   *holds* the bid — the last player to say or pass the bid — not necessarily the
   one who first set it. `Session.holder` tracks this and is updated on every bid,
@@ -39,11 +38,13 @@ lower bid). Multiple agents with distinct roles can also play full games.
   player *before* the loser in turn order (`_previous_active`). `mejer/game.py`
   keeps the same `holder` logic in its text log.
 - `mejer/agents/base.py` – `Agent`/`Role` base classes.
-- `mejer/agents/player.py` – `MejerPlayerAgent` and the role registry.
-- `mejer/agents/referee.py` – `RefereeAgent` (Domare-Doris). Judges each answer.
+- `mejer/agents/player.py` – `MejerPlayerAgent` and the role registry. The agent
+  is the source of truth for legality: `_coerce_bid` and `_coerce_blind_bid`
+  keep every bid valid and strictly higher, and `Session._enforce_bid` is the
+  engine's backstop. The tests guard the rules.
 - `mejer/web/app.py` + `mejer/web/static/` – web UI and JSON API. The UI has
   four tabs: *Spelarna* (the four player cards with name, description, and
-  style, plus the referee), *Enskild spelare* (one player answers a roll),
+  style), *Enskild spelare* (one player answers a roll),
   *Fyra agenter* (the interactive session), and *Hela spel* (per-game log,
   placeholder for now). `/api/roles` returns each role's `style` too, so the
   first tab can show the full character text. Tab switching just toggles
@@ -69,8 +70,7 @@ So slå is *not* a peek at the old dice — the player shakes a brand new roll, 
 the bid must be strictly higher than the previous one whatever the dice show.
 This is why the engine logs a fresh `kind="roll"` entry before every slå, and
 why `announce_blind` (not `announce`) is used for it. A slå that is not strictly
-higher is stopped by the referee: `Session._enforce_bid` lets the smallest legal
-raise take over and records the objection.
+higher is corrected to the smallest legal raise: `Session._enforce_bid`.
 
 ## Agent Canvas: LLM profiles vanish on container restart (gotcha)
 
@@ -110,16 +110,13 @@ It also refuses to double-start if `/api/health` already answers on the port.
 Manual fallback: `pip install -r requirements.txt`, then
 `python3 -m uvicorn mejer.web.app:app --host 0.0.0.0 --port 12000`.
 
-## Referee design (important)
+## The engine is the source of truth
 
-The referee judges the answer the player *actually gave*: the model's raw
-proposal (`Announcement.proposed`), not the value after rule coercion. This is
-what makes objections meaningful — otherwise the player agent's own coercion
-would make every answer trivially legal.
-
-The formal rule checks are authoritative. The LLM layer may add a comment or
-sharpen a verdict, but it can never approve a formal rule breach (see
-`RefereeAgent._llm_second_opinion`). Keep that property when editing.
+Legality lives in the engine and the player agent, not in a separate judge:
+`MejerPlayerAgent._coerce_bid` / `_coerce_blind_bid` keep every bid valid and
+strictly higher, and `Session._enforce_bid` is the engine's backstop for the bid
+that actually stands. The tests in `tests/` guard the rules. There is no referee
+agent — do not reintroduce a deterministic check as a "judge".
 
 ## Commands
 

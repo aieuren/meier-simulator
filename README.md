@@ -11,13 +11,12 @@ roller kan spela hela spel mot varandra.
 
 ## Vad som finns
 
-- **Webbapp med tre flikar:**
+- **Webbapp med fyra flikar:**
+  - **Spelarna** – de fyra agenterna och deras karaktärsbeskrivningar.
   - **Enskild spelare** – skriv in tärningsutfallet (två tärningar) och se spelarens svar.
   - **Fyra agenter** – fyra agenter spelar mot varandra i ett fullt flöde fram till en syn.
   - **Hela spel** – en logg per spelat spel från början till slut (innehållet kommer).
 - **Fyra spelarroller** – Ärlig-Adolf, Rackar-Rakel, Kalkylerande-Karin och Trygge-Tor.
-- **Domaragent** – Domare-Doris övervakar att alla följer reglerna och säger OK eller
-  kommer med invändningar.
 - **Interaktiv spelsession** – fyra agenter spelar mot varandra i ett fullt flöde
   fram till en syn. Slumpen avgör ordningen och vem som börjar. Varje steg
   bekräftas med **Ett drag**, eller så körs flödet vidare med **Till slut på
@@ -84,7 +83,7 @@ python -m mejer.cli decide 43 --role trygg
 # Spela ett helt spel med flera oberoende agenter
 python -m mejer.cli play rackar kalkyl trygg
 
-# Interaktiv session med steg-grind, domare och logg
+# Interaktiv session med steg-grind och logg
 python -m mejer.cli session
 ```
 
@@ -96,7 +95,6 @@ python -m mejer.cli session
 | `rackar` | Rackar-Rakel | Bluffar högt, tar risker |
 | `kalkyl` | Kalkylerande-Karin | Matematisk, väger risk mot vinst |
 | `trygg` | Trygge-Tor | Feg och defensiv |
-| `domare` | Domare-Doris | Domare (inte en spelare) |
 
 ## Interaktiv spelsession
 
@@ -113,14 +111,14 @@ I webbappen finns sektionen **"Fyra agenter spelar mot varandra"**:
    - Kommer bägaren ett helt varv tillbaka till budgivaren måste denne **höja**.
      Är budet Mejer slår budgivaren i stället om och börjar en ny runda.
    - Vid en **syn** lyfts locket. Visar tärningarna lägre än budet förlorar
-     budgivaren ett liv, annars den som synade. Mejer kostar dubbelt.
-4. Domaren granskar varje svar och säger **OK** eller kommer med en invändning.
+     den som ansvarar för budet ett liv (den som sa det senast, eller skickade
+     vidare och tog över ansvaret), annars den som synade. Mejer kostar dubbelt.
 
 Loggen byggs **nedåt**: äldst överst, nyast nederst. Varje runda börjar med en
 rad för tärningsutfallet (indata) med tärningssymboler. Därefter följer en rad
 per svar – bara siffran som sägs, eller **Synar** / **Skickar vidare** / **Slår**
-/ **Höjer** – och domarens utlåtande. Inga repliker visas. Vid en syn visas
-resultatet och vem som förlorade liv. Livsställningen syns i spelordningen.
+/ **Höjer**. Inga repliker visas. Vid en syn visas resultatet och en egen rad om
+vem som förlorade hur många liv. Livsställningen syns i spelordningen.
 
 **Knappen "Ett drag"** ligger i loggen, direkt under det senaste
 tärningsutfallet. Den utför steget så att nästa rad läggs till.
@@ -137,7 +135,7 @@ tärningsutfallet. Den utför steget så att nästa rad läggs till.
 | POST | `/api/announce` | Givet tärningsutfall: spelarens svar |
 | POST | `/api/decide` | Givet ett bud: Slå, Syna eller Skicka vidare |
 | GET | `/api/health` | Status och vald LLM-leverantör |
-| POST | `/api/session/new` | Ny session: slumpad ordning, domare, första slaget |
+| POST | `/api/session/new` | Ny session: slumpad ordning, första slaget |
 | GET | `/api/session` | Hela sessionens tillstånd och logg |
 | POST | `/api/session/advance` | Ett drag: utför aktuellt steg |
 | POST | `/api/session/round` | Kör flödet fram till rundans slut |
@@ -209,12 +207,11 @@ mejer/
   rules.py            Regler: poängordning, jämförelse, syn, slumpat slag
   llm.py              LLM-klient (Anthropic + OpenHands-fallback)
   game.py             Spelmotor för flera oberoende agenter
-  session.py          Interaktiv session: fullt flöde, domare, logg
+  session.py          Interaktiv session: fullt flöde och logg
   cli.py              Kommandoradsgränssnitt
   agents/
     base.py           Agent-grundklass och roll
     player.py         Mejer-spelaragenten och rollerna
-    referee.py        Domaragenten (Domare-Doris)
   web/
     app.py            FastAPI-app
     static/           Frontend (HTML/CSS/JS)

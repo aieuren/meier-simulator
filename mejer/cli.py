@@ -14,7 +14,6 @@ import sys
 
 from . import rules
 from .agents.player import ROLES, get_role, MejerPlayerAgent
-from .agents.referee import RefereeAgent
 from .game import Game
 from .session import Session
 
@@ -91,18 +90,12 @@ def _print_entry(entry) -> None:
         print(f"  {entry.player_name}: Höjer {rules.name(entry.bid)}")
     else:
         print(f"  {entry.player_name}: Säger {rules.name(entry.bid)}")
-    verdict = entry.referee
-    if verdict.ok:
-        print("  Domaren: OK")
-    else:
-        print(f"  Domaren: INVÄNDNING – {' '.join(verdict.objections)}")
 
 
 def _cmd_session(args: argparse.Namespace) -> int:
     roles = args.roles or list(ROLES)
     players = [MejerPlayerAgent(role=get_role(key)) for key in roles]
-    referee = RefereeAgent()
-    session = Session.new(players, referee, seed=args.seed)
+    session = Session.new(players, seed=args.seed)
 
     print("Spelordning: " + " → ".join(players[i].name for i in session.order))
     print("Tryck Enter (Ett drag) för nästa steg.")
@@ -142,11 +135,10 @@ def _cmd_session(args: argparse.Namespace) -> int:
         )
     print("\nLogg:")
     for e in session.log:
-        verdict = "OK" if e.referee.ok else "invändning"
-        print(
-            f"  R{e.round}: {e.player_name} [{e.action}] {rules.name(e.bid)} "
-            f"– domare: {verdict}"
-        )
+        if e.kind == "life":
+            print(f"  R{e.round}: {e.player_name} förlorar {e.lives_lost} liv ({e.lives_left} kvar)")
+        else:
+            print(f"  R{e.round}: {e.player_name} [{e.action}] {rules.name(e.bid)}")
     return 0
 
 
@@ -173,7 +165,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_play.set_defaults(func=_cmd_play)
 
     p_sess = sub.add_parser(
-        "session", help="Interaktiv session: OK-grind på tärningsslaget, domare och logg"
+        "session", help="Interaktiv session: OK-grind på tärningsslaget och logg"
     )
     p_sess.add_argument("roles", nargs="*", choices=list(ROLES))
     p_sess.add_argument("--seed", type=int, default=None)

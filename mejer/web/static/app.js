@@ -85,9 +85,9 @@ function setupTabs() {
 
 // -- Flik 1: de fyra spelarna och deras karaktärer --------------------------
 
-function playerCard(r, extraClass) {
+function playerCard(r) {
   const div = document.createElement("div");
-  div.className = "player-card" + (extraClass ? " " + extraClass : "");
+  div.className = "player-card";
   div.innerHTML = `
     <div class="player-name">${r.name}</div>
     <div class="player-desc">${r.description}</div>
@@ -101,12 +101,6 @@ function renderPlayers(data) {
   if (!list) return;
   list.innerHTML = "";
   (data.roles || []).forEach((r) => list.appendChild(playerCard(r)));
-
-  const ref = $("refereeCard");
-  if (ref && data.referee) {
-    ref.innerHTML = "";
-    ref.appendChild(playerCard(data.referee, "is-referee"));
-  }
 }
 
 function readDice(a, b) {
@@ -407,12 +401,6 @@ function renderLog(entries) {
 
     // Spelarens svar: bara siffran eller åtgärden – ingen replik.
     row.className = "log-row is-action" + (e.action === "syna" ? " is-call" : "");
-    const ref = e.referee || {};
-    const refClass = ref.ok ? "ok" : "objection";
-    const refText = ref.ok ? "Domaren: OK" : "Domaren: invändning";
-    const refDetail = ref.ok
-      ? ""
-      : `<div class="ref-detail">${(ref.objections || []).join(" ")}</div>`;
     const corrected = e.corrected
       ? `<span class="log-corrected" title="Modellen föreslog ${e.proposed}">korrigerat bud</span>`
       : "";
@@ -444,10 +432,8 @@ function renderLog(entries) {
         ${who}
         ${main} ${prev}
         ${truthTag}
-        <span class="log-referee ${refClass}">${refText}</span>
       </div>
       ${corrected}
-      ${refDetail}
     `;
     frag.appendChild(row);
   });

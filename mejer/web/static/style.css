@@ -171,10 +171,8 @@ select {
   border-radius: 11px;
   padding: 0.9rem 1rem;
 }
-.player-card.is-referee { border-left-color: var(--muted); }
 .player-name { font-weight: 700; font-size: 1.05rem; margin-bottom: 0.15rem; }
 .player-desc { color: var(--accent); font-size: 0.85rem; margin-bottom: 0.5rem; }
-.player-card.is-referee .player-desc { color: var(--muted); }
 .player-style { color: var(--muted); font-size: 0.88rem; line-height: 1.45; margin: 0; }
 
 button {
@@ -335,12 +333,8 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 .pending-what { color: var(--muted); font-size: 0.9rem; margin-right: auto; }
 .log-bid.truth { color: var(--good); }
 .log-bid.lie { color: var(--bad); }
-.log-referee { margin-left: auto; padding: 0.1rem 0.55rem; border-radius: 999px; font-size: 0.8rem; font-weight: 700; }
-.log-referee.ok { background: rgba(76, 195, 138, 0.18); color: var(--good); }
-.log-referee.objection { background: rgba(239, 107, 107, 0.18); color: var(--bad); }
 .log-line { font-style: italic; margin: 0.4rem 0 0.2rem; }
 .log-reasoning { color: var(--muted); font-size: 0.85rem; }
-.ref-detail { color: var(--bad); font-size: 0.85rem; margin-top: 0.3rem; }
 .log-corrected { font-size: 0.78rem; color: var(--accent); border: 1px dashed var(--accent); border-radius: 6px; padding: 0 0.4rem; }
 .log-action { color: var(--accent); font-size: 0.85rem; }
 .log-prev { color: var(--muted); font-size: 0.82rem; }
