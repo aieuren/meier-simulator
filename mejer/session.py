@@ -58,6 +58,7 @@ class LogEntry:
     line: str = ""
     reasoning: str = ""
     previous_bid: int | None = None
+    accepted_bid: int | None = None  # budet spelaren svarar på (slå/skicka/syna)
     proposed: int | None = None  # rå bud från modellen
     corrected: bool = False  # korrigerades budet?
     blind: bool = False  # slog spelaren bägaren på nytt (fick inte lyfta locket)?
@@ -83,6 +84,10 @@ class LogEntry:
             "previous_bid": self.previous_bid,
             "previous_bid_name": rules.name(self.previous_bid)
             if self.previous_bid is not None
+            else None,
+            "accepted_bid": self.accepted_bid,
+            "accepted_bid_name": rules.name(self.accepted_bid)
+            if self.accepted_bid is not None
             else None,
             "proposed": self.proposed,
             "corrected": self.corrected,
@@ -327,7 +332,13 @@ class Session:
             ann = player.announce_blind(dice, previous_bid=bid)
             ann = self._enforce_bid(ann, previous_bid=bid)
             entry = self._log_entry(
-                player, dice, ann, action="slå", previous_bid=bid, blind=True
+                player,
+                dice,
+                ann,
+                action="slå",
+                previous_bid=bid,
+                blind=True,
+                accepted_bid=bid,
             )
             self.pending_dice = dice
             self.pending_bid = ann.bid
@@ -350,6 +361,7 @@ class Session:
             reasoning=decision.reasoning,
             action="skicka",
             previous_bid=bid,
+            accepted_bid=bid,
         )
         self.log.append(entry)
         self.holder = self.actor
@@ -431,6 +443,7 @@ class Session:
             reasoning="",
             action="syna",
             previous_bid=bid,
+            accepted_bid=bid,
         )
         self.log.append(entry)
 
@@ -484,6 +497,7 @@ class Session:
         action: str,
         previous_bid: int | None,
         blind: bool,
+        accepted_bid: int | None = None,
     ) -> LogEntry:
         entry = LogEntry(
             kind="action",
@@ -498,6 +512,7 @@ class Session:
             reasoning=ann.reasoning,
             action=action,
             previous_bid=previous_bid,
+            accepted_bid=accepted_bid,
             proposed=ann.proposed,
             corrected=ann.corrected,
             blind=blind,
@@ -540,6 +555,7 @@ class Session:
                 }
                 for i in self.order
             ],
+            "starter": self.name_of(self.order[0]),
             "current": {
                 "name": self.current_player.name,
                 "role": self.current_player.role.key,

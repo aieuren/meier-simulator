@@ -293,9 +293,33 @@ function renderSession(data) {
 
   $("sessionNote").textContent = finished ? "Sessionen är avslutad." : "";
 
+  renderOrderNote(data);
   renderResult(data.result);
   renderLog(data.log);
   placeControls(data, pending);
+}
+
+// Visa spelordningen och vem som börjar – slumpas fram vid Ny session.
+function renderOrderNote(data) {
+  const box = $("orderNote");
+  if (!box) return;
+  const order = data.order || [];
+  if (order.length === 0) {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  const chain = order
+    .map((p) => {
+      const lives = `<span class="order-lives">${p.lives} liv</span>`;
+      return `<span class="order-player">${p.name}${lives}</span>`;
+    })
+    .join('<span class="order-arrow">→</span>');
+  box.innerHTML = `
+    <div class="order-title">Spelordning</div>
+    <div class="order-chain">${chain}</div>
+    <div class="order-start"><strong>${textOr(data.starter, "?")}</strong> börjar: slår och tittar i smyg.</div>
+  `;
 }
 
 // Flytta OK-knappen till tärningsutfallet i loggen och visa vad som väntar.
@@ -399,38 +423,42 @@ function renderLog(entries) {
       return;
     }
 
-    // Spelarens svar: bara siffran eller åtgärden – ingen replik.
+    // Spelarens svar: en egen rad per åtgärd.
     row.className = "log-row is-action" + (e.action === "syna" ? " is-call" : "");
     const corrected = e.corrected
       ? `<span class="log-corrected" title="Modellen föreslog ${e.proposed}">korrigerat bud</span>`
       : "";
+    const who = e.player_name ? `<span class="log-player">${e.player_name}</span>` : "";
 
     let main;
     if (e.action === "syna") {
-      main = `<span class="log-action">Synar</span>`;
+      main = `<span class="log-action">Synar</span> <span class="log-prev">budet ${textOr(e.accepted_bid_name, "?")}</span>`;
     } else if (e.action === "skicka") {
-      main = `<span class="log-action">Skickar vidare</span> <strong>${textOr(e.bid_name, "?")}</strong>`;
+      main =
+        `<span class="log-action">Skickar vidare</span> <strong>${textOr(e.accepted_bid_name, "?")}</strong>` +
+        `<span class="log-prev">utan att slå</span>`;
     } else if (e.action === "slå") {
-      main = `<span class="log-action">Slår</span> <strong>${textOr(e.bid_name, "?")}</strong>`;
+      main =
+        `<span class="log-action">Accepterar och slår</span>` +
+        `<span class="log-prev">över ${textOr(e.accepted_bid_name, "?")}</span>` +
+        `<span class="log-says">säger</span> <strong>${textOr(e.bid_name, "?")}</strong>`;
     } else if (e.action === "höja") {
-      main = `<span class="log-action">Höjer</span> <strong>${textOr(e.bid_name, "?")}</strong>`;
+      main =
+        `<span class="log-action">Höjer</span>` +
+        `<span class="log-prev">över ${textOr(e.previous_bid_name, "?")}</span>` +
+        `<span class="log-says">säger</span> <strong>${textOr(e.bid_name, "?")}</strong>`;
     } else {
       main = `<span class="log-action">Säger</span> <strong>${textOr(e.bid_name, "?")}</strong>`;
     }
-    const prev =
-      e.previous_bid_name && (e.action === "slå" || e.action === "höja")
-        ? `<span class="log-prev">(över ${e.previous_bid_name})</span>`
-        : "";
     const truthTag =
       e.action === "bud" || e.action === "slå" || e.action === "höja"
         ? `<span class="log-bid ${e.lie ? "lie" : "truth"}">${e.lie ? "bluff" : "sant"}</span>`
         : "";
-    const who = e.player_name ? `<span class="log-player">${e.player_name}</span>` : "";
 
     row.innerHTML = `
       <div class="log-head">
         ${who}
-        ${main} ${prev}
+        ${main}
         ${truthTag}
       </div>
       ${corrected}

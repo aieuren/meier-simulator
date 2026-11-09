@@ -338,6 +338,21 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 .log-corrected { font-size: 0.78rem; color: var(--accent); border: 1px dashed var(--accent); border-radius: 6px; padding: 0 0.4rem; }
 .log-action { color: var(--accent); font-size: 0.85rem; }
 .log-prev { color: var(--muted); font-size: 0.82rem; }
+.log-says { color: var(--muted); font-size: 0.82rem; }
+.order-note {
+  margin-top: 1rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: 11px;
+  background: var(--panel-2);
+}
+.order-title { font-size: 0.8rem; color: var(--accent); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem; }
+.order-chain { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; font-size: 0.92rem; }
+.order-player { display: inline-flex; flex-direction: column; }
+.order-lives { color: var(--muted); font-size: 0.78rem; }
+.order-arrow { color: var(--muted); }
+.order-start { margin-top: 0.6rem; font-size: 0.9rem; color: var(--text); }
 .log-row.is-call { border-color: var(--bad); }
 .log-row.is-call .log-head { color: var(--bad); }
 

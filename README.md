@@ -12,12 +12,12 @@ roller kan spela hela spel mot varandra.
 ## Vad som finns
 
 - **Webbapp med fyra flikar:**
-  - **Spelarna** – de fyra agenterna och deras karaktärsbeskrivningar.
+  - **Spelarna** – de fyra spelarna och deras karaktärsbeskrivningar.
   - **Enskild spelare** – skriv in tärningsutfallet (två tärningar) och se spelarens svar.
-  - **Fyra agenter** – fyra agenter spelar mot varandra i ett fullt flöde fram till en syn.
+  - **Fyra spelare** – fyra spelare spelar mot varandra i ett fullt flöde fram till en syn.
   - **Hela spel** – en logg per spelat spel från början till slut (innehållet kommer).
 - **Fyra spelarroller** – Ärlig-Adolf, Rackar-Rakel, Kalkylerande-Karin och Trygge-Tor.
-- **Interaktiv spelsession** – fyra agenter spelar mot varandra i ett fullt flöde
+- **Interaktiv spelsession** – fyra spelare spelar mot varandra i ett fullt flöde
   fram till en syn. Slumpen avgör ordningen och vem som börjar. Varje steg
   bekräftas med **Ett drag**, eller så körs flödet vidare med **Till slut på
   runda** eller **Till syn**. Varje svar sparas i en logg.
@@ -98,7 +98,7 @@ python -m mejer.cli session
 
 ## Interaktiv spelsession
 
-I webbappen finns sektionen **"Fyra agenter spelar mot varandra"**:
+I webbappen finns sektionen **"Fyra spelare spelar mot varandra"**:
 
 1. Klicka **Ny session**. Slumpen avgör spelordningen och vem som börjar.
 2. Ett steg visas i taget. Klicka **Ett drag** för att utföra det,

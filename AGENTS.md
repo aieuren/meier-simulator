@@ -24,7 +24,11 @@ lower bid). Multiple agents with distinct roles can also play full games.
   The log is built downward: each shake starts with a `kind="roll"`
   entry (the dice, pure input), then one `kind="action"` entry per answer (bid,
   raise, pass, or call), and after a call a `kind="life"` entry (who lost how
-  many lives, and how many remain). `advance()` does one gated step;
+  many lives, and how many remain). Every action entry carries `accepted_bid`
+  (the bid the player answers) next to `bid` (the bid they then say), so the UI
+  can show "Slår över X, säger Y" as separate parts. `to_dict` also reports
+  `order` and `starter` so the UI can show the seating and who begins.
+  `advance()` does one gated step;
   `run_to_round_end()` runs to the end of the current round (a call, or a new
   round after Mejer), and `run_to_call()` runs the whole flow to the next call.
   The web UI moves the *Ett drag* button into the log so it sits under the
@@ -45,7 +49,7 @@ lower bid). Multiple agents with distinct roles can also play full games.
 - `mejer/web/app.py` + `mejer/web/static/` – web UI and JSON API. The UI has
   four tabs: *Spelarna* (the four player cards with name, description, and
   style), *Enskild spelare* (one player answers a roll),
-  *Fyra agenter* (the interactive session), and *Hela spel* (per-game log,
+  *Fyra spelare* (the interactive session), and *Hela spel* (per-game log,
   placeholder for now). `/api/roles` returns each role's `style` too, so the
   first tab can show the full character text. Tab switching just toggles
   `[hidden]` on `.tab-panel`; note the `.tab-panel[hidden] { display: none }`

@@ -99,6 +99,60 @@ def test_first_roll_produces_bid_then_awaits_action():
     assert state["pending"]["bidder"] == first
 
 
+def test_session_dict_reports_order_and_starter():
+    players = [make_player(k) for k in ("a", "b", "c", "d")]
+    session = Session.new(players, seed=7)
+    state = session.to_dict()
+    assert [p["name"] for p in state["order"]] == [
+        players[i].name for i in session.order
+    ]
+    # Den som börjar är den första i ordningen.
+    assert state["starter"] == players[session.order[0]].name
+
+
+def test_skicka_logs_accepted_bid_and_keeps_same_bid():
+    players = [
+        make_player(k, ScriptedLLM(bids=[44], actions=["skicka"])) for k in ("a", "b")
+    ]
+    session = Session.new(players, seed=3)
+    session.advance()  # bud 44
+    entry = session.advance()  # skickar vidare
+
+    assert entry.action == "skicka"
+    # Budet spelaren svarar på, och det är oförändrat efter ett skickande.
+    assert entry.accepted_bid == 44
+    assert entry.bid == 44
+    assert entry.to_dict()["accepted_bid_name"] == "44"
+
+
+def test_slag_logs_accepted_bid_and_new_bid_separately():
+    players = [
+        make_player(k, ScriptedLLM(bids=[44], actions=["slå"])) for k in ("a", "b")
+    ]
+    session = Session.new(players, seed=3)
+    session.advance()  # bud 44
+    entry = session.advance()  # slår över 44 med ett nytt bud
+
+    assert entry.action == "slå"
+    # Budet spelaren svarar på är 44; det nya (sagda) budet är högre.
+    assert entry.accepted_bid == 44
+    assert entry.bid != entry.accepted_bid
+    assert rules.is_higher(entry.bid, entry.accepted_bid)
+
+
+def test_syna_logs_accepted_bid():
+    players = [
+        make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b")
+    ]
+    session = Session.new(players, seed=3)
+    session.advance()  # bud 66
+    entry = session.advance()  # synar budet
+
+    assert entry.action == "syna"
+    assert entry.accepted_bid == 66
+    assert entry.to_dict()["accepted_bid_name"] == "66"
+
+
 def test_skicka_passes_bid_and_forces_raise_with_two_players():
     players = [
         make_player(k, ScriptedLLM(bids=[44], actions=["skicka"])) for k in ("a", "b")
