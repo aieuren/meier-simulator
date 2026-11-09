@@ -49,14 +49,31 @@ lower bid). Multiple agents with distinct roles can also play full games.
 - `mejer/web/app.py` + `mejer/web/static/` – web UI and JSON API. The UI has
   four tabs: *Spelarna* (the four player cards with name, description, and
   style), *Enskild spelare* (one player answers a roll),
-  *Fyra spelare* (the interactive session), and *Hela spel* (per-game log,
-  placeholder for now). `/api/roles` returns each role's `style` too, so the
+  *Fyra spelare* (the interactive session), and *Matchserie* (run a series of
+  matches and show per-player statistics plus a downloadable JSONL protocol).
+  `/api/roles` returns each role's `style` too, so the
   first tab can show the full character text. Tab switching just toggles
   `[hidden]` on `.tab-panel`; note the `.tab-panel[hidden] { display: none }`
   rule — a bare `display: grid` would otherwise override `hidden` and show every
-  panel at once.
+  panel at once. A match series is hundreds of LLM calls and takes minutes, so
+  `/api/matches/run` starts a background thread and returns at once; the client
+  polls `/api/matches/status` (field `running`) and renders matches as they
+  finish. Only one series runs at a time (a second start gives 409). The request
+  field `workers` (1–8) plays several matches at once; the JSONL file is written
+  line by line as matches finish, so the download works mid-run.
+- `mejer/match.py` – batch play of many full matches between the roles, for
+  strategy analysis. `play_match` plays one match to the end via
+  `Session.play_to_end()` and returns a `GameRecord`; `run_matches` yields a
+  series (optional sequential seeds, and `workers>1` plays matches in parallel
+  threads); `write_jsonl`/`read_jsonl` persist one
+  match per line; `summarize` aggregates a series per role (win rate, bluff
+  rate, raise/call rates, call success, lives lost). `GameRecord.events` is the
+  full session log (`LogEntry.to_dict()`), which carries the analysis fields
+  (`accepted_bid`, `proposed`, `corrected`, `blind`, `lives_lost`, `lives_left`,
+  `actor_lives`, `active_players`, `caller_loses`). Tests swap the module-level
+  `_new_agents` factory for scripted agents.
 - `mejer/cli.py` – command line entry points (`announce`, `decide`, `play`,
-  `session`).
+  `session`, `match`, `summarize`).
 - `tests/` – unit tests. No real LLM calls; `FakeLLM`/`ScriptedAgent` are used.
 
 ## Mejer ranking is non-numeric (gotcha)

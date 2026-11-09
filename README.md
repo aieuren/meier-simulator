@@ -15,12 +15,14 @@ roller kan spela hela spel mot varandra.
   - **Spelarna** – de fyra spelarna och deras karaktärsbeskrivningar.
   - **Enskild spelare** – skriv in tärningsutfallet (två tärningar) och se spelarens svar.
   - **Fyra spelare** – fyra spelare spelar mot varandra i ett fullt flöde fram till en syn.
-  - **Hela spel** – en logg per spelat spel från början till slut (innehållet kommer).
+  - **Matchserie** – kör många matcher och få statistik + ett JSONL-protokoll för analys.
 - **Fyra spelarroller** – Ärlig-Adolf, Rackar-Rakel, Kalkylerande-Karin och Trygge-Tor.
 - **Interaktiv spelsession** – fyra spelare spelar mot varandra i ett fullt flöde
   fram till en syn. Slumpen avgör ordningen och vem som börjar. Varje steg
-  bekräftas med **Ett drag**, eller så körs flödet vidare med **Till slut på
-  runda** eller **Till syn**. Varje svar sparas i en logg.
+  bekräftas med **Ett drag**, eller så körs flödet vidare med **Till syn**
+  eller **Till slut på runda**. Varje svar sparas i en logg.
+- **Matchserie och statistik** – spela N matcher mellan rollerna, se vinstfrekvens,
+  bluffrekvens, höjningar och synar, och ladda ner hela protokollet som JSONL.
 - **Spelmotor** – flera oberoende agenter spelar ett fullt Mejer-spel mot varandra.
 - **Kommandoradsgränssnitt** – kör agenten, en session eller ett helt spel.
 - **Regelmotor** – fullständig poängordning, budjämförelse, syn-avgörande och
@@ -85,6 +87,12 @@ python -m mejer.cli play rackar kalkyl trygg
 
 # Interaktiv session med steg-grind och logg
 python -m mejer.cli session
+
+# Spela många matcher och skriv ett JSONL-protokoll för analys
+python -m mejer.cli match --count 20 --out matches.jsonl --workers 3
+
+# Sammanfatta ett tidigare protokoll
+python -m mejer.cli summarize matches.jsonl
 ```
 
 ### Roller
@@ -124,8 +132,29 @@ vem som förlorade hur många liv. Livsställningen syns i spelordningen.
 tärningsutfallet. Den utför steget så att nästa rad läggs till.
 
 > **Obs:** Grinden (att varje steg måste bekräftas) är till för att vi ska
-> kunna kontrollera att allt fungerar. **Till slut på runda** och **Till syn**
+> kunna kontrollera att allt fungerar. **Till syn** och **Till slut på runda**
 > kör flera steg utan att du behöver trycka.
+
+## Matchserie och statistik
+
+Fliken **Matchserie** låter spelarna möta varandra i många matcher i följd. Varje
+match körs från första slag till dess att en spelare står kvar som vinnare. Efter
+serien visas en sammanställning per spelare: vinster, vinstprocent, bluffrekvens,
+höjningar, synar och hur ofta synen lyckas. Under sammanställningen listas varje
+match (klicka för detaljer) och hela protokollet kan laddas ner som JSONL.
+
+Protokollet är byggt för efteranalys. Varje match innehåller:
+
+- spelarna med roll och namn, spelordningen och vem som började,
+- vinnaren, antalet rundor, kvarvarande liv och utslagsordningen,
+- `events`: varje åtgärd med spelare, roll, tärningsutfall, bud, om budet var
+  sant eller en bluff, tidigare bud, livsställning och rundnummer,
+- `player_stats`: per spelare antal bud, bluffar, synar, höjningar, förlorade liv
+  och om spelaren slogs ut.
+
+Med ett fast basfrö blir en serie reproducerbar. JSONL-formatet (en match per rad)
+gör att stora serier kan läsas och analyseras rad för rad utan att allt hålls i
+minnet.
 
 ## API
 
@@ -141,6 +170,20 @@ tärningsutfallet. Den utför steget så att nästa rad läggs till.
 | POST | `/api/session/round` | Kör flödet fram till rundans slut |
 | POST | `/api/session/run` | Kör hela flödet fram till en syn |
 | POST | `/api/session/stop` | Avsluta sessionen |
+| POST | `/api/matches/run` | Starta en serie matcher i bakgrunden |
+| GET | `/api/matches/status` | Läge och hittills spelade matcher för serien |
+| GET | `/api/matches/summary` | Statistik för den senaste matchserien |
+| GET | `/api/matches/download` | Ladda ner protokollet (JSONL) |
+
+En match är hundratals LLM-anrop och tar minuter, så en serie körs i en
+bakgrundstråd. `POST /api/matches/run` svarar direkt, och klienten följer
+framdriften med `GET /api/matches/status` (fältet `running` är `false` när allt
+är klart). Fliken **Matchserie** pollar status var tredje sekund och visar
+matcherna vartefter de blir klara.
+
+Fältet `workers` (1–8, standard 3) spelar flera matcher samtidigt, vilket kortar
+en lång serie. Varje match har egna agenter och en egen LLM-klient, så de delar
+ingen status.
 
 Exempel:
 
@@ -148,6 +191,11 @@ Exempel:
 curl -X POST http://localhost:12000/api/announce \
   -H "Content-Type: application/json" \
   -d '{"die1": 2, "die2": 5, "role": "rackar"}'
+
+# Starta 10 matcher i bakgrunden (3 samtidigt) och följ dem
+curl -X POST http://localhost:12000/api/matches/run \
+  -H "Content-Type: application/json" -d '{"count": 10, "workers": 3}'
+curl http://localhost:12000/api/matches/status
 ```
 
 ## LLM-konfiguration
@@ -208,6 +256,7 @@ mejer/
   llm.py              LLM-klient (Anthropic + OpenHands-fallback)
   game.py             Spelmotor för flera oberoende agenter
   session.py          Interaktiv session: fullt flöde och logg
+  match.py            Batchkörning av många matcher + statistik (JSONL)
   cli.py              Kommandoradsgränssnitt
   agents/
     base.py           Agent-grundklass och roll

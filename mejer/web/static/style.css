@@ -370,3 +370,51 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 
 .error { color: var(--bad); }
 .loading { color: var(--muted); font-style: italic; }
+
+/* -- Flik 4: matchserie och statistik -- */
+.match-controls { display: flex; gap: 0.9rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 1rem; }
+.match-controls label { display: flex; flex-direction: column; font-size: 0.8rem; color: var(--muted); gap: 0.3rem; }
+.match-controls input {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 0.45rem 0.6rem;
+  font-size: 0.95rem;
+  width: 8rem;
+}
+.match-controls .primary { width: auto; margin-top: 0; }
+
+.match-summary { margin-top: 1.2rem; }
+.stat-table { width: 100%; border-collapse: collapse; margin-top: 0.8rem; font-size: 0.9rem; }
+.stat-table th, .stat-table td { padding: 0.45rem 0.6rem; text-align: right; border-bottom: 1px solid var(--line); }
+.stat-table th:first-child, .stat-table td:first-child { text-align: left; }
+.stat-table th { color: var(--accent); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.5px; }
+.stat-table tbody tr:hover { background: var(--panel-2); }
+
+.match-list { display: grid; gap: 0.5rem; }
+.match-row {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+  padding: 0.5rem 0.8rem;
+}
+.match-row summary {
+  cursor: pointer;
+  display: flex;
+  gap: 1rem;
+  align-items: baseline;
+  flex-wrap: wrap;
+  list-style: none;
+}
+.match-row summary::-webkit-details-marker { display: none; }
+.match-no { font-weight: 700; color: var(--accent); }
+.match-winner { font-weight: 600; }
+.match-meta { color: var(--muted); font-size: 0.85rem; }
+.match-body { margin-top: 0.6rem; }
+.match-order { font-size: 0.88rem; color: var(--muted); margin-bottom: 0.5rem; }
+.match-stat-line { display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.85rem; padding: 0.15rem 0; }
+.ms-name { min-width: 11rem; font-weight: 600; }
+.ms-cell { color: var(--muted); }
+.match-download { margin-top: 0.8rem; }
+.match-download a { color: var(--accent); }

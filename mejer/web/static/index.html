@@ -16,7 +16,7 @@
   <button class="tab active" data-tab="tab-spelarna" role="tab" aria-selected="true">Spelarna</button>
   <button class="tab" data-tab="tab-spelare" role="tab" aria-selected="false">Enskild spelare</button>
   <button class="tab" data-tab="tab-agenter" role="tab" aria-selected="false">Fyra spelare</button>
-  <button class="tab" data-tab="tab-spel" role="tab" aria-selected="false">Hela spel</button>
+  <button class="tab" data-tab="tab-spel" role="tab" aria-selected="false">Matchserie</button>
 </nav>
 
 <main>
@@ -115,22 +115,54 @@
       <div id="pendingCtl" class="pending-ctl" hidden>
         <span class="pending-what" id="pendingWhat"></span>
         <button id="okBtn">Ett drag</button>
-        <button id="roundBtn">Till slut på runda</button>
         <button id="runBtn">Till syn</button>
+        <button id="roundBtn">Till slut på runda</button>
       </div>
     </section>
   </div>
 
-  <!-- Flik 4: logg per helt spel (innehåll kommer) -->
+  <!-- Flik 4: matchserie och statistik -->
   <div class="tab-panel" id="tab-spel" hidden>
     <section class="card">
-      <h2>Logg per helt spel</h2>
+      <h2>Matchserie och statistik</h2>
       <p class="hint">
-        Här samlas en logg för varje spelat spel från början till slut.
+        Låt spelarna möta varandra i många matcher. Varje match sparas i ett
+        strukturerat protokoll (JSONL) med tärningsutfall, bud, bluffar, synar
+        och livsställning. Kör en serie och analysera vilka strategier som
+        verkar löna sig.
       </p>
-      <div class="placeholder" id="gameLogPlaceholder">
-        <p>Inget innehåll än.</p>
-        <p class="muted">Fliken fylls på när innehållet är klart.</p>
+
+      <div class="match-controls">
+        <label>Antal matcher
+          <input type="number" id="matchCount" min="1" max="200" value="5" />
+        </label>
+        <label>Basfrö (valfritt)
+          <input type="number" id="matchSeed" placeholder="slump" />
+        </label>
+        <label>Liv per spelare
+          <input type="number" id="matchLives" min="1" max="10" value="3" />
+        </label>
+        <label>Samtidiga matcher
+          <input type="number" id="matchWorkers" min="1" max="8" value="3" />
+        </label>
+        <button id="matchRunBtn" class="primary">Spela serien</button>
+      </div>
+
+      <div id="matchStatus" class="session-status" hidden></div>
+
+      <div id="matchSummary" class="match-summary" hidden>
+        <h3>Sammanställning</h3>
+        <div id="matchSummaryBody"></div>
+        <p class="match-download">
+          <a id="matchDownloadLink" href="/api/matches/download" download>
+            Ladda ner protokollet (JSONL)
+          </a>
+        </p>
+      </div>
+
+      <h3 class="log-title">Matcher</h3>
+      <div id="matchList" class="match-list">
+        <p class="hint">Ingen serie körd än.</p>
       </div>
     </section>
   </div>

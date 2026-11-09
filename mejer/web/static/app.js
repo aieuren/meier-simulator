@@ -65,6 +65,10 @@ async function boot() {
   $("okBtn").onclick = advanceSession;
   $("roundBtn").onclick = () => runSession("/api/session/round", "roundBtn", "Spelar…", "Till slut på runda");
   $("runBtn").onclick = () => runSession("/api/session/run", "runBtn", "Spelar…", "Till syn");
+  $("matchRunBtn").onclick = runMatchSeries;
+
+  // Om en matchserie redan kör i servern (t.ex. efter omladdning): visa och följ.
+  resumeMatchSeries();
 }
 
 function setupTabs() {
@@ -467,6 +471,179 @@ function renderLog(entries) {
   });
   box.insertBefore(frag, ctl && ctl.parentNode === box ? ctl : null);
   box.scrollTop = box.scrollHeight;
+}
+
+// -- Flik 4: matchserie och statistik ---------------------------------------
+
+const pct = (v) => `${((v || 0) * 100).toFixed(1)} %`;
+
+function matchRow(rec) {
+  const div = document.createElement("details");
+  div.className = "match-row";
+  const order = (rec.order || []).join(" → ");
+  const stats = rec.player_stats || {};
+  const lines = (rec.players || [])
+    .map((p) => {
+      const s = stats[p.name] || {};
+      return (
+        `<div class="match-stat-line">` +
+        `<span class="ms-name">${p.name}</span>` +
+        `<span class="ms-cell">bud ${s.bids || 0}</span>` +
+        `<span class="ms-cell">bluff ${s.bluffs || 0}</span>` +
+        `<span class="ms-cell">syn ${s.calls || 0}</span>` +
+        `<span class="ms-cell">liv −${s.lives_lost || 0}</span>` +
+        `<span class="ms-cell">${s.eliminated ? "ute" : (p.name === rec.winner ? "vinnare" : "kvar")}</span>` +
+        `</div>`
+      );
+    })
+    .join("");
+  div.innerHTML = `
+    <summary>
+      <span class="match-no">Match ${rec.game}</span>
+      <span class="match-winner">Vinnare: ${rec.winner}</span>
+      <span class="match-meta">${rec.rounds} rundor</span>
+    </summary>
+    <div class="match-body">
+      <p class="match-order"><strong>Spelordning:</strong> ${order}. <strong>Börjar:</strong> ${rec.starter}.</p>
+      ${lines}
+    </div>
+  `;
+  return div;
+}
+
+function renderMatchSummary(summary) {
+  const box = $("matchSummaryBody");
+  const roles = summary.roles || {};
+  const rows = Object.keys(roles)
+    .map((role) => {
+      const b = roles[role];
+      return (
+        `<tr>` +
+        `<td>${b.name}</td>` +
+        `<td>${b.wins}/${b.games}</td>` +
+        `<td>${pct(b.win_rate)}</td>` +
+        `<td>${pct(b.bluff_rate)}</td>` +
+        `<td>${pct(b.raise_rate)}</td>` +
+        `<td>${pct(b.call_rate)}</td>` +
+        `<td>${pct(b.call_success_rate)}</td>` +
+        `<td>${b.avg_lives_lost}</td>` +
+        `</tr>`
+      );
+    })
+    .join("");
+  box.innerHTML = `
+    <p class="hint">
+      ${summary.games} matcher, i snitt ${summary.avg_rounds} rundor per match.
+      Startspelaren vinner ${pct(summary.starter_win_rate)} av matcherna.
+    </p>
+    <table class="stat-table">
+      <thead>
+        <tr>
+          <th>Spelare</th><th>Vinster</th><th>Vinst%</th>
+          <th>Bluff%</th><th>Höj%</th><th>Syn%</th><th>Syn lyckas</th><th>Snitt liv −</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+  $("matchSummary").hidden = false;
+}
+
+async function runMatchSeries() {
+  const btn = $("matchRunBtn");
+  const count = parseInt($("matchCount").value, 10) || 1;
+  const lives = parseInt($("matchLives").value, 10) || 3;
+  const workers = parseInt($("matchWorkers").value, 10) || 1;
+  const seedRaw = $("matchSeed").value.trim();
+  const baseSeed = seedRaw === "" ? null : parseInt(seedRaw, 10);
+
+  btn.disabled = true;
+  const status = $("matchStatus");
+  status.hidden = false;
+  status.textContent = `Startar serien (${count} matcher)…`;
+
+  try {
+    const res = await fetch("/api/matches/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ count, lives, workers, base_seed: baseSeed }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    await pollMatchSeries();
+  } catch (e) {
+    status.textContent = `Fel: ${e.message}`;
+    btn.disabled = false;
+  }
+}
+
+// Om sidan laddas om mitt i en serie: visa det som redan är klart och fortsätt
+// följa serien. Annars står fliken tom trots att jobbet kör vidare i servern.
+async function resumeMatchSeries() {
+  let data;
+  try {
+    const res = await fetch("/api/matches/status");
+    if (!res.ok) return;
+    data = await res.json();
+  } catch (e) {
+    return;
+  }
+  renderMatchList(data);
+  if (data.summary) renderMatchSummary(data.summary);
+  if (data.running) {
+    $("matchStatus").hidden = false;
+    $("matchStatus").textContent = matchProgressText(data);
+    $("matchRunBtn").disabled = true;
+    await pollMatchSeries();
+  }
+}
+
+function matchProgressText(data) {
+  const base = `${data.done} av ${data.count} matcher klara`;
+  const avg = data.summary ? ` · snitt ${data.summary.avg_rounds} rundor/match` : "";
+  return `${base}${avg}…`;
+}
+
+function renderMatchList(data) {
+  const list = $("matchList");
+  list.innerHTML = "";
+  (data.records || []).forEach((rec) => list.appendChild(matchRow(rec)));
+}
+
+async function pollMatchSeries() {
+  const status = $("matchStatus");
+  const btn = $("matchRunBtn");
+
+  for (;;) {
+    await new Promise((r) => setTimeout(r, 3000));
+    let data;
+    try {
+      const res = await fetch("/api/matches/status");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      data = await res.json();
+    } catch (e) {
+      status.textContent = `Fel vid hämtning av status: ${e.message}`;
+      btn.disabled = false;
+      return;
+    }
+
+    renderMatchList(data);
+    if (data.summary) renderMatchSummary(data.summary);
+
+    if (data.error) {
+      status.textContent = `Fel: ${data.error}`;
+      btn.disabled = false;
+      return;
+    }
+    if (!data.running) {
+      status.textContent = `Klart: ${data.done} matcher spelade.`;
+      btn.disabled = false;
+      return;
+    }
+    status.textContent = matchProgressText(data);
+  }
 }
 
 boot();

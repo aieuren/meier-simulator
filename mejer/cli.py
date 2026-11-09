@@ -10,11 +10,13 @@ Exempel:
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 
 from . import rules
 from .agents.player import ROLES, get_role, MejerPlayerAgent
 from .game import Game
+from .match import read_jsonl, run_matches, summarize, write_jsonl
 from .session import Session
 
 
@@ -142,6 +144,43 @@ def _cmd_session(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_match(args: argparse.Namespace) -> int:
+    roles = args.roles or list(ROLES)
+    out = args.out or "matches.jsonl"
+
+    def progress(done: int, total: int) -> None:
+        print(f"  match {done}/{total}", flush=True)
+
+    records = list(
+        run_matches(
+            roles,
+            args.count,
+            base_seed=args.seed,
+            lives=args.lives,
+            workers=args.workers,
+            progress=progress if args.verbose else None,
+        )
+    )
+    n = write_jsonl(records, out)
+    print(f"\nSpelade {n} matcher. Protokoll: {out}")
+
+    stats = summarize([r.to_dict() for r in records])
+    print(f"\nVinnare per roll (av {stats['games']} matcher):")
+    for role, b in stats["roles"].items():
+        print(
+            f"  {b['name']:22} vinst {b['wins']:3}/{b['games']:<3} "
+            f"({b['win_rate'] * 100:4.1f}%)  bluff {b['bluff_rate'] * 100:4.1f}%  "
+            f"syn {b['call_rate'] * 100:4.1f}% (lyckas {b['call_success_rate'] * 100:4.1f}%)"
+        )
+    return 0
+
+
+def _cmd_summarize(args: argparse.Namespace) -> int:
+    stats = summarize(read_jsonl(args.path))
+    print(json.dumps(stats, ensure_ascii=False, indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mejer", description="Mejer med LLM-agenter")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -170,6 +209,24 @@ def build_parser() -> argparse.ArgumentParser:
     p_sess.add_argument("roles", nargs="*", choices=list(ROLES))
     p_sess.add_argument("--seed", type=int, default=None)
     p_sess.set_defaults(func=_cmd_session)
+
+    p_match = sub.add_parser(
+        "match", help="Spela många matcher och skriv ett JSONL-protokoll för analys"
+    )
+    p_match.add_argument("roles", nargs="*", choices=list(ROLES))
+    p_match.add_argument("--count", type=int, default=10, help="Antal matcher")
+    p_match.add_argument("--out", default="matches.jsonl", help="Utfil (JSONL)")
+    p_match.add_argument("--seed", type=int, default=None, help="Basfrö")
+    p_match.add_argument("--lives", type=int, default=3)
+    p_match.add_argument(
+        "--workers", type=int, default=1, help="Antal matcher som spelas samtidigt"
+    )
+    p_match.add_argument("--verbose", action="store_true")
+    p_match.set_defaults(func=_cmd_match)
+
+    p_sum = sub.add_parser("summarize", help="Sammanfatta ett JSONL-protokoll")
+    p_sum.add_argument("path")
+    p_sum.set_defaults(func=_cmd_summarize)
 
     return parser
 

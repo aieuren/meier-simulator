@@ -4,12 +4,16 @@ Klienten föredrar ett riktigt Anthropic-konto (Claude) via ``ANTHROPIC_API_KEY`
 Saknas den faller den tillbaka på OpenHands agent-server-proxyn, som finns i
 Agent Canvas-miljön. Båda talar OpenAI-liknande ``/v1/chat/completions``, men
 Anthropic används via sin egen SDK när nyckeln finns.
+
+Anropen görs om några gånger vid tillfälliga fel (timeout, nätverksfel, 429 och
+5xx), eftersom en lång matchserie annars avbryts av ett enstaka tidsavbrott.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -24,6 +28,22 @@ class _MissingProfile(LLMError):
     """Agent-servern saknar LLM-profilen som modellnamnet pekar på."""
 
 
+class _Transient(LLMError):
+    """Tillfälligt fel som är värt att försöka igen (timeout, 429, 5xx)."""
+
+
+def _is_transient_exc(exc: Exception) -> bool:
+    """Avgör om ett SDK-undantag är tillfälligt (timeout, anslutning, 429, 5xx)."""
+    name = type(exc).__name__.lower()
+    if "timeout" in name or "connection" in name or "ratelimit" in name:
+        return True
+    status = getattr(exc, "status_code", None)
+    if isinstance(status, int) and (status == 429 or status >= 500):
+        return True
+    text = str(exc).lower()
+    return "timed out" in text or "timeout" in text or "overloaded" in text
+
+
 @dataclass
 class LLMConfig:
     """Konfiguration för en LLM-anslutning."""
@@ -34,7 +54,9 @@ class LLMConfig:
     base_url: str = ""
     max_tokens: int = 1024
     temperature: float = 0.7
-    timeout: float = 120.0
+    timeout: float = 180.0
+    max_retries: int = 3
+    retry_backoff: float = 1.5
 
     @property
     def profile_name(self) -> str:
@@ -93,9 +115,25 @@ class LLMClient:
     last_usage: dict[str, int] = field(default_factory=dict, init=False)
 
     def complete(self, system: str, user: str, *, json_mode: bool = False) -> str:
-        if self.config.provider == "anthropic":
-            return self._complete_anthropic(system, user)
-        return self._complete_openhands(system, user, json_mode=json_mode)
+        return self._with_retries(
+            lambda: self._complete_anthropic(system, user)
+            if self.config.provider == "anthropic"
+            else self._complete_openhands(system, user, json_mode=json_mode)
+        )
+
+    def _with_retries(self, call):
+        """Kör ett LLM-anrop och gör om det vid tillfälliga fel."""
+        attempts = max(1, self.config.max_retries)
+        last: Exception | None = None
+        for attempt in range(attempts):
+            try:
+                return call()
+            except (_Transient, httpx.HTTPError) as exc:
+                last = exc
+                if attempt + 1 >= attempts:
+                    break
+                time.sleep(self.config.retry_backoff * (attempt + 1))
+        raise LLMError(f"Kunde inte nå LLM efter {attempts} försök: {last}") from last
 
     # -- Anthropic (Claude-kontot) ------------------------------------------
     def _complete_anthropic(self, system: str, user: str) -> str:
@@ -118,6 +156,8 @@ class LLMClient:
                 messages=[{"role": "user", "content": user}],
             )
         except Exception as exc:  # pragma: no cover - nätverksberoende
+            if _is_transient_exc(exc):
+                raise _Transient(f"Anthropic-anropet avbröts tillfälligt: {exc}") from exc
             raise LLMError(f"Anthropic-anrop misslyckades: {exc}") from exc
 
         parts = [block.text for block in resp.content if getattr(block, "type", "") == "text"]
@@ -183,7 +223,8 @@ class LLMClient:
             resp.raise_for_status()
             return resp
         except httpx.HTTPStatusError as exc:
-            if exc.response.status_code == 404 and self.config.profile_name:
+            status = exc.response.status_code
+            if status == 404 and self.config.profile_name:
                 try:
                     detail = exc.response.json().get("detail", "")
                 except ValueError:
@@ -192,9 +233,15 @@ class LLMClient:
                     raise _MissingProfile(
                         f"LLM-profilen '{self.config.profile_name}' saknas i agent-servern"
                     ) from exc
+            if status == 429 or status >= 500:
+                raise _Transient(
+                    f"LLM-anropet avvisades tillfälligt ({status}): {exc.response.text[:200]}"
+                ) from exc
             raise LLMError(
-                f"LLM-anrop misslyckades ({exc.response.status_code}): {exc.response.text[:300]}"
+                f"LLM-anrop misslyckades ({status}): {exc.response.text[:300]}"
             ) from exc
+        except (httpx.TimeoutException, httpx.TransportError) as exc:
+            raise _Transient(f"Kunde inte nå LLM: {exc}") from exc
         except httpx.HTTPError as exc:
             raise LLMError(f"Kunde inte nå LLM: {exc}") from exc
 

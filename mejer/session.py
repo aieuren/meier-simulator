@@ -64,6 +64,9 @@ class LogEntry:
     blind: bool = False  # slog spelaren bägaren på nytt (fick inte lyfta locket)?
     lives_lost: int = 0  # antal förlorade liv (endast life)
     lives_left: int | None = None  # kvarvarande liv (endast life)
+    actor_lives: int | None = None  # den agerandes liv vid tillfället (analys)
+    active_players: int | None = None  # antal spelare kvar vid tillfället (analys)
+    caller_loses: bool | None = None  # vid syn: förlorade den som synade? (analys)
 
     def to_dict(self) -> dict:
         return {
@@ -94,6 +97,9 @@ class LogEntry:
             "blind": self.blind,
             "lives_lost": self.lives_lost,
             "lives_left": self.lives_left,
+            "actor_lives": self.actor_lives,
+            "active_players": self.active_players,
+            "caller_loses": self.caller_loses,
         }
 
 
@@ -280,6 +286,19 @@ class Session:
                 created.append(entry)
         return created
 
+    def play_to_end(self, *, max_steps: int = 20000) -> LogEntry | None:
+        """Spela hela sessionen klart, runda för runda, utan grind.
+
+        Används för batchkörning av många matcher. Returnerar den sista
+        loggposten. Ett skyddsnät stoppar efter ``max_steps`` steg.
+        """
+        last: LogEntry | None = None
+        steps = 0
+        while not self.finished and self.step_kind and steps < max_steps:
+            steps += 1
+            last = self.advance()
+        return last
+
     def run_to_round_end(self, *, max_steps: int = 200) -> list[LogEntry]:
         """Kör flödet fram till rundans slut.
 
@@ -307,7 +326,7 @@ class Session:
         player = self.players[self.actor]
         ann = player.announce(dice)
         entry = self._log_entry(
-            player, dice, ann, action="bud", previous_bid=None, blind=False
+            player, dice, ann, action="bud", previous_bid=None, blind=False, actor_idx=self.actor
         )
         self.pending_bid = ann.bid
         self.bidder = self.actor
@@ -339,6 +358,7 @@ class Session:
                 previous_bid=bid,
                 blind=True,
                 accepted_bid=bid,
+                actor_idx=self.actor,
             )
             self.pending_dice = dice
             self.pending_bid = ann.bid
@@ -362,6 +382,8 @@ class Session:
             action="skicka",
             previous_bid=bid,
             accepted_bid=bid,
+            actor_lives=self.lives[self.actor],
+            active_players=len(self._active_indices()),
         )
         self.log.append(entry)
         self.holder = self.actor
@@ -377,7 +399,7 @@ class Session:
         ann = player.announce(dice, previous_bid=bid)
         ann = self._enforce_bid(ann, previous_bid=bid)
         entry = self._log_entry(
-            player, dice, ann, action="höja", previous_bid=bid, blind=False
+            player, dice, ann, action="höja", previous_bid=bid, blind=False, actor_idx=self.bidder
         )
         self.pending_bid = ann.bid
         self.holder = self.bidder
@@ -444,11 +466,14 @@ class Session:
             action="syna",
             previous_bid=bid,
             accepted_bid=bid,
+            actor_lives=self.lives[caller_idx],
+            active_players=len(self._active_indices()),
+            caller_loses=result.caller_loses,
         )
         self.log.append(entry)
 
         # En egen rad om det förlorade livet, direkt efter synen.
-        self._log_life(loser_idx, result.lives)
+        self._log_life(loser_idx, result.lives, active_players=len(self._active_indices()))
 
         self.result = CallResult(
             bid=bid,
@@ -471,7 +496,7 @@ class Session:
         self._prepare_round(starter=self._previous_active(loser_idx))
         return entry
 
-    def _log_life(self, loser_idx: int, lost: int) -> LogEntry:
+    def _log_life(self, loser_idx: int, lost: int, *, active_players: int | None = None) -> LogEntry:
         """Logga en egen rad när någon förlorar ett (eller två) liv."""
         entry = LogEntry(
             kind="life",
@@ -483,6 +508,7 @@ class Session:
             player_name=self.name_of(loser_idx),
             lives_lost=lost,
             lives_left=self.lives[loser_idx],
+            active_players=active_players,
         )
         self.log.append(entry)
         return entry
@@ -498,6 +524,7 @@ class Session:
         previous_bid: int | None,
         blind: bool,
         accepted_bid: int | None = None,
+        actor_idx: int | None = None,
     ) -> LogEntry:
         entry = LogEntry(
             kind="action",
@@ -516,6 +543,8 @@ class Session:
             proposed=ann.proposed,
             corrected=ann.corrected,
             blind=blind,
+            actor_lives=self.lives[actor_idx] if actor_idx is not None else None,
+            active_players=len(self._active_indices()),
         )
         self.log.append(entry)
         return entry
