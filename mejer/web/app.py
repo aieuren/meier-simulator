@@ -18,7 +18,7 @@ from .. import rules
 from ..agents.player import ROLES, get_role
 from ..llm import LLMClient, LLMError
 from ..agents.player import MejerPlayerAgent
-from ..agents.referee import RefereeAgent
+from ..agents.referee import REFEREE_ROLE, RefereeAgent
 from ..session import Session
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -75,9 +75,15 @@ class NoCacheStaticFiles(StaticFiles):
 def list_roles() -> dict:
     return {
         "roles": [
-            {"key": r.key, "name": r.name, "description": r.description}
+            {"key": r.key, "name": r.name, "description": r.description, "style": r.style}
             for r in ROLES.values()
         ],
+        "referee": {
+            "key": REFEREE_ROLE.key,
+            "name": REFEREE_ROLE.name,
+            "description": REFEREE_ROLE.description,
+            "style": REFEREE_ROLE.style,
+        },
         "ranking": [{"value": v, "name": rules.name(v)} for v in rules.RANKING],
     }
 

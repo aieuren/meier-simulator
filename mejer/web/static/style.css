@@ -157,6 +157,26 @@ select {
 .role .rname { font-weight: 600; display: block; }
 .role .rdesc { color: var(--muted); font-size: 0.82rem; }
 
+/* Flik 1: spelarkort med karaktärsbeskrivning. */
+.players {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.8rem;
+}
+
+.player-card {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: 11px;
+  padding: 0.9rem 1rem;
+}
+.player-card.is-referee { border-left-color: var(--muted); }
+.player-name { font-weight: 700; font-size: 1.05rem; margin-bottom: 0.15rem; }
+.player-desc { color: var(--accent); font-size: 0.85rem; margin-bottom: 0.5rem; }
+.player-card.is-referee .player-desc { color: var(--muted); }
+.player-style { color: var(--muted); font-size: 0.88rem; line-height: 1.45; margin: 0; }
+
 button {
   background: var(--panel-2);
   color: var(--text);
@@ -289,6 +309,13 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 /* Spelarens svar: bara siffra eller åtgärd. */
 .log-row.is-action { border-left: 4px solid var(--line); }
 .log-row.is-action.is-call { border-left-color: var(--bad); background: rgba(239, 107, 107, 0.08); }
+
+/* Förlorat liv: en egen rad efter synen. */
+.log-row.is-life {
+  border-left: 4px solid var(--bad);
+  background: rgba(239, 107, 107, 0.12);
+}
+.log-life { color: var(--bad); font-weight: 700; margin-left: auto; }
 .log-action { color: var(--muted); }
 .log-row.is-action strong { font-size: 1.05rem; }
 .log-prev { color: var(--muted); font-size: 0.85rem; }

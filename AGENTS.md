@@ -23,22 +23,33 @@ lower bid). Multiple agents with distinct roles can also play full games.
   (new shake) / pass → forced raise → call), random player order, referee review,
   and the log. The log is built downward: each shake starts with a `kind="roll"`
   entry (the dice, pure input), then one `kind="action"` entry per answer (bid,
-  raise, pass, or call). `advance()` does one gated step; `run_to_round_end()`
-  runs to the end of the current round (a call, or a new round after Mejer), and
-  `run_to_call()` runs the whole flow to the next call. The web UI moves the
-  *Ett drag* button into the log so it sits under the latest dice roll; the
-  *Till slut på runda* and *Till syn* buttons run multiple steps at once. When a
-  raise is not strictly higher than the previous bid, `_enforce_bid` lets the
-  referee stop it and the smallest legal raise takes over.
+  raise, pass, or call), and after a call a `kind="life"` entry (who lost how
+  many lives, and how many remain). `advance()` does one gated step;
+  `run_to_round_end()` runs to the end of the current round (a call, or a new
+  round after Mejer), and `run_to_call()` runs the whole flow to the next call.
+  The web UI moves the *Ett drag* button into the log so it sits under the
+  latest dice roll; the *Till slut på runda* and *Till syn* buttons run multiple
+  steps at once. When a raise is not strictly higher than the previous bid,
+  `_enforce_bid` lets the referee stop it and the smallest legal raise takes
+  over.
+- Call responsibility: the player who loses a life on a call is the one who
+  *holds* the bid — the last player to say or pass the bid — not necessarily the
+  one who first set it. `Session.holder` tracks this and is updated on every bid,
+  blind shake, forced raise, and pass. The next round starts with the active
+  player *before* the loser in turn order (`_previous_active`). `mejer/game.py`
+  keeps the same `holder` logic in its text log.
 - `mejer/agents/base.py` – `Agent`/`Role` base classes.
 - `mejer/agents/player.py` – `MejerPlayerAgent` and the role registry.
 - `mejer/agents/referee.py` – `RefereeAgent` (Domare-Doris). Judges each answer.
 - `mejer/web/app.py` + `mejer/web/static/` – web UI and JSON API. The UI has
-  three tabs: *Enskild spelare* (one player answers a roll), *Fyra agenter* (the
-  interactive session), and *Hela spel* (per-game log, placeholder for now).
-  Tab switching just toggles `[hidden]` on `.tab-panel`; note the
-  `.tab-panel[hidden] { display: none }` rule — a bare `display: grid` would
-  otherwise override `hidden` and show every panel at once.
+  four tabs: *Spelarna* (the four player cards with name, description, and
+  style, plus the referee), *Enskild spelare* (one player answers a roll),
+  *Fyra agenter* (the interactive session), and *Hela spel* (per-game log,
+  placeholder for now). `/api/roles` returns each role's `style` too, so the
+  first tab can show the full character text. Tab switching just toggles
+  `[hidden]` on `.tab-panel`; note the `.tab-panel[hidden] { display: none }`
+  rule — a bare `display: grid` would otherwise override `hidden` and show every
+  panel at once.
 - `mejer/cli.py` – command line entry points (`announce`, `decide`, `play`,
   `session`).
 - `tests/` – unit tests. No real LLM calls; `FakeLLM`/`ScriptedAgent` are used.

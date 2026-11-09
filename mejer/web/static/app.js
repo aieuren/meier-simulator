@@ -21,6 +21,8 @@ async function boot() {
   const data = await res.json();
   state.ranking = data.ranking;
 
+  renderPlayers(data);
+
   // Rollkort
   const list = $("roleList");
   data.roles.forEach((r) => {
@@ -79,6 +81,32 @@ function setupTabs() {
       });
     };
   });
+}
+
+// -- Flik 1: de fyra spelarna och deras karaktärer --------------------------
+
+function playerCard(r, extraClass) {
+  const div = document.createElement("div");
+  div.className = "player-card" + (extraClass ? " " + extraClass : "");
+  div.innerHTML = `
+    <div class="player-name">${r.name}</div>
+    <div class="player-desc">${r.description}</div>
+    <p class="player-style">${r.style || ""}</p>
+  `;
+  return div;
+}
+
+function renderPlayers(data) {
+  const list = $("playerList");
+  if (!list) return;
+  list.innerHTML = "";
+  (data.roles || []).forEach((r) => list.appendChild(playerCard(r)));
+
+  const ref = $("refereeCard");
+  if (ref && data.referee) {
+    ref.innerHTML = "";
+    ref.appendChild(playerCard(data.referee, "is-referee"));
+  }
 }
 
 function readDice(a, b) {
@@ -313,11 +341,17 @@ function renderResult(result) {
     return;
   }
   box.hidden = false;
+  const holder = result.holder || result.bidder;
+  const holderLine =
+    holder !== result.bidder
+      ? `<div>Budet sattes av ${result.bidder}, men ansvaret hade gått vidare till ${holder}.</div>`
+      : "";
   box.innerHTML = `
     <div class="call-title">Syn!</div>
     <div>Tärningarna visade <strong>${result.shown_name}</strong> mot budet
       <strong>${result.bid_name}</strong>.</div>
-    <div>${result.caller} synade ${result.bidder}.</div>
+    <div>${result.caller} synade ${holder}.</div>
+    ${holderLine}
     <div class="call-loser"><strong>${result.loser}</strong> förlorar
       ${result.lives} liv${result.lives === 2 ? " (Mejer kostar dubbelt)" : ""}.</div>
   `;
@@ -349,6 +383,22 @@ function renderLog(entries) {
         <div class="log-head">
           <span class="log-action">${who}</span>
           <span class="log-dice">${diceFaces(e.dice)} <strong>${textOr(e.shown_name, "?")}</strong></span>
+        </div>
+      `;
+      frag.appendChild(row);
+      return;
+    }
+
+    // Förlorat liv: en egen rad direkt efter synen.
+    if (e.kind === "life") {
+      row.className = "log-row is-life";
+      const lost = e.lives_lost || 1;
+      const double = lost === 2 ? " (Mejer kostar dubbelt)" : "";
+      row.innerHTML = `
+        <div class="log-head">
+          <span class="log-action">Liv förlorat</span>
+          <span class="log-player">${textOr(e.player_name, "?")}</span>
+          <span class="log-life">−${lost} liv${double} → ${e.lives_left} kvar</span>
         </div>
       `;
       frag.appendChild(row);

@@ -13,12 +13,15 @@ Flödet följer reglerna:
    **Syna** (lyfter locket) eller **Skicka vidare** (samma bud).
 3. När bägaren kommer ett helt varv tillbaka till budgivaren måste denne höja.
    Är budet Mejer får spelaren i stället slå om och börja en ny runda.
-4. Vid en syn lyfts locket: visar tärningarna lägre än budet förlorar budgivaren
-   ett liv, annars den som synade. Mejer kostar dubbelt.
+4. Vid en syn lyfts locket: visar tärningarna lägre än budet förlorar den
+   spelare som ansvarar för budet (den som sa det senast, eller skickade vidare
+   och därmed tog över ansvaret) ett liv, annars den som synade. Mejer kostar
+   dubbelt. Den som förlorar livet loggas som en egen rad.
 
 Sessionen är grindad: varje steg (ett tärningsslag, en höjning eller ett svar)
-måste bekräftas med OK innan nästa steg sker. Det gör det lätt att kontrollera
-att allt fungerar. ``run_to_call`` kör hela flödet fram till en syn på en gång.
+måste bekräftas innan nästa steg sker. Det gör det lätt att kontrollera att
+allt fungerar. ``run_to_round_end`` kör fram till rundans slut och
+``run_to_call`` kör hela flödet fram till en syn på en gång.
 """
 
 from __future__ import annotations
@@ -35,20 +38,22 @@ from .agents.referee import RefereeAgent, Verdict
 class LogEntry:
     """En rad i loggen.
 
-    Två slag av rader:
+    Tre slag av rader:
 
     - ``kind == "roll"``: ett tärningsutfall (indata). Ingen spelare har svarat
       än. Detta är steget där OK-knappen hör hemma.
     - ``kind == "action"``: en spelares svar – ett bud, en blind höjning, en
       syn eller ett skickande.
+    - ``kind == "life"``: någon har förlorat ett (eller två) liv efter en syn.
+      Raden ligger direkt efter synen och visar hur många liv som är kvar.
     """
 
-    kind: str  # "roll" eller "action"
+    kind: str  # "roll", "action" eller "life"
     round: int
     dice: tuple[int, int]
     shown: int
-    action: str = "bud"  # "bud", "slå", "skicka", "syna", "höja" (endast action)
-    player: str | None = None  # rollens nyckel (endast action)
+    action: str = "bud"  # "bud", "slå", "skicka", "syna", "höja", "liv"
+    player: str | None = None  # rollens nyckel (endast action/life)
     player_name: str | None = None
     bid: int | None = None  # sagt bud (endast action)
     truth: bool = False
@@ -59,6 +64,8 @@ class LogEntry:
     proposed: int | None = None  # rå bud från modellen
     corrected: bool = False  # korrigerades budet?
     blind: bool = False  # slog spelaren bägaren på nytt (fick inte lyfta locket)?
+    lives_lost: int = 0  # antal förlorade liv (endast life)
+    lives_left: int | None = None  # kvarvarande liv (endast life)
 
     def to_dict(self) -> dict:
         return {
@@ -83,6 +90,8 @@ class LogEntry:
             "proposed": self.proposed,
             "corrected": self.corrected,
             "blind": self.blind,
+            "lives_lost": self.lives_lost,
+            "lives_left": self.lives_left,
             "referee": self.referee.to_dict() if self.referee else None,
         }
 
@@ -94,7 +103,8 @@ class CallResult:
     bid: int
     shown: int
     caller: str
-    bidder: str
+    bidder: str  # den som satte budet
+    holder: str  # den som är ansvarig för budet (kan ha skickat vidare)
     caller_loses: bool
     loser: str  # namn på den som förlorar liv
     lives: int  # antal förlorade liv
@@ -107,6 +117,7 @@ class CallResult:
             "shown_name": rules.name(self.shown),
             "caller": self.caller,
             "bidder": self.bidder,
+            "holder": self.holder,
             "caller_loses": self.caller_loses,
             "loser": self.loser,
             "lives": self.lives,
@@ -132,6 +143,7 @@ class Session:
     pending_dice: tuple[int, int] | None = None  # det hemliga slaget (tärningar)
     pending_bid: int | None = None  # aktuellt bud
     bidder: int = 0  # spelarindex för den som satte budet
+    holder: int = 0  # spelarindex för den som ansvarar för budet (kan ha skickat vidare)
     actor: int = 0  # spelarindex som ska agera
 
     @classmethod
@@ -177,6 +189,7 @@ class Session:
         self.step_kind = "roll"
         self.actor = starter
         self.bidder = starter
+        self.holder = starter
         self.pending_bid = None
         self._log_roll(
             player=self.players[starter].name,
@@ -308,6 +321,7 @@ class Session:
         )
         self.pending_bid = ann.bid
         self.bidder = self.actor
+        self.holder = self.actor
         self._prepare_action(actor=self._next_actor(self.actor))
         return entry
 
@@ -341,10 +355,11 @@ class Session:
             self.pending_dice = dice
             self.pending_bid = ann.bid
             self.bidder = self.actor
+            self.holder = self.actor
             self._after_bid(actor=self.actor)
             return entry
 
-        # Skicka vidare: samma bud går vidare.
+        # Skicka vidare: samma bud går vidare. Spelaren tar över ansvaret för budet.
         verdict = self.referee.review_decision("skicka", bid=bid, line=decision.line)
         entry = LogEntry(
             kind="action",
@@ -362,6 +377,7 @@ class Session:
             previous_bid=bid,
         )
         self.log.append(entry)
+        self.holder = self.actor
         self._after_bid(actor=self.actor)
         return entry
 
@@ -385,6 +401,7 @@ class Session:
             player, dice, ann, verdict, action="höja", previous_bid=bid, blind=False
         )
         self.pending_bid = ann.bid
+        self.holder = self.bidder
         self._after_bid(actor=self.bidder)
         return entry
 
@@ -434,10 +451,13 @@ class Session:
         assert bid is not None and dice is not None
         shown = rules.read_dice(*dice)
         caller_idx = self.actor
-        bidder_idx = self.bidder
+        # Den som ansvarar för budet: den som sa det senast (eller skickade
+        # vidare och därmed tog över ansvaret). Det är den "föregående spelaren"
+        # i regeln, inte nödvändigtvis den som först satte budet.
+        holder_idx = self.holder
 
         result = rules.resolve_call(bid, shown)
-        loser_idx = caller_idx if result.caller_loses else bidder_idx
+        loser_idx = caller_idx if result.caller_loses else holder_idx
         self.lives[loser_idx] = max(0, self.lives[loser_idx] - result.lives)
 
         verdict = self.referee.review_decision("syna", bid=bid, line="")
@@ -458,11 +478,15 @@ class Session:
         )
         self.log.append(entry)
 
+        # En egen rad om det förlorade livet, direkt efter synen.
+        self._log_life(loser_idx, result.lives)
+
         self.result = CallResult(
             bid=bid,
             shown=shown,
             caller=self.name_of(caller_idx),
-            bidder=self.name_of(bidder_idx),
+            bidder=self.name_of(self.bidder),
+            holder=self.name_of(holder_idx),
             caller_loses=result.caller_loses,
             loser=self.name_of(loser_idx),
             lives=result.lives,
@@ -476,6 +500,22 @@ class Session:
         # livet), som slår och börjar en ny runda.
         self.round += 1
         self._prepare_round(starter=self._previous_active(loser_idx))
+        return entry
+
+    def _log_life(self, loser_idx: int, lost: int) -> LogEntry:
+        """Logga en egen rad när någon förlorar ett (eller två) liv."""
+        entry = LogEntry(
+            kind="life",
+            round=self.round,
+            dice=self.pending_dice or (1, 1),
+            shown=rules.read_dice(*(self.pending_dice or (1, 1))),
+            action="liv",
+            player=self.players[loser_idx].role.key,
+            player_name=self.name_of(loser_idx),
+            lives_lost=lost,
+            lives_left=self.lives[loser_idx],
+        )
+        self.log.append(entry)
         return entry
 
     # -- Hjälpare för loggposter -------------------------------------------
@@ -532,6 +572,7 @@ class Session:
                 pending["bid"] = self.pending_bid
                 pending["bid_name"] = rules.name(self.pending_bid)
                 pending["bidder"] = self.name_of(self.bidder)
+                pending["holder"] = self.name_of(self.holder)
 
         return {
             "phase": self._phase(),

@@ -421,10 +421,10 @@ def test_new_round_logs_a_fresh_roll_entry():
     ]
     session = Session.new(players, make_referee(), seed=3)
     session.advance()  # bud
-    session.advance()  # syn -> ny runda, nytt tärningsutfall
+    session.advance()  # syn -> livsrad, ny runda, nytt tärningsutfall
     kinds = [row["kind"] for row in session.to_dict()["log"]]
-    # roll, action(bud), action(syna), roll(ny runda)
-    assert kinds == ["roll", "action", "action", "roll"]
+    # roll, action(bud), action(syna), life(förlorat liv), roll(ny runda)
+    assert kinds == ["roll", "action", "action", "life", "roll"]
 
 
 def test_run_to_call_log_is_ordered_downward():
@@ -469,7 +469,99 @@ def test_log_entries_always_have_frontend_fields():
             assert row["player_name"]
             assert row["bid"] is None
             assert row["referee"] is None
+        elif row["kind"] == "life":
+            # Livsraden: vem som förlorade och hur många liv som är kvar.
+            assert row["player_name"]
+            assert row["lives_lost"] >= 1
+            assert row["lives_left"] is not None
+            assert row["referee"] is None
         else:
             assert row["player_name"]
             assert row["action"]
             assert row["referee"] is not None and "ok" in row["referee"]
+
+
+def _session_with_state(order, lives=(3, 3, 3, 3)):
+    players = [make_player(k, ScriptedLLM()) for k in "abcd"]
+    session = Session.new(players, make_referee(), seed=3)
+    session.order = list(order)
+    session.lives = list(lives)
+    session.log.clear()
+    return session, players
+
+
+def test_pass_moves_call_responsibility_to_the_passer():
+    # A sätter budet, B och C skickar vidare, D synar. Tärningarna visar lägre
+    # än budet, så den som ansvarar för budet förlorar – och det är C, som
+    # skickade vidare sist, inte A som satte budet från början.
+    session, players = _session_with_state([0, 1, 2, 3])
+    session.pending_bid = 52
+    session.pending_dice = (3, 1)  # visar 31, lägre än 52
+    session.bidder = 0
+    session.holder = 2  # C skickade vidare sist
+    session.actor = 3  # D synar
+
+    session._resolve_call(players[3])
+
+    result = session.result
+    assert result.caller_loses is False
+    assert result.holder == players[2].name
+    assert result.bidder == players[0].name
+    assert result.loser == players[2].name
+    assert session.lives[2] == 2
+    assert session.lives[0] == 3
+
+
+def test_caller_loses_when_dice_are_high_enough():
+    # Budet är lågt men tärningarna visar högre: den som synade förlorar.
+    session, players = _session_with_state([0, 1, 2, 3])
+    session.pending_bid = 31
+    session.pending_dice = (5, 2)  # visar 52, högre än 31
+    session.bidder = 1
+    session.holder = 1
+    session.actor = 3
+
+    session._resolve_call(players[3])
+
+    result = session.result
+    assert result.caller_loses is True
+    assert result.loser == players[3].name
+    assert session.lives[3] == 2
+    assert session.lives[1] == 3
+
+
+def test_life_loss_is_logged_as_its_own_row():
+    session, players = _session_with_state([0, 1, 2, 3])
+    session.pending_bid = 52
+    session.pending_dice = (3, 1)
+    session.bidder = 0
+    session.holder = 0
+    session.actor = 3
+
+    session._resolve_call(players[3])
+
+    life_rows = [row for row in session.to_dict()["log"] if row["kind"] == "life"]
+    assert len(life_rows) == 1
+    row = life_rows[0]
+    assert row["player_name"] == players[0].name
+    assert row["lives_lost"] == 1
+    assert row["lives_left"] == 2
+    # Livsraden ligger direkt efter synen.
+    kinds = [r["kind"] for r in session.to_dict()["log"]]
+    assert kinds.index("life") == kinds.index("action") + 1
+
+
+def test_mejer_call_logs_two_lives_lost():
+    session, players = _session_with_state([0, 1])
+    session.pending_bid = 21  # Mejer
+    session.pending_dice = (2, 1)  # visar Mejer
+    session.bidder = 0
+    session.holder = 0
+    session.actor = 1
+
+    session._resolve_call(players[1])
+
+    life_rows = [row for row in session.to_dict()["log"] if row["kind"] == "life"]
+    assert len(life_rows) == 1
+    assert life_rows[0]["lives_lost"] == 2
+    assert life_rows[0]["lives_left"] == 1

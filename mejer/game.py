@@ -104,6 +104,7 @@ class Game:
         order = active_idx[pos0:] + active_idx[:pos0]
 
         bidder = order[0]
+        holder = order[0]  # ansvarig för budet (byter vid skicka vidare)
         dice = self.roll()
         shown = rules.read_dice(*dice)
         ann = self.players[bidder].agent.announce(dice)
@@ -125,9 +126,13 @@ class Game:
                     idx = order[(pos + 1) % len(order)]
                 self._record(f"  {self.players[idx].name} tvingas syna (rundan tog för lång tid).")
                 result = rules.resolve_call(bid, shown)
-                loser = bidder if not result.caller_loses else idx
+                loser = holder if not result.caller_loses else idx
                 self.players[loser].lose_life(result.lives)
                 self._record(f"  Syn! {result.describe()}")
+                self._record(
+                    f"  {self.players[loser].name} förlorar {result.lives} liv "
+                    f"och har nu {self.players[loser].lives} liv."
+                )
                 return self._previous_active(loser)
 
             idx = order[pos % len(order)]
@@ -155,7 +160,7 @@ class Game:
 
             if decision.action == "syna":
                 result = rules.resolve_call(bid, shown)
-                loser = bidder if not result.caller_loses else idx
+                loser = holder if not result.caller_loses else idx
                 self.players[loser].lose_life(result.lives)
                 self._record(
                     f"  Syn! {result.describe()} "
@@ -169,6 +174,10 @@ class Game:
             if decision.action == "slå" and decision.bid is not None:
                 bid = decision.bid
                 bidder = idx
+                holder = idx
+            elif decision.action == "skicka":
+                # Spelaren tar över ansvaret för budet.
+                holder = idx
 
             pos += 1
 

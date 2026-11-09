@@ -13,14 +13,34 @@
 </header>
 
 <nav class="tabs" role="tablist" aria-label="Flikar">
-  <button class="tab active" data-tab="tab-spelare" role="tab" aria-selected="true">Enskild spelare</button>
+  <button class="tab active" data-tab="tab-spelarna" role="tab" aria-selected="true">Spelarna</button>
+  <button class="tab" data-tab="tab-spelare" role="tab" aria-selected="false">Enskild spelare</button>
   <button class="tab" data-tab="tab-agenter" role="tab" aria-selected="false">Fyra agenter</button>
   <button class="tab" data-tab="tab-spel" role="tab" aria-selected="false">Hela spel</button>
 </nav>
 
 <main>
-  <!-- Flik 1: en enskild spelare svarar på ett tärningsutfall -->
-  <div class="tab-panel" id="tab-spelare">
+  <!-- Flik 1: de fyra agenterna och deras karaktärer -->
+  <div class="tab-panel" id="tab-spelarna">
+    <section class="card">
+      <h2>De fyra spelarna</h2>
+      <p class="hint">
+        Fyra oberoende LLM-agenter spelar mot varandra. Var och en har sin egen
+        karaktär och spelstil, och ser bara den information en riktig spelare
+        skulle ha. Rollerna är desamma i alla flikar.
+      </p>
+      <div id="playerList" class="players"></div>
+    </section>
+
+    <section class="card">
+      <h2>Domaren</h2>
+      <p class="hint">Domaren är också en LLM-agent och granskar varje svar mot reglerna.</p>
+      <div id="refereeCard" class="players"></div>
+    </section>
+  </div>
+
+  <!-- Flik 2: en enskild spelare svarar på ett tärningsutfall -->
+  <div class="tab-panel" id="tab-spelare" hidden>
     <section class="card">
       <h2>1. Tärningsslaget</h2>
       <p class="hint">Två tärningar, 1–6. Läses med den högsta först (2 och 5 blir 52).</p>
@@ -74,7 +94,7 @@
     </section>
   </div>
 
-  <!-- Flik 2: fyra agenter spelar mot varandra, steg för steg -->
+  <!-- Flik 3: fyra agenter spelar mot varandra, steg för steg -->
   <div class="tab-panel" id="tab-agenter" hidden>
     <section class="card" id="sessionCard">
       <h2>Fyra agenter spelar mot varandra</h2>
@@ -106,7 +126,7 @@
     </section>
   </div>
 
-  <!-- Flik 3: logg per helt spel (innehåll kommer) -->
+  <!-- Flik 4: logg per helt spel (innehåll kommer) -->
   <div class="tab-panel" id="tab-spel" hidden>
     <section class="card">
       <h2>Logg per helt spel</h2>
