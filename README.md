@@ -163,6 +163,46 @@ Med ett fast basfrö blir en serie reproducerbar. JSONL-formatet (en match per r
 gör att stora serier kan läsas och analyseras rad för rad utan att allt hålls i
 minnet.
 
+### Få resultatet mejlat
+
+En lång serie tar tid. Fyll i en adress i fältet **Mejla resultatet till** innan
+du startar serien, så skickas JSONL-protokollet som bilaga när körningen är klar.
+Mejlet innehåller också en kort sammanfattning (antal matcher, vinster och
+vinstfrekvens per roll).
+
+E-posten är avstängd tills servern fått SMTP-inställningar. Sätt dem i miljön
+innan du startar servern:
+
+| Variabel | Betydelse |
+|---|---|
+| `MEJER_SMTP_HOST` | SMTP-server (krävs för att slå på mejl) |
+| `MEJER_SMTP_PORT` | Port (standard 587; 465 ger implicit TLS) |
+| `MEJER_SMTP_USER` | Användarnamn |
+| `MEJER_SMTP_PASSWORD` | Lösenord eller app-lösenord |
+| `MEJER_MAIL_FROM` | Avsändare (standard: `MEJER_SMTP_USER`) |
+| `MEJER_MAIL_TO` | Standardmottagare, kommaseparerad |
+| `MEJER_SMTP_TLS` | Sätt till `0` för att stänga av STARTTLS (testservrar) |
+
+Exempel med ett Gmail-konto och ett app-lösenord:
+
+```bash
+export MEJER_SMTP_HOST=smtp.gmail.com
+export MEJER_SMTP_PORT=587
+export MEJER_SMTP_USER=du@gmail.com
+export MEJER_SMTP_PASSWORD=app-losenord
+export MEJER_MAIL_TO=du@gmail.com
+./run.sh --background
+```
+
+Samma sak finns i kommandoraden:
+
+```bash
+python -m mejer.cli match --count 20 --mail du@gmail.com
+```
+
+Ett mejlfel fäller aldrig körningen. Resultatet ligger kvar på servern och kan
+laddas ner som vanligt; felet visas bara i statusraden.
+
 ## Analys
 
 Fliken **Analys** låter dig borra vidare i insamlat material. Du laddar upp en
@@ -209,6 +249,7 @@ Tre saker är värda att veta:
 | GET | `/api/matches/status` | Läge och hittills spelade matcher för serien |
 | GET | `/api/matches/summary` | Statistik för den senaste matchserien |
 | GET | `/api/matches/download` | Ladda ner protokollet (JSONL) |
+| GET | `/api/matches/mail` | Om e-post är påslagen och standardmottagare |
 | GET | `/api/analysis/data` | Inläst material: antal matcher, källor och sammanställning |
 | POST | `/api/analysis/upload` | Ladda upp en eller flera JSONL-filer (multipart, fältet `files`) |
 | POST | `/api/analysis/load-latest` | Läs in protokollet från senaste matchserien |
@@ -225,6 +266,33 @@ matcherna vartefter de blir klara.
 Fältet `workers` (1–8, standard 3) spelar flera matcher samtidigt, vilket kortar
 en lång serie. Varje match har egna agenter och en egen LLM-klient, så de delar
 ingen status.
+
+### Långa körningar
+
+En match tar några minuter, så en serie på tiotals matcher kan ta lång tid. Tre
+saker avgör hur länge en körning får hålla på:
+
+- **Serien körs i bakgrunden.** `POST /api/matches/run` svarar direkt och jobbet
+  fortsätter i en tråd, oavsett om du stänger fliken. Du kan alltså starta en
+  lång serie och komma tillbaka senare.
+- **Sandlådan har en inaktivitetsgräns.** I Agent Canvas pausas en miljö som
+  varit inaktiv en stund (runt 20 minuter). Pågående LLM-anrop och
+  statuspollningen från en öppen flik håller den vaken. Lämna fliken öppen om du
+  vill vara säker, och använd `workers` för att korta körtiden.
+- **Protokollet skrivs medan serien spelas.** Varje klar match läggs till i
+  JSONL-filen direkt, så ett avbrott mitt i serien förstör inte det som redan är
+  klart. Ladda ner filen och fortsätt därifrån.
+
+Behöver du en körning som garanterat får ta mer än en timme, kör du den utanför
+Agent Canvas – koden är portabel. Sätt `ANTHROPIC_API_KEY` och kör kommandoraden
+i en egen terminal (eller med `nohup`), och låt den mejla resultatet när den är
+klar:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+python -m mejer.cli match --count 60 --workers 4 \
+  --out matcher.jsonl --mail du@gmail.com
+```
 
 Exempel:
 
@@ -299,6 +367,7 @@ mejer/
   session.py          Interaktiv session: fullt flöde och logg
   match.py            Batchkörning av många matcher + statistik (JSONL)
   analysis.py         Analys: digest av protokoll + LLM-frågor med diagram
+  notify.py           E-postavisering med resultatfilen som bilaga (SMTP)
   cli.py              Kommandoradsgränssnitt
   agents/
     base.py           Agent-grundklass och roll

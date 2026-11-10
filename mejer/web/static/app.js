@@ -71,6 +71,7 @@ async function boot() {
   // Om en matchserie redan kör i servern (t.ex. efter omladdning): visa och följ.
   resumeMatchSeries();
 
+  setupMatchMail();
   setupAnalysis();
 }
 
@@ -615,6 +616,7 @@ async function runMatchSeries() {
   const workers = parseInt($("matchWorkers").value, 10) || 1;
   const seedRaw = $("matchSeed").value.trim();
   const baseSeed = seedRaw === "" ? null : parseInt(seedRaw, 10);
+  const mailTo = ($("matchMailTo").value || "").trim() || null;
 
   btn.disabled = true;
   const status = $("matchStatus");
@@ -625,7 +627,7 @@ async function runMatchSeries() {
     const res = await fetch("/api/matches/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ count, lives, workers, base_seed: baseSeed }),
+      body: JSON.stringify({ count, lives, workers, base_seed: baseSeed, mail_to: mailTo }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -698,10 +700,31 @@ async function pollMatchSeries() {
     }
     if (!data.running) {
       status.textContent = `Klart: ${data.done} matcher spelade.`;
+      if (data.mail_status) status.textContent += ` ${data.mail_status}.`;
       btn.disabled = false;
       return;
     }
     status.textContent = matchProgressText(data);
+  }
+}
+
+// Visa om e-post är påslagen på servern, och fyll i standardmottagaren.
+async function setupMatchMail() {
+  const hint = $("matchMailHint");
+  const field = $("matchMailTo");
+  if (!hint || !field) return;
+  try {
+    const res = await fetch("/api/matches/mail");
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.configured) return;
+    hint.hidden = false;
+    hint.textContent = data.default_to
+      ? `E-post är påslagen. Standardmottagare: ${data.default_to}. Lämna fältet tomt för den.`
+      : "E-post är påslagen. Fyll i en mottagare för att få resultatet mejlat.";
+    if (data.default_to && !field.value) field.placeholder = data.default_to;
+  } catch (e) {
+    /* tyst: e-post är valfritt */
   }
 }
 

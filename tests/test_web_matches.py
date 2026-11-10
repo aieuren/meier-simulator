@@ -98,3 +98,46 @@ def test_second_series_while_running_conflicts(monkeypatch):
     second = client.post("/api/matches/run", json={"count": 1})
     assert second.status_code == 409
     _wait_done(client, timeout=30.0)
+
+
+def test_mail_endpoint_reports_not_configured(monkeypatch):
+    monkeypatch.delenv("MEJER_SMTP_HOST", raising=False)
+    client = _client(monkeypatch)
+    data = client.get("/api/matches/mail").json()
+    assert data["configured"] is False
+
+
+def test_series_mails_result_when_finished(monkeypatch, tmp_path):
+    sent = {}
+
+    def fake_send(path, *, subject, body, to=None, smtp_factory=None):
+        sent["path"] = path
+        sent["subject"] = subject
+        sent["body"] = body
+        sent["to"] = to
+        return [to or "default@example.com"]
+
+    monkeypatch.setattr(web_app.notify, "send_matches", fake_send)
+    client = _client(monkeypatch)
+    res = client.post(
+        "/api/matches/run", json={"count": 2, "base_seed": 1, "mail_to": "boss@example.com"}
+    )
+    assert res.status_code == 200
+    data = _wait_done(client)
+    assert data["error"] is None
+    assert "boss@example.com" in (data["mail_status"] or "")
+    assert sent["to"] == "boss@example.com"
+    assert "2" in sent["subject"]
+
+
+def test_mail_failure_does_not_break_series(monkeypatch):
+    def boom(*args, **kwargs):
+        raise web_app.notify.MailError("SMTP nere")
+
+    monkeypatch.setattr(web_app.notify, "send_matches", boom)
+    client = _client(monkeypatch)
+    client.post("/api/matches/run", json={"count": 1, "mail_to": "boss@example.com"})
+    data = _wait_done(client)
+    assert data["error"] is None
+    assert data["done"] == 1
+    assert "Kunde inte skicka" in (data["mail_status"] or "")

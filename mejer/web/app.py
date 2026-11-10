@@ -8,6 +8,7 @@ tidigare bud om spelaren slår efter någon annan.
 from __future__ import annotations
 
 import json
+import os
 import threading
 from pathlib import Path
 
@@ -22,7 +23,7 @@ from ..llm import LLMClient, LLMError
 from ..agents.player import MejerPlayerAgent
 from ..match import GameRecord, read_jsonl, run_matches, summarize
 from ..session import Session
-from .. import analysis
+from .. import analysis, notify
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -261,6 +262,10 @@ class MatchRequest(BaseModel):
     workers: int = Field(
         3, ge=1, le=8, description="Antal matcher som spelas samtidigt"
     )
+    mail_to: str | None = Field(
+        None,
+        description="E-postmottagare för resultatfilen. Annars MEJER_MAIL_TO i miljön.",
+    )
 
 
 class _MatchJob:
@@ -273,15 +278,18 @@ class _MatchJob:
         base_seed: int | None,
         lives: int,
         workers: int = 1,
+        mail_to: str | None = None,
     ):
         self.roles = roles
         self.count = count
         self.base_seed = base_seed
         self.lives = lives
         self.workers = workers
+        self.mail_to = mail_to
         self.done = 0
         self.records: list[GameRecord] = []
         self.error: str | None = None
+        self.mail_status: str | None = None
         self.running = True
         self.lock = threading.Lock()
         self.thread = threading.Thread(target=self._run, daemon=True)
@@ -303,12 +311,33 @@ class _MatchJob:
                         self.done += 1
                     fh.write(json.dumps(rec.to_dict(), ensure_ascii=False) + "\n")
                     fh.flush()
+            self._maybe_mail()
         except LLMError as exc:
             self.error = f"LLM-fel: {exc}"
         except Exception as exc:  # pragma: no cover - skyddsnät
             self.error = f"Oväntat fel: {exc}"
         finally:
             self.running = False
+
+    def _maybe_mail(self) -> None:
+        """Skicka resultatfilen när serien är klar, om e-post är påslagen."""
+        if not (self.mail_to or notify.mail_configured()):
+            return
+        with self.lock:
+            snapshot = [rec.to_dict() for rec in self.records]
+        try:
+            sent = notify.send_matches(
+                _MATCH_FILE,
+                to=self.mail_to,
+                subject=f"Mejer: {self.done} matcher klara",
+                body=notify.summary_body(
+                    summarize(snapshot), count=self.count, file_name=_MATCH_FILE.name
+                ),
+            )
+            self.mail_status = f"Skickat till {', '.join(sent)}"
+        except notify.MailError as exc:
+            # Ett mejlfel ska inte fälla körningen – resultatet finns kvar.
+            self.mail_status = f"Kunde inte skicka: {exc}"
 
     def status(self) -> dict:
         with self.lock:
@@ -319,6 +348,7 @@ class _MatchJob:
             "done": self.done,
             "count": self.count,
             "error": self.error,
+            "mail_status": self.mail_status,
             "games": self.done,
             "records": snapshot,
             "summary": summary,
@@ -342,7 +372,9 @@ def matches_run(req: MatchRequest) -> dict:
     if _match_job is not None and _match_job.running:
         raise HTTPException(status_code=409, detail="En matchserie kör redan.")
 
-    _match_job = _MatchJob(roles, req.count, req.base_seed, req.lives, req.workers)
+    _match_job = _MatchJob(
+        roles, req.count, req.base_seed, req.lives, req.workers, mail_to=req.mail_to
+    )
     _match_job.thread.start()
     return _match_job.status()
 
@@ -373,6 +405,15 @@ def matches_download() -> FileResponse:
         media_type="application/x-ndjson",
         filename="mejer-matcher.jsonl",
     )
+
+
+@app.get("/api/matches/mail")
+def matches_mail() -> dict:
+    """Om e-post är påslagen, och i så fall standardmottagaren."""
+    return {
+        "configured": notify.mail_configured(),
+        "default_to": os.environ.get("MEJER_MAIL_TO", "").strip(),
+    }
 
 
 # -- Analys: ställ frågor mot insamlade matchprotokoll ---------------------

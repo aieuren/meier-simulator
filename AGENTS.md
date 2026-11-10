@@ -62,7 +62,14 @@ lower bid). Multiple agents with distinct roles can also play full games.
   polls `/api/matches/status` (field `running`) and renders matches as they
   finish. Only one series runs at a time (a second start gives 409). The request
   field `workers` (1–8) plays several matches at once; the JSONL file is written
-  line by line as matches finish, so the download works mid-run.
+  line by line as matches finish, so the download works mid-run. If `mail_to`
+  (request) or `MEJER_MAIL_TO`/`MEJER_SMTP_HOST` (env) is set, `_MatchJob` mails
+  the finished JSONL as an attachment via `mejer/notify.py`; the outcome lands in
+  the status field `mail_status`. A mail failure never fails the run.
+- `mejer/notify.py` – optional SMTP e-mail of the result file. Off unless
+  `MEJER_SMTP_HOST` plus a recipient are set. `send_matches` attaches the JSONL
+  and returns the recipient list; `mail_configured` gates it; `summary_body`
+  builds the plain-text summary. Tests inject a fake `smtp_factory`.
 - `mejer/match.py` – batch play of many full matches between the roles, for
   strategy analysis. `play_match` plays one match to the end via
   `Session.play_to_end()` and returns a `GameRecord`; `run_matches` yields a
@@ -75,7 +82,8 @@ lower bid). Multiple agents with distinct roles can also play full games.
   `actor_lives`, `active_players`, `caller_loses`). Tests swap the module-level
   `_new_agents` factory for scripted agents.
 - `mejer/cli.py` – command line entry points (`announce`, `decide`, `play`,
-  `session`, `match`, `summarize`).
+  `session`, `match`, `summarize`). `match --mail ADDRESS` mails the protocol
+  when the series finishes (same env vars as the web app).
 - `mejer/analysis.py` – analysis of collected match protocols. `build_digest`
   turns a list of `GameRecord.to_dict()` records into a compact summary
   (per-role stats from `summarize`, plus action/bid/outcome distributions and a
@@ -187,6 +195,13 @@ python -m mejer.cli play rackar kalkyl trygg
   managed proxy key; set `ANTHROPIC_API_KEY` to use a real Claude account.
 - Never print the session API key. Read it from the process env if needed.
 - The web app is served on port 12000 in this environment.
+- **Long runs / sandbox lifetime**: the runtime pauses an idle environment
+  (`OH_RUNTIME_IDLE_TIMEOUT_SECONDS`, 1200s = 20 min in Canvas). LLM traffic and
+  the client's 3s status polling keep it awake. A match series runs in a
+  background thread, so closing the tab does not stop it, and the JSONL is
+  appended as matches finish — a pause mid-series does not lose finished games.
+  For runs that must exceed the idle window, run the CLI outside Canvas with a
+  real `ANTHROPIC_API_KEY` (optionally `nohup`) and `match --mail`.
 - File upload (`/api/analysis/upload`) needs `python-multipart`; it is in
   `requirements.txt` and `run.sh` reinstalls missing deps after a container
   restart. Without it FastAPI raises at import/route-definition time.

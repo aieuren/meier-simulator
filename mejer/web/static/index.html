@@ -148,8 +148,12 @@
         <label>Samtidiga matcher
           <input type="number" id="matchWorkers" min="1" max="8" value="3" />
         </label>
+        <label>Mejla resultatet till (valfritt)
+          <input type="email" id="matchMailTo" placeholder="namn@exempel.se" />
+        </label>
         <button id="matchRunBtn" class="primary">Spela serien</button>
       </div>
+      <p class="hint" id="matchMailHint" hidden></p>
 
       <div id="matchStatus" class="session-status" hidden></div>
 
