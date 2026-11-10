@@ -491,15 +491,15 @@ function renderLog(entries, result) {
     } else {
       main = `<span class="log-action">Säger</span> <strong>${textOr(e.bid_name, "?")}</strong>`;
     }
-    // Etiketten "sant/bluff" gäller bara bud där spelaren tittat på tärningarna.
-    // Ett blind slag ("slå") kan inte vara en bluff – spelaren såg dem inte.
+    // Etiketten "sant/bluff" gäller bara bud där spelaren tittat på sina tärningar.
+    // Ett blint bud ("slå") kan inte vara en bluff – spelaren såg dem inte.
     const showsTruth =
       (e.action === "bud" || e.action === "höja") && !e.blind;
     const truthTag = showsTruth
       ? `<span class="log-bid ${e.lie ? "lie" : "truth"}">${e.lie ? "bluff" : "sant"}</span>`
       : "";
     const blindTag = e.blind
-      ? `<span class="log-blind">blind slag – såg inte tärningarna</span>`
+      ? `<span class="log-blind">blint bud – tittar inte på egna tärningarna</span>`
       : "";
 
     row.innerHTML = `
@@ -568,6 +568,7 @@ function renderMatchSummary(summary) {
         `<td>${b.wins}/${b.games}</td>` +
         `<td>${pct(b.win_rate)}</td>` +
         `<td>${pct(b.bluff_rate)}</td>` +
+        `<td>${pct(b.blind_rate)}</td>` +
         `<td>${pct(b.raise_rate)}</td>` +
         `<td>${pct(b.call_rate)}</td>` +
         `<td>${pct(b.call_success_rate)}</td>` +
@@ -585,7 +586,7 @@ function renderMatchSummary(summary) {
       <thead>
         <tr>
           <th>Spelare</th><th>Vinster</th><th>Vinst%</th>
-          <th>Bluff%</th><th>Höj%</th><th>Syn%</th><th>Syn lyckas</th><th>Snitt liv −</th>
+          <th>Bluff%</th><th>Blint bud%</th><th>Höj%</th><th>Syn%</th><th>Syn lyckas</th><th>Snitt liv −</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>

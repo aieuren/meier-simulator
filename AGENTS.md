@@ -158,10 +158,12 @@ python -m mejer.cli play rackar kalkyl trygg
   and surrounding text (`llm.parse_json_object`).
 - The engine coerces illegal model output back to legal moves (e.g. forces a
   higher bid when the rules require it). Keep that safety net.
-- A "slå" bid is **blind**: the player shakes the cup without looking, so the
-  bid is not a truth-or-bluff claim. Only "bud" and "höja" bids (where the player
-  saw the dice) carry the sant/bluff label; blind bids are labelled separately
-  and counted as `blinds`, never as `bluffs`, in the stats.
+- A "slå" bid is **blind**: the player shakes their *own* cup and does not look
+  at their own dice, so the bid is not a truth-or-bluff claim. Only "bud" and
+  "höja" bids (where the player saw the dice) carry the sant/bluff label; blind
+  bids are labelled "blint bud" and counted as `blinds`, never as `bluffs`, in
+  the stats. This is deliberate: it adds a psychological dimension, so `blind_rate`
+  is tracked per role to see whether bidding blind pays off over many matches.
 - Note that pairs (11–66) outrank high singles, so e.g. 44 beats 65. When a call
   looks "wrong", check the ranking before assuming a bug.
 

@@ -114,7 +114,8 @@ I webbappen finns sektionen **"Fyra spelare spelar mot varandra"**:
    ny runda), eller **Till syn** för att spela hela vägen fram till en syn.
 3. Flödet följer reglerna:
    - Den som börjar **slår och tittar i smyg**, sedan säger ett bud.
-   - Nästa spelare **slår** (skakar bägaren på nytt och säger ett högre bud), **synar** eller **skickar
+   - Nästa spelare **slår** (skakar sina egna tärningar på nytt, tittar inte på
+     dem och säger ett högre bud — ett *blint bud*), **synar** eller **skickar
      vidare**.
    - Kommer bägaren ett helt varv tillbaka till budgivaren måste denne **höja**.
      Är budet Mejer slår budgivaren i stället om och börjar en ny runda.

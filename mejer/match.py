@@ -320,6 +320,7 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
         b["elimination_rate"] = _rate(b["eliminated"], b["games"])
         b["avg_lives_lost"] = round(b["lives_lost"] / games, 3)
         b["bluff_rate"] = _rate(b["bluffs"], b["bids"])
+        b["blind_rate"] = _rate(b["blinds"], b["bids"])
         b["raise_rate"] = _rate(b["raises"], b["decisions"])
         b["pass_rate"] = _rate(b["passes"], b["decisions"])
         b["call_rate"] = _rate(b["calls"], b["decisions"])
