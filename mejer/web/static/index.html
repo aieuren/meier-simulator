@@ -17,6 +17,7 @@
   <button class="tab" data-tab="tab-spelare" role="tab" aria-selected="false">Enskild spelare</button>
   <button class="tab" data-tab="tab-agenter" role="tab" aria-selected="false">Fyra spelare</button>
   <button class="tab" data-tab="tab-spel" role="tab" aria-selected="false">Matchserie</button>
+  <button class="tab" data-tab="tab-analys" role="tab" aria-selected="false">Analys</button>
 </nav>
 
 <main>
@@ -165,6 +166,58 @@
         <p class="hint">Ingen serie körd än.</p>
       </div>
     </section>
+  </div>
+
+  <!-- Flik 5: analys – ställ frågor mot insamlade matchprotokoll -->
+  <div class="tab-panel" id="tab-analys" hidden>
+    <section class="card">
+      <h2>1. Ladda in matchdata</h2>
+      <p class="hint">
+        Ladda upp en eller flera JSONL-filer som du tidigare laddat ner efter en
+        matchserie. Flera filer sammanställs tillsammans, så du kan bygga en
+        större datamängd över tid.
+      </p>
+      <div class="analysis-upload">
+        <input type="file" id="analysisFiles" accept=".jsonl,.ndjson,.json,text/plain" multiple />
+        <button id="analysisUploadBtn" class="primary">Ladda upp filer</button>
+        <button id="analysisLoadLatestBtn">Använd senaste serien</button>
+        <button id="analysisClearBtn">Töm</button>
+      </div>
+      <div id="analysisDataStatus" class="session-status" hidden></div>
+      <div id="analysisSources" class="analysis-sources"></div>
+      <p class="match-download">
+        <a id="analysisExportLink" href="/api/analysis/export" download hidden>
+          Ladda ner allt inläst material (JSONL)
+        </a>
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>2. Ställ en fråga</h2>
+      <p class="hint">
+        Frågan besvaras av en LLM utifrån en sammanställning av det inlästa
+        materialet. Du kan också be om ett diagram.
+      </p>
+      <div class="analysis-ask">
+        <textarea id="analysisQuestion" rows="3"
+          placeholder="T.ex. Vem bluffar mest, och lönar det sig?"></textarea>
+        <button id="analysisAskBtn" class="primary">Analysera</button>
+      </div>
+      <div id="analysisSuggestions" class="analysis-suggestions"></div>
+    </section>
+
+    <section class="card" id="analysisResultCard" hidden>
+      <h2>Svar</h2>
+      <div id="analysisAnswer" class="analysis-answer"></div>
+      <div id="analysisChart" class="analysis-chart"></div>
+      <div id="analysisFollowups" class="analysis-followups"></div>
+      <div id="analysisUsage" class="analysis-usage"></div>
+    </section>
+
+    <details class="card advanced">
+      <summary>Visa sammanställningen som skickas till modellen</summary>
+      <pre id="analysisDigest" class="analysis-digest"></pre>
+    </details>
   </div>
 </main>
 

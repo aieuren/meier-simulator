@@ -432,3 +432,69 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 .ms-cell { color: var(--muted); }
 .match-download { margin-top: 0.8rem; }
 .match-download a { color: var(--accent-2); }
+
+/* -- Flik 5: analys -- */
+.analysis-upload { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; }
+.analysis-upload input[type="file"] { color: var(--muted); font-size: 0.9rem; flex: 1 1 18rem; }
+.analysis-upload button { margin-top: 0; width: auto; }
+.analysis-sources { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.7rem; }
+.analysis-source-chip {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  background: var(--panel-2);
+}
+.analysis-ask { display: grid; gap: 0.6rem; }
+.analysis-ask textarea {
+  width: 100%;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text);
+  padding: 0.6rem 0.7rem;
+  font: inherit;
+  resize: vertical;
+}
+.analysis-ask button { margin-top: 0; width: auto; justify-self: start; }
+.analysis-suggestions, .analysis-followups {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 0.7rem;
+}
+.analysis-suggest-label { color: var(--muted); font-size: 0.85rem; }
+.analysis-suggest {
+  margin-top: 0;
+  width: auto;
+  font-size: 0.82rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  text-align: left;
+}
+.analysis-answer p { margin: 0.4rem 0; }
+.analysis-answer ul { margin: 0.4rem 0; padding-left: 1.2rem; }
+.analysis-answer code { background: var(--panel-2); padding: 0.05rem 0.3rem; border-radius: 4px; }
+.analysis-chart { margin-top: 1rem; }
+.analysis-usage { color: var(--muted); font-size: 0.78rem; margin-top: 0.8rem; }
+.analysis-digest {
+  white-space: pre-wrap;
+  font-size: 0.78rem;
+  color: var(--muted);
+  max-height: 26rem;
+  overflow: auto;
+  margin: 0.6rem 0 0;
+}
+.chart-title { font-weight: 600; margin-bottom: 0.4rem; }
+.chart-svg { width: 100%; height: auto; }
+.chart-axis { stroke: var(--line); stroke-width: 1; }
+.chart-bar { fill: var(--accent); }
+.chart-val { fill: var(--muted); font-size: 11px; }
+.chart-lbl { fill: var(--muted); font-size: 11px; }
+.chart-legend { display: flex; gap: 0.8rem; flex-wrap: wrap; margin-top: 0.5rem; }
+.chart-legend-item { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.82rem; color: var(--muted); }
+.chart-legend-item i { width: 0.7rem; height: 0.7rem; border-radius: 2px; display: inline-block; }
+.analysis-table { margin: 0.6rem 0; }
+.analysis-answer p:first-child { margin-top: 0; }

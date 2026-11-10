@@ -11,8 +11,8 @@ import json
 import threading
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, UploadFile
+from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -22,6 +22,7 @@ from ..llm import LLMClient, LLMError
 from ..agents.player import MejerPlayerAgent
 from ..match import GameRecord, read_jsonl, run_matches, summarize
 from ..session import Session
+from .. import analysis
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -359,6 +360,109 @@ def matches_download() -> FileResponse:
         media_type="application/x-ndjson",
         filename="mejer-matcher.jsonl",
     )
+
+
+# -- Analys: ställ frågor mot insamlade matchprotokoll ---------------------
+#
+# Användaren laddar upp en eller flera JSONL-filer (nedladdade efter tidigare
+# körningar). De sammanställs till en kompakt digest som en LLM får svara på
+# frågor om. Digesten hålls liten med flit: hela händelseloggarna ryms inte i
+# modellkontexten.
+
+#: Största tillåtna uppladdning per fil (skydd mot misstag).
+_MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+
+_store = analysis.AnalysisStore()
+
+
+@app.get("/api/analysis/data")
+def analysis_data() -> dict:
+    """Vad som finns inläst: antal matcher, källor och sammanställningen."""
+    info = _store.info()
+    digest = _store.digest()
+    return {
+        **info,
+        "digest": digest,
+        "digest_text": analysis.render_digest_text(digest),
+    }
+
+
+@app.post("/api/analysis/upload")
+async def analysis_upload(files: list[UploadFile]) -> dict:
+    """Ladda upp en eller flera JSONL-filer med matchprotokoll."""
+    if not files:
+        raise HTTPException(status_code=400, detail="Inga filer skickades")
+    added = 0
+    details: list[dict] = []
+    for f in files:
+        raw = await f.read()
+        if len(raw) > _MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Filen {f.filename} är för stor (max 25 MB)",
+            )
+        try:
+            text = raw.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise HTTPException(
+                status_code=400, detail=f"Filen {f.filename} är inte UTF-8-text"
+            ) from exc
+        n = _store.add_text(f.filename or "fil", text)
+        added += n
+        details.append({"name": f.filename, "games": n})
+    if added == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Inga giltiga matchprotokoll hittades i filerna",
+        )
+    info = _store.info()
+    return {**info, "added": added, "files": details}
+
+
+@app.post("/api/analysis/load-latest")
+def analysis_load_latest() -> dict:
+    """Läs in protokollet från den senaste matchserien i servern."""
+    if not _MATCH_FILE.exists():
+        raise HTTPException(status_code=404, detail="Ingen matchserie körd ännu.")
+    added = _store.add_file(_MATCH_FILE)
+    return {**_store.info(), "added": added}
+
+
+@app.post("/api/analysis/clear")
+def analysis_clear() -> dict:
+    """Töm allt inläst analysmaterial."""
+    _store.clear()
+    return _store.info()
+
+
+@app.get("/api/analysis/export")
+def analysis_export() -> PlainTextResponse:
+    """Ladda ner allt inläst material som en JSONL-fil igen."""
+    if not _store.snapshot():
+        raise HTTPException(status_code=404, detail="Inget material inläst.")
+    return PlainTextResponse(
+        _store.to_jsonl() + "\n",
+        media_type="application/x-ndjson",
+        headers={"Content-Disposition": 'attachment; filename="mejer-analys.jsonl"'},
+    )
+
+
+class AnalysisAskRequest(BaseModel):
+    question: str = Field(..., min_length=1, description="Frågan till analysen")
+
+
+@app.post("/api/analysis/ask")
+def analysis_ask(req: AnalysisAskRequest) -> dict:
+    """Ställ en fråga mot det inlästa materialet och få svar (+ ev. diagram)."""
+    if not _store.snapshot():
+        raise HTTPException(status_code=400, detail="Inget material inläst ännu.")
+    try:
+        result = analysis.ask(_store.digest(), req.question)
+    except LLMError as exc:
+        raise HTTPException(status_code=502, detail=f"LLM-fel: {exc}") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return result
 
 
 app.mount("/static", NoCacheStaticFiles(directory=STATIC_DIR), name="static")

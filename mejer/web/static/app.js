@@ -69,6 +69,8 @@ async function boot() {
 
   // Om en matchserie redan kör i servern (t.ex. efter omladdning): visa och följ.
   resumeMatchSeries();
+
+  setupAnalysis();
 }
 
 function setupTabs() {
@@ -690,6 +692,419 @@ async function pollMatchSeries() {
     }
     status.textContent = matchProgressText(data);
   }
+}
+
+// -- Flik 5: analys mot insamlade matchprotokoll ---------------------------
+
+function setupAnalysis() {
+  const up = $("analysisUploadBtn");
+  if (!up) return;
+  up.onclick = uploadAnalysisFiles;
+  $("analysisLoadLatestBtn").onclick = loadLatestAnalysis;
+  $("analysisClearBtn").onclick = clearAnalysis;
+  $("analysisAskBtn").onclick = askAnalysis;
+  refreshAnalysisData();
+}
+
+async function refreshAnalysisData() {
+  let data;
+  try {
+    const res = await fetch("/api/analysis/data");
+    data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Fel");
+  } catch (e) {
+    showAnalysisStatus(`Kunde inte hämta analysdata: ${e.message}`, true);
+    return;
+  }
+  renderAnalysisData(data);
+}
+
+function renderAnalysisData(data) {
+  const status = $("analysisDataStatus");
+  status.hidden = false;
+  if (!data.games) {
+    status.textContent = "Ingen data inläst än.";
+  } else {
+    const skipped = data.skipped ? ` (${data.skipped} rader överhoppade)` : "";
+    status.textContent = `${data.games} matcher inlästa från ${data.sources.length} fil(er)${skipped}.`;
+  }
+
+  const src = $("analysisSources");
+  src.innerHTML = "";
+  (data.sources || []).forEach((name) => {
+    const chip = document.createElement("span");
+    chip.className = "analysis-source-chip";
+    chip.textContent = name;
+    src.appendChild(chip);
+  });
+
+  $("analysisExportLink").hidden = !data.games;
+  $("analysisDigest").textContent = data.digest_text || "";
+  renderAnalysisSuggestions(data);
+}
+
+// Färdiga förslag så att det är lätt att komma igång.
+function renderAnalysisSuggestions(data) {
+  const box = $("analysisSuggestions");
+  box.innerHTML = "";
+  if (!data.games) return;
+  const ideas = [
+    "Vem bluffar mest, och lönar sig bluffandet?",
+    "Lönar det sig att syna? Jämför synarens framgång per roll.",
+    "Vinner startspelaren oftare än de andra?",
+    "Hur vanligt är blint bud, och hur går det för den som budar blint?",
+    "Vilka bud är vanligast?",
+  ];
+  const label = document.createElement("span");
+  label.className = "analysis-suggest-label";
+  label.textContent = "Förslag:";
+  box.appendChild(label);
+  ideas.forEach((q) => {
+    const b = document.createElement("button");
+    b.className = "analysis-suggest";
+    b.type = "button";
+    b.textContent = q;
+    b.onclick = () => {
+      $("analysisQuestion").value = q;
+      askAnalysis();
+    };
+    box.appendChild(b);
+  });
+}
+
+function showAnalysisStatus(text, isError) {
+  const status = $("analysisDataStatus");
+  status.hidden = false;
+  status.textContent = text;
+  status.classList.toggle("error", !!isError);
+}
+
+async function uploadAnalysisFiles() {
+  const input = $("analysisFiles");
+  const btn = $("analysisUploadBtn");
+  if (!input.files || input.files.length === 0) {
+    showAnalysisStatus("Välj minst en fil först.", true);
+    return;
+  }
+  const form = new FormData();
+  for (const f of input.files) form.append("files", f);
+
+  btn.disabled = true;
+  btn.textContent = "Laddar…";
+  try {
+    const res = await fetch("/api/analysis/upload", { method: "POST", body: form });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Fel");
+    showAnalysisStatus(`Lade till ${data.added} matcher.`, false);
+    input.value = "";
+    await refreshAnalysisData();
+  } catch (e) {
+    showAnalysisStatus(`Fel: ${e.message}`, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Ladda upp filer";
+  }
+}
+
+async function loadLatestAnalysis() {
+  const btn = $("analysisLoadLatestBtn");
+  btn.disabled = true;
+  try {
+    const res = await fetch("/api/analysis/load-latest", { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Fel");
+    showAnalysisStatus(`Lade till ${data.added} matcher från senaste serien.`, false);
+    await refreshAnalysisData();
+  } catch (e) {
+    showAnalysisStatus(`Fel: ${e.message}`, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function clearAnalysis() {
+  const btn = $("analysisClearBtn");
+  btn.disabled = true;
+  try {
+    const res = await fetch("/api/analysis/clear", { method: "POST" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.detail || "Fel");
+    }
+    $("analysisResultCard").hidden = true;
+    showAnalysisStatus("Materialet är tömt.", false);
+    await refreshAnalysisData();
+  } catch (e) {
+    showAnalysisStatus(`Fel: ${e.message}`, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function askAnalysis() {
+  const q = $("analysisQuestion").value.trim();
+  if (!q) return;
+  const btn = $("analysisAskBtn");
+  const card = $("analysisResultCard");
+  btn.disabled = true;
+  btn.textContent = "Analyserar…";
+  card.hidden = false;
+  $("analysisAnswer").innerHTML = '<p class="hint">Tänker…</p>';
+  $("analysisChart").innerHTML = "";
+  $("analysisFollowups").innerHTML = "";
+  $("analysisUsage").textContent = "";
+
+  try {
+    const res = await fetch("/api/analysis/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: q }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Fel");
+    renderAnalysisResult(data);
+  } catch (e) {
+    $("analysisAnswer").innerHTML = `<p class="error">Fel: ${e.message}</p>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Analysera";
+  }
+}
+
+function renderAnalysisResult(data) {
+  $("analysisAnswer").innerHTML = markdownLite(data.answer || "");
+  $("analysisChart").innerHTML = "";
+  if (data.chart) renderChart($("analysisChart"), data.chart);
+
+  const fu = $("analysisFollowups");
+  fu.innerHTML = "";
+  (data.followups || []).forEach((f) => {
+    const b = document.createElement("button");
+    b.className = "analysis-suggest";
+    b.type = "button";
+    b.textContent = f;
+    b.onclick = () => {
+      $("analysisQuestion").value = f;
+      askAnalysis();
+    };
+    fu.appendChild(b);
+  });
+
+  const u = data.usage || {};
+  $("analysisUsage").textContent = u.total_tokens
+    ? `Modellanrop: ${u.total_tokens} tokens.`
+    : "";
+}
+
+// Minimal markdown: fetstil, kursiv, radbrytningar, punktlistor och tabeller.
+// Ingen HTML från modellen släpps igenom, så svaret kan inte injicera markup.
+function markdownLite(text) {
+  const esc = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  const lines = esc.split(/\r?\n/);
+  const out = [];
+  let inList = false;
+  let table = [];
+
+  const flushTable = () => {
+    if (table.length) {
+      out.push(renderMdTable(table));
+      table = [];
+    }
+  };
+
+  for (const raw of lines) {
+    const line = raw.trim();
+
+    // Tabellrad: samla ihop och rendera när tabellen tar slut.
+    if (line.startsWith("|") && line.endsWith("|")) {
+      if (inList) {
+        out.push("</ul>");
+        inList = false;
+      }
+      table.push(line);
+      continue;
+    }
+    flushTable();
+
+    const bullet = /^[-*]\s+(.*)$/.exec(line);
+    if (bullet) {
+      if (!inList) {
+        out.push("<ul>");
+        inList = true;
+      }
+      out.push(`<li>${inlineMd(bullet[1])}</li>`);
+      continue;
+    }
+    if (inList) {
+      out.push("</ul>");
+      inList = false;
+    }
+    if (line === "") out.push("");
+    else out.push(`<p>${inlineMd(line)}</p>`);
+  }
+  if (inList) out.push("</ul>");
+  flushTable();
+  return out.join("");
+}
+
+// Dela en tabellrad "| a | b |" i celler.
+function mdCells(row) {
+  return row
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((c) => c.trim());
+}
+
+function renderMdTable(rows) {
+  if (rows.length === 0) return "";
+  const header = mdCells(rows[0]);
+  // Rad 2 är en avgränsare (---|---) om den bara består av streck och kolon.
+  const isSep = (r) => /^[\s|:-]+$/.test(r);
+  const bodyRows = rows.slice(isSep(rows[1] || "") ? 2 : 1);
+  const head = header.map((c) => `<th>${inlineMd(c)}</th>`).join("");
+  const body = bodyRows
+    .map((r) => `<tr>${mdCells(r).map((c) => `<td>${inlineMd(c)}</td>`).join("")}</tr>`)
+    .join("");
+  return (
+    `<table class="stat-table analysis-table"><thead><tr>${head}</tr></thead>` +
+    `<tbody>${body}</tbody></table>`
+  );
+}
+
+function inlineMd(s) {
+  return s
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>");
+}
+
+// Diagram ritas som ren SVG – inga externa bibliotek behövs.
+function renderChart(box, chart) {
+  const type = chart.type;
+  if (type === "table") {
+    renderChartTable(box, chart);
+    return;
+  }
+  if (type === "bar") {
+    renderChartBar(box, chart);
+    return;
+  }
+  if (type === "line") {
+    renderChartLine(box, chart);
+    return;
+  }
+}
+
+function chartTitle(chart) {
+  return chart.title ? `<div class="chart-title">${escapeHtml(chart.title)}</div>` : "";
+}
+
+function escapeHtml(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function renderChartTable(box, chart) {
+  const cols = chart.columns || [];
+  const rows = chart.rows || [];
+  const head = cols.map((c) => `<th>${escapeHtml(c)}</th>`).join("");
+  const body = rows
+    .map((r) => `<tr>${r.map((c) => `<td>${escapeHtml(c)}</td>`).join("")}</tr>`)
+    .join("");
+  box.innerHTML =
+    chartTitle(chart) +
+    `<table class="stat-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
+const CHART_W = 640;
+const CHART_H = 300;
+const PAD = { top: 20, right: 16, bottom: 64, left: 48 };
+
+function chartScaffold(chart, maxVal) {
+  const plotW = CHART_W - PAD.left - PAD.right;
+  const plotH = CHART_H - PAD.top - PAD.bottom;
+  return { plotW, plotH, maxVal: maxVal > 0 ? maxVal : 1 };
+}
+
+function svgOpen() {
+  return `<svg viewBox="0 0 ${CHART_W} ${CHART_H}" class="chart-svg" role="img" preserveAspectRatio="xMidYMid meet">`;
+}
+
+function renderChartBar(box, chart) {
+  const labels = chart.labels || [];
+  const values = (chart.values || []).map((v) => Number(v) || 0);
+  const maxVal = Math.max(1, ...values);
+  const { plotW, plotH } = chartScaffold(chart, maxVal);
+  const n = Math.max(1, labels.length);
+  const slot = plotW / n;
+  const barW = Math.min(56, slot * 0.6);
+  const baseY = PAD.top + plotH;
+
+  let bars = "";
+  labels.forEach((lab, i) => {
+    const v = values[i] || 0;
+    const h = (v / maxVal) * plotH;
+    const x = PAD.left + slot * i + (slot - barW) / 2;
+    const y = baseY - h;
+    bars +=
+      `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" rx="3" class="chart-bar"></rect>` +
+      `<text x="${(x + barW / 2).toFixed(1)}" y="${(y - 4).toFixed(1)}" class="chart-val" text-anchor="middle">${escapeHtml(v)}</text>` +
+      `<text x="${(PAD.left + slot * i + slot / 2).toFixed(1)}" y="${baseY + 16}" class="chart-lbl" text-anchor="middle">${escapeHtml(lab)}</text>`;
+  });
+
+  const axis = `<line x1="${PAD.left}" y1="${baseY}" x2="${CHART_W - PAD.right}" y2="${baseY}" class="chart-axis"></line>`;
+  box.innerHTML = chartTitle(chart) + svgOpen() + axis + bars + "</svg>";
+}
+
+function renderChartLine(box, chart) {
+  const labels = chart.labels || [];
+  const series = chart.series || [];
+  const allVals = series.flatMap((s) => (s.values || []).map((v) => Number(v) || 0));
+  const maxVal = Math.max(1, ...allVals);
+  const { plotW, plotH } = chartScaffold(chart, maxVal);
+  const baseY = PAD.top + plotH;
+  const n = Math.max(1, labels.length);
+  const stepX = n > 1 ? plotW / (n - 1) : 0;
+  const xAt = (i) => PAD.left + stepX * i;
+  const yAt = (v) => baseY - (v / maxVal) * plotH;
+
+  let paths = "";
+  const palette = ["#9aa4b8", "#6fae8a", "#cf8378", "#c9b98f", "#8fa9cf"];
+  series.forEach((s, si) => {
+    const vals = (s.values || []).map((v) => Number(v) || 0);
+    const pts = vals.map((v, i) => `${xAt(i).toFixed(1)},${yAt(v).toFixed(1)}`).join(" ");
+    const color = palette[si % palette.length];
+    paths += `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" class="chart-line"></polyline>`;
+    vals.forEach((v, i) => {
+      paths += `<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(v).toFixed(1)}" r="3" fill="${color}"></circle>`;
+    });
+  });
+
+  const axis = `<line x1="${PAD.left}" y1="${baseY}" x2="${CHART_W - PAD.right}" y2="${baseY}" class="chart-axis"></line>`;
+  let xl = "";
+  labels.forEach((lab, i) => {
+    xl += `<text x="${xAt(i).toFixed(1)}" y="${baseY + 16}" class="chart-lbl" text-anchor="middle">${escapeHtml(lab)}</text>`;
+  });
+  let legend = "";
+  series.forEach((s, si) => {
+    const color = palette[si % palette.length];
+    legend += `<span class="chart-legend-item"><i style="background:${color}"></i>${escapeHtml(s.name || "")}</span>`;
+  });
+
+  box.innerHTML =
+    chartTitle(chart) +
+    svgOpen() +
+    axis +
+    paths +
+    xl +
+    "</svg>" +
+    (legend ? `<div class="chart-legend">${legend}</div>` : "");
 }
 
 boot();

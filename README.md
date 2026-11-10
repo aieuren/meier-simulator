@@ -11,11 +11,13 @@ roller kan spela hela spel mot varandra.
 
 ## Vad som finns
 
-- **Webbapp med fyra flikar:**
+- **Webbapp med fem flikar:**
   - **Spelarna** – de fyra spelarna och deras karaktärsbeskrivningar.
   - **Enskild spelare** – skriv in tärningsutfallet (två tärningar) och se spelarens svar.
   - **Fyra spelare** – fyra spelare spelar mot varandra i ett fullt flöde fram till en syn.
   - **Matchserie** – kör många matcher och få statistik + ett JSONL-protokoll för analys.
+  - **Analys** – ladda upp en eller flera JSONL-filer och ställ frågor mot materialet.
+    Svaren kommer från en LLM och kan innehålla diagram (stapel, linje eller tabell).
 - **Fyra spelarroller** – Ärlig-Adolf, Rackar-Rakel, Kalkylerande-Karin och Trygge-Tor.
 - **Interaktiv spelsession** – fyra spelare spelar mot varandra i ett fullt flöde
   fram till en syn. Slumpen avgör ordningen och vem som börjar. Varje steg
@@ -158,6 +160,33 @@ Med ett fast basfrö blir en serie reproducerbar. JSONL-formatet (en match per r
 gör att stora serier kan läsas och analyseras rad för rad utan att allt hålls i
 minnet.
 
+## Analys
+
+Fliken **Analys** låter dig borra vidare i insamlat material. Du laddar upp en
+eller flera JSONL-filer (sådana du laddat ner från fliken **Matchserie**), och
+filerna sammanställs tillsammans. På så sätt kan du bygga en stor datamängd över
+tid, från flera körningar.
+
+Därefter ställer du frågor i fritext. En LLM svarar utifrån en kompakt
+sammanställning av materialet – aggregerade mått per roll, fördelningar över bud
+och tärningsutfall, och en matchlista. Modellen kan också rita ett diagram:
+stapel, linje eller tabell. Diagrammen ritas som ren SVG i webbläsaren, utan
+externa bibliotek.
+
+Knappen **Använd senaste serien** läser in protokollet från den senaste
+matchserien som körts i servern, så att du slipper ladda ner och upp igen.
+
+Tre saker är värda att veta:
+
+- Hela händelseloggarna ryms inte i modellens kontext. Därför skickas en
+  **sammanställning** i stället för rådata. Du kan se exakt vad modellen får
+  under **Visa sammanställningen som skickas till modellen**.
+- Modellen får inte hitta på siffror; den ska räkna på det som finns. Ändå bör
+  du behandla svaren som vägledning, inte som facit – särskilt vid litet
+  underlag.
+- Frågorna besvaras av samma LLM-uppkoppling som agenterna använder (se
+  **LLM-konfiguration**). Varje fråga är alltså ett modellanrop.
+
 ## API
 
 | Metod | Väg | Beskrivning |
@@ -176,6 +205,12 @@ minnet.
 | GET | `/api/matches/status` | Läge och hittills spelade matcher för serien |
 | GET | `/api/matches/summary` | Statistik för den senaste matchserien |
 | GET | `/api/matches/download` | Ladda ner protokollet (JSONL) |
+| GET | `/api/analysis/data` | Inläst material: antal matcher, källor och sammanställning |
+| POST | `/api/analysis/upload` | Ladda upp en eller flera JSONL-filer (multipart, fältet `files`) |
+| POST | `/api/analysis/load-latest` | Läs in protokollet från senaste matchserien |
+| POST | `/api/analysis/ask` | Ställ en fråga mot materialet (svar + ev. diagram) |
+| GET | `/api/analysis/export` | Ladda ner allt inläst material som JSONL |
+| POST | `/api/analysis/clear` | Töm allt inläst analysmaterial |
 
 En match är hundratals LLM-anrop och tar minuter, så en serie körs i en
 bakgrundstråd. `POST /api/matches/run` svarar direkt, och klienten följer
@@ -259,6 +294,7 @@ mejer/
   game.py             Spelmotor för flera oberoende agenter
   session.py          Interaktiv session: fullt flöde och logg
   match.py            Batchkörning av många matcher + statistik (JSONL)
+  analysis.py         Analys: digest av protokoll + LLM-frågor med diagram
   cli.py              Kommandoradsgränssnitt
   agents/
     base.py           Agent-grundklass och roll

@@ -74,6 +74,16 @@ lower bid). Multiple agents with distinct roles can also play full games.
   `_new_agents` factory for scripted agents.
 - `mejer/cli.py` – command line entry points (`announce`, `decide`, `play`,
   `session`, `match`, `summarize`).
+- `mejer/analysis.py` – analysis of collected match protocols. `build_digest`
+  turns a list of `GameRecord.to_dict()` records into a compact summary
+  (per-role stats from `summarize`, plus action/bid/outcome distributions and a
+  per-match series) so it fits in the model context — the full event logs do
+  not. `render_digest_text` formats it for the prompt (and for the UI). `ask`
+  sends a question with the digest and expects JSON
+  (`{"answer", "chart", "followups"}`); `_clean_chart` drops charts the frontend
+  cannot draw. `AnalysisStore` accumulates uploaded records across files. The
+  chart types are `bar` (`labels`/`values`), `line` (`labels`/`series`) and
+  `table` (`columns`/`rows`); the frontend renders them as plain SVG.
 - `tests/` – unit tests. No real LLM calls; `FakeLLM`/`ScriptedAgent` are used.
 
 ## Mejer ranking is non-numeric (gotcha)
@@ -175,6 +185,11 @@ python -m mejer.cli play rackar kalkyl trygg
   managed proxy key; set `ANTHROPIC_API_KEY` to use a real Claude account.
 - Never print the session API key. Read it from the process env if needed.
 - The web app is served on port 12000 in this environment.
+- File upload (`/api/analysis/upload`) needs `python-multipart`; it is in
+  `requirements.txt` and `run.sh` reinstalls missing deps after a container
+  restart. Without it FastAPI raises at import/route-definition time.
+- The analysis tab keeps uploaded protocols **in memory** (`web.app._store`),
+  so they are lost on restart. Tests clear the store to stay isolated.
 - Git remote: `https://github.com/aieuren/mejer-simulator.git` (branch `main`).
   The repo was renamed from `majer-simulator`; GitHub redirects the old name.
   `git push` needs auth: a repo-local `credential.helper` reads
