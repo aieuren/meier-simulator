@@ -301,6 +301,22 @@ class Session:
             last = self.advance()
         return last
 
+    def run_to_end(self, *, max_steps: int = 20000) -> list[LogEntry]:
+        """Spela hela matchen klart och returnera alla nya loggposter.
+
+        Samma flöde som ``play_to_end``, men avsett för den interaktiva
+        sessionen: grindens steg bekräftas automatiskt tills någon står kvar
+        som vinnare. Ett skyddsnät stoppar efter ``max_steps`` steg.
+        """
+        created: list[LogEntry] = []
+        steps = 0
+        while not self.finished and self.step_kind and steps < max_steps:
+            steps += 1
+            entry = self.advance()
+            if entry is not None:
+                created.append(entry)
+        return created
+
     def run_to_round_end(self, *, max_steps: int = 200) -> list[LogEntry]:
         """Kör flödet fram till rundans slut.
 

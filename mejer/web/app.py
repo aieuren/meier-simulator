@@ -223,6 +223,19 @@ def session_round() -> dict:
     return session.to_dict()
 
 
+@app.post("/api/session/end")
+def session_end() -> dict:
+    """Spela hela matchen klart, tills någon står kvar som vinnare."""
+    session = _require_session()
+    try:
+        session.run_to_end()
+    except LLMError as exc:
+        raise HTTPException(status_code=502, detail=f"LLM-fel: {exc}") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return session.to_dict()
+
+
 @app.post("/api/session/stop")
 def session_stop() -> dict:
     session = _require_session()

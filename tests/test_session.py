@@ -401,6 +401,20 @@ def test_run_to_round_end_starts_a_new_round_with_a_roll():
     assert session.to_dict()["log"][-1]["kind"] == "roll"
 
 
+def test_run_to_end_finishes_the_whole_match():
+    players = [
+        make_player(k, ScriptedLLM(bids=[11], actions=["syna"])) for k in ("a", "b", "c", "d")
+    ]
+    session = Session.new(players, seed=11, lives=1)
+    created = session.run_to_end()
+    assert session.finished is True
+    assert session.to_dict()["phase"] == "finished"
+    # Flera rundor spelades, och en vinnare står kvar.
+    assert any(e.action == "syna" for e in created)
+    state = session.to_dict()
+    assert len([p for p in state["order"] if p["lives"] > 0]) == 1
+
+
 def test_session_finishes_when_one_player_left():
     players = [
         make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b")

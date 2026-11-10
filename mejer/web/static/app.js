@@ -65,6 +65,7 @@ async function boot() {
   $("okBtn").onclick = advanceSession;
   $("roundBtn").onclick = () => runSession("/api/session/round", "roundBtn", "Spelar…", "Till slut på runda");
   $("runBtn").onclick = () => runSession("/api/session/run", "runBtn", "Spelar…", "Till syn");
+  $("endBtn").onclick = () => runSession("/api/session/end", "endBtn", "Spelar klart…", "Hela matchen");
   $("matchRunBtn").onclick = runMatchSeries;
 
   // Om en matchserie redan kör i servern (t.ex. efter omladdning): visa och följ.
@@ -244,7 +245,7 @@ async function newSession() {
 
 async function advanceSession() {
   const btn = $("okBtn");
-  btn.disabled = true;
+  setSessionBusy(true);
   btn.textContent = "Spelaren svarar…";
   try {
     const res = await fetch("/api/session/advance", { method: "POST" });
@@ -254,15 +255,15 @@ async function advanceSession() {
   } catch (err) {
     $("log").insertAdjacentHTML("afterbegin", `<p class="error">Fel: ${err.message}</p>`);
   } finally {
-    btn.disabled = false;
+    setSessionBusy(false);
     btn.textContent = "Ett drag";
   }
 }
 
-// Kör flödet vidare med ett anrop: till rundans slut eller till en syn.
+// Kör flödet vidare med ett anrop: till en syn, till rundans slut eller hela matchen.
 async function runSession(path, btnId, busyLabel, idleLabel) {
   const btn = $(btnId);
-  btn.disabled = true;
+  setSessionBusy(true);
   btn.textContent = busyLabel;
   try {
     const res = await fetch(path, { method: "POST" });
@@ -272,8 +273,18 @@ async function runSession(path, btnId, busyLabel, idleLabel) {
   } catch (err) {
     $("log").insertAdjacentHTML("afterbegin", `<p class="error">Fel: ${err.message}</p>`);
   } finally {
-    btn.disabled = false;
+    setSessionBusy(false);
     btn.textContent = idleLabel;
+  }
+}
+
+const SESSION_BTNS = ["okBtn", "runBtn", "roundBtn", "endBtn"];
+
+// Lås alla styrknappar medan ett anrop pågår, så inget dubbelklick hinner iväg.
+function setSessionBusy(busy) {
+  for (const id of SESSION_BTNS) {
+    const b = $(id);
+    if (b) b.disabled = busy;
   }
 }
 

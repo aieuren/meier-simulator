@@ -113,7 +113,8 @@ I webbappen finns sektionen **"Fyra spelare spelar mot varandra"**:
 1. Klicka **Ny session**. Slumpen avgör spelordningen och vem som börjar.
 2. Ett steg visas i taget. Klicka **Ett drag** för att utföra det,
    **Till slut på runda** för att köra fram till rundans slut (en syn eller en
-   ny runda), eller **Till syn** för att spela hela vägen fram till en syn.
+   ny runda), **Till syn** för att spela hela vägen fram till en syn, eller
+   **Hela matchen** för att spela klart tills en vinnare står kvar.
 3. Flödet följer reglerna:
    - Den som börjar **slår och tittar i smyg**, sedan säger ett bud.
    - Nästa spelare **slår** (skakar sina egna tärningar på nytt, tittar inte på
@@ -135,8 +136,10 @@ vem som förlorade hur många liv. Livsställningen syns i spelordningen.
 tärningsutfallet. Den utför steget så att nästa rad läggs till.
 
 > **Obs:** Grinden (att varje steg måste bekräftas) är till för att vi ska
-> kunna kontrollera att allt fungerar. **Till syn** och **Till slut på runda**
-> kör flera steg utan att du behöver trycka.
+> kunna kontrollera att allt fungerar. **Till syn**, **Till slut på runda** och
+> **Hela matchen** kör flera steg utan att du behöver trycka. En hel match är
+> många LLM-anrop, så **Hela matchen** kan ta en stund; knapparna är låsta
+> medan anropet kör.
 
 ## Matchserie och statistik
 
@@ -200,6 +203,7 @@ Tre saker är värda att veta:
 | POST | `/api/session/advance` | Ett drag: utför aktuellt steg |
 | POST | `/api/session/round` | Kör flödet fram till rundans slut |
 | POST | `/api/session/run` | Kör hela flödet fram till en syn |
+| POST | `/api/session/end` | Spela hela matchen klart till en vinnare |
 | POST | `/api/session/stop` | Avsluta sessionen |
 | POST | `/api/matches/run` | Starta en serie matcher i bakgrunden |
 | GET | `/api/matches/status` | Läge och hittills spelade matcher för serien |

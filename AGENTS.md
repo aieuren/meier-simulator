@@ -30,10 +30,12 @@ lower bid). Multiple agents with distinct roles can also play full games.
   `order` and `starter` so the UI can show the seating and who begins.
   `advance()` does one gated step;
   `run_to_round_end()` runs to the end of the current round (a call, or a new
-  round after Mejer), and `run_to_call()` runs the whole flow to the next call.
+  round after Mejer), `run_to_call()` runs the whole flow to the next call, and
+  `run_to_end()` plays the whole match to a winner.
   The web UI moves the *Ett drag* button into the log so it sits under the
-  latest dice roll; the *Till slut på runda* and *Till syn* buttons run multiple
-  steps at once. When a raise is not strictly higher than the previous bid,
+  latest dice roll; the *Till slut på runda*, *Till syn* and *Hela matchen*
+  buttons run multiple steps at once (all four controls are disabled while a
+  call runs). When a raise is not strictly higher than the previous bid,
   `_enforce_bid` replaces it with the smallest legal raise.
 - Call responsibility: the player who loses a life on a call is the one who
   *holds* the bid — the last player to say or pass the bid — not necessarily the
