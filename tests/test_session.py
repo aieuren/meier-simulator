@@ -318,6 +318,10 @@ def test_call_resolves_lives_and_result():
     total = sum(p["lives"] for p in state["order"])
     assert total == 6 - result.lives
 
+    # Syn-raden bär med sig vem som ansvarade för budet (för loggen).
+    call_row = next(r for r in state["log"] if r["action"] == "syna")
+    assert call_row["holder_name"] == result.holder
+
 
 def test_mejer_call_costs_two_lives():
     players = [

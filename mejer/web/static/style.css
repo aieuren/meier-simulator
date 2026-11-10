@@ -297,26 +297,50 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 .log-dice .die { font-size: 1.4rem; padding: 0; background: none; color: var(--accent); }
 .log-dice strong { color: var(--accent); font-size: 1.05rem; }
 
-/* Tärningsutfall: indata-raden som OK-knappen hör till. */
+/* Tärningsutfall: indata-raden som OK-knappen hör till. Tonad, inte gul. */
 .log-row.is-roll {
-  border-left: 4px solid var(--accent);
-  background: rgba(255, 196, 0, 0.06);
+  border-left: 4px solid var(--line);
+  background: var(--panel-2);
 }
 .log-row.is-roll .log-action { color: var(--muted); }
 
 /* Spelarens svar: bara siffra eller åtgärd. */
 .log-row.is-action { border-left: 4px solid var(--line); }
-.log-row.is-action.is-call { border-left-color: var(--bad); background: rgba(239, 107, 107, 0.08); }
+.log-row.is-action.is-call { border-left-color: var(--bad); background: rgba(239, 107, 107, 0.06); }
 
 /* Förlorat liv: en egen rad efter synen. */
 .log-row.is-life {
   border-left: 4px solid var(--bad);
-  background: rgba(239, 107, 107, 0.12);
+  background: rgba(239, 107, 107, 0.1);
 }
 .log-life { color: var(--bad); font-weight: 700; margin-left: auto; }
 .log-action { color: var(--muted); }
 .log-row.is-action strong { font-size: 1.05rem; }
 .log-prev { color: var(--muted); font-size: 0.85rem; }
+
+/* Synens resultat: kronologiskt i loggen, direkt efter liv-raden. */
+.log-row.is-call-result {
+  border-left: 4px solid var(--bad);
+  background: rgba(239, 107, 107, 0.08);
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.92rem;
+}
+
+/* Rundavdelare: visar var en ny runda tar vid. */
+.log-round {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin: 0.5rem 0 0.1rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.log-round::before,
+.log-round::after { content: ""; height: 1px; background: var(--line); flex: 1; }
+.log-round-label { white-space: nowrap; }
 
 /* OK-knappen ligger sist i loggen, vid senaste tärningsutfallet. */
 .pending-ctl {
@@ -356,15 +380,6 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 .log-row.is-call { border-color: var(--bad); }
 .log-row.is-call .log-head { color: var(--bad); }
 
-.call-result {
-  margin-top: 0.8rem;
-  background: rgba(239, 107, 107, 0.1);
-  border: 1px solid var(--bad);
-  border-radius: 10px;
-  padding: 0.7rem 0.9rem;
-  display: grid;
-  gap: 0.25rem;
-}
 .call-title { font-weight: 700; color: var(--bad); text-transform: uppercase; letter-spacing: 1px; }
 .call-loser { color: var(--bad); font-weight: 600; }
 

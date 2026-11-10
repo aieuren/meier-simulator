@@ -298,8 +298,7 @@ function renderSession(data) {
   $("sessionNote").textContent = finished ? "Sessionen är avslutad." : "";
 
   renderOrderNote(data);
-  renderResult(data.result);
-  renderLog(data.log);
+  renderLog(data.log, data.result);
   placeControls(data, pending);
 }
 
@@ -322,7 +321,7 @@ function renderOrderNote(data) {
   box.innerHTML = `
     <div class="order-title">Spelordning</div>
     <div class="order-chain">${chain}</div>
-    <div class="order-start"><strong>${textOr(data.starter, "?")}</strong> börjar: slår och tittar i smyg.</div>
+    <div class="order-start"><strong>${textOr(data.starter, "?")}</strong> börjar</div>
   `;
 }
 
@@ -350,19 +349,10 @@ function placeControls(data, pending) {
   log.scrollTop = log.scrollHeight;
 }
 
-function renderResult(result) {
-  let box = $("callResult");
-  if (!box) {
-    box = document.createElement("div");
-    box.id = "callResult";
-    box.className = "call-result";
-    $("sessionStatus").appendChild(box);
-  }
-  if (!result) {
-    box.hidden = true;
-    return;
-  }
-  box.hidden = false;
+// Sammanfattning av en syn, placerad kronologiskt i loggen (efter liv-raden).
+function callResultBlock(result) {
+  const box = document.createElement("div");
+  box.className = "log-row is-call-result";
   const holder = result.holder || result.bidder;
   const holderLine =
     holder !== result.bidder
@@ -377,9 +367,10 @@ function renderResult(result) {
     <div class="call-loser"><strong>${result.loser}</strong> förlorar
       ${result.lives} liv${result.lives === 2 ? " (Mejer kostar dubbelt)" : ""}.</div>
   `;
+  return box;
 }
 
-function renderLog(entries) {
+function renderLog(entries, result) {
   const box = $("log");
   const ctl = $("pendingCtl");
   // Behåll OK-panelen (den ligger inuti loggen) när vi bygger om raderna.
@@ -392,9 +383,26 @@ function renderLog(entries) {
     return;
   }
 
-  // Bygg alla rader i ordning (äldst först) och sätt dem ovanför OK-panelen.
+  // Sista synen i loggen – resultatrutan hör hemma direkt efter dess liv-rad.
+  let lastCallIdx = -1;
+  entries.forEach((e, i) => {
+    if (e.action === "syna") lastCallIdx = i;
+  });
+
   const frag = document.createDocumentFragment();
-  entries.forEach((e) => {
+  let prevRound = null;
+
+  entries.forEach((e, i) => {
+    // Ny runda: en tydlig avdelare så att man ser var rundan börjar.
+    if (prevRound !== null && e.round !== prevRound) {
+      const sep = document.createElement("div");
+      sep.className = "log-round";
+      const starter = e.kind === "roll" && e.player_name ? ` · ${e.player_name} börjar` : "";
+      sep.innerHTML = `<span class="log-round-label">Runda ${e.round}${starter}</span>`;
+      frag.appendChild(sep);
+    }
+    prevRound = e.round;
+
     const row = document.createElement("div");
 
     // Tärningsutfall: en egen rad med tärningarna som indata.
@@ -424,6 +432,10 @@ function renderLog(entries) {
         </div>
       `;
       frag.appendChild(row);
+      // Direkt efter liv-raden för den senaste synen: synens resultat.
+      if (result && i === lastCallIdx + 1) {
+        frag.appendChild(callResultBlock(result));
+      }
       return;
     }
 

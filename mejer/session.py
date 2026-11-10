@@ -67,6 +67,7 @@ class LogEntry:
     actor_lives: int | None = None  # den agerandes liv vid tillfället (analys)
     active_players: int | None = None  # antal spelare kvar vid tillfället (analys)
     caller_loses: bool | None = None  # vid syn: förlorade den som synade? (analys)
+    holder_name: str | None = None  # vid syn: den som ansvarar för budet (analys)
 
     def to_dict(self) -> dict:
         return {
@@ -100,6 +101,7 @@ class LogEntry:
             "actor_lives": self.actor_lives,
             "active_players": self.active_players,
             "caller_loses": self.caller_loses,
+            "holder_name": self.holder_name,
         }
 
 
@@ -469,6 +471,7 @@ class Session:
             actor_lives=self.lives[caller_idx],
             active_players=len(self._active_indices()),
             caller_loses=result.caller_loses,
+            holder_name=self.name_of(holder_idx),
         )
         self.log.append(entry)
 
