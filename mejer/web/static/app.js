@@ -349,6 +349,34 @@ function placeControls(data, pending) {
   log.scrollTop = log.scrollHeight;
 }
 
+// Rangordningsindex för ett utfall (0 = högst). Använder rankninglistan.
+function rankIndex(value) {
+  return (state.ranking || []).findIndex((v) => v.value === value);
+}
+
+// Är utfallet ett par (två lika tärningar)?
+function isPair(value) {
+  const hi = Math.floor(value / 10);
+  const lo = value % 10;
+  return hi === lo && value !== 21;
+}
+
+// Kort förklaring till varför synen föll ut som den gjorde.
+function explainCall(result) {
+  const shown = result.shown;
+  const bid = result.bid;
+  const shownName = result.shown_name;
+  const bidName = result.bid_name;
+  if (shown === bid) {
+    return `Tärningarna visade exakt ${bidName} – alltså förlorar den som synade.`;
+  }
+  if (rankIndex(shown) < rankIndex(bid)) {
+    const why = shown === 21 ? "Mejer är högst" : isPair(shown) ? `${shownName} är ett par` : `${shownName} är högre`;
+    return `${why} och slår budet ${bidName} – alltså förlorar den som synade.`;
+  }
+  return `${shownName} är lägre än budet ${bidName} – alltså förlorar budgivaren.`;
+}
+
 // Sammanfattning av en syn, placerad kronologiskt i loggen (efter liv-raden).
 function callResultBlock(result) {
   const box = document.createElement("div");
@@ -356,7 +384,7 @@ function callResultBlock(result) {
   const holder = result.holder || result.bidder;
   const holderLine =
     holder !== result.bidder
-      ? `<div>Budet sattes av ${result.bidder}, men ansvaret hade gått vidare till ${holder}.</div>`
+      ? `<div>Ansvaret för budet hade gått vidare från ${result.bidder} till ${holder}.</div>`
       : "";
   box.innerHTML = `
     <div class="call-title">Syn!</div>
@@ -364,6 +392,7 @@ function callResultBlock(result) {
       <strong>${result.bid_name}</strong>.</div>
     <div>${result.caller} synade ${holder}.</div>
     ${holderLine}
+    <div class="call-why">${explainCall(result)}</div>
     <div class="call-loser"><strong>${result.loser}</strong> förlorar
       ${result.lives} liv${result.lives === 2 ? " (Mejer kostar dubbelt)" : ""}.</div>
   `;
@@ -450,19 +479,15 @@ function renderLog(entries, result) {
     if (e.action === "syna") {
       main = `<span class="log-action">Synar</span> <span class="log-prev">budet ${textOr(e.accepted_bid_name, "?")}</span>`;
     } else if (e.action === "skicka") {
-      main =
-        `<span class="log-action">Skickar vidare</span> <strong>${textOr(e.accepted_bid_name, "?")}</strong>` +
-        `<span class="log-prev">utan att slå</span>`;
+      main = `<span class="log-action">Skickar vidare</span> <strong>${textOr(e.accepted_bid_name, "?")}</strong>`;
     } else if (e.action === "slå") {
       main =
-        `<span class="log-action">Accepterar och slår</span>` +
-        `<span class="log-prev">över ${textOr(e.accepted_bid_name, "?")}</span>` +
-        `<span class="log-says">säger</span> <strong>${textOr(e.bid_name, "?")}</strong>`;
+        `<span class="log-action">Höjer till</span> <strong>${textOr(e.bid_name, "?")}</strong>` +
+        `<span class="log-prev">(över ${textOr(e.accepted_bid_name, "?")})</span>`;
     } else if (e.action === "höja") {
       main =
-        `<span class="log-action">Höjer</span>` +
-        `<span class="log-prev">över ${textOr(e.previous_bid_name, "?")}</span>` +
-        `<span class="log-says">säger</span> <strong>${textOr(e.bid_name, "?")}</strong>`;
+        `<span class="log-action">Måste höja till</span> <strong>${textOr(e.bid_name, "?")}</strong>` +
+        `<span class="log-prev">(över ${textOr(e.previous_bid_name, "?")})</span>`;
     } else {
       main = `<span class="log-action">Säger</span> <strong>${textOr(e.bid_name, "?")}</strong>`;
     }

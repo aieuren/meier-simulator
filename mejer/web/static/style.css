@@ -5,10 +5,10 @@
   --line: #313849;
   --text: #e8ecf4;
   --muted: #9aa4b8;
-  --accent: #e0b44a;
-  --accent-2: #6ea8fe;
-  --good: #4cc38a;
-  --bad: #ef6b6b;
+  --accent: #8f9cb5;
+  --accent-2: #8f9cb5;
+  --good: #6fae8a;
+  --bad: #cf8378;
   --radius: 14px;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
 }
@@ -35,7 +35,7 @@ h1 {
   letter-spacing: 0.5px;
 }
 
-h1 span { color: var(--accent); font-weight: 500; }
+h1 span { color: var(--muted); font-weight: 500; }
 
 .tagline { color: var(--muted); margin: 0.4rem 0 0; }
 
@@ -63,7 +63,7 @@ h1 span { color: var(--accent); font-weight: 500; }
 
 .tab.active {
   background: var(--panel);
-  color: var(--accent);
+  color: var(--text);
   border-color: var(--line);
   font-weight: 700;
 }
@@ -100,7 +100,7 @@ main {
 h2 {
   margin: 0 0 0.6rem;
   font-size: 1.05rem;
-  color: var(--accent);
+  color: var(--text);
   text-transform: uppercase;
   letter-spacing: 1px;
 }
@@ -131,7 +131,7 @@ select {
   margin-left: auto;
   font-size: 2.4rem;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--text);
   min-width: 4.5rem;
   text-align: center;
 }
@@ -153,7 +153,7 @@ select {
 }
 
 .role:hover { transform: translateY(-1px); }
-.role.active { border-color: var(--accent); }
+.role.active { border-color: var(--muted); }
 .role .rname { font-weight: 600; display: block; }
 .role .rdesc { color: var(--muted); font-size: 0.82rem; }
 
@@ -167,12 +167,12 @@ select {
 .player-card {
   background: var(--panel-2);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--accent);
+  border-left: 4px solid var(--line);
   border-radius: 11px;
   padding: 0.9rem 1rem;
 }
 .player-name { font-weight: 700; font-size: 1.05rem; margin-bottom: 0.15rem; }
-.player-desc { color: var(--accent); font-size: 0.85rem; margin-bottom: 0.5rem; }
+.player-desc { color: var(--muted); font-size: 0.85rem; margin-bottom: 0.5rem; }
 .player-style { color: var(--muted); font-size: 0.88rem; line-height: 1.45; margin: 0; }
 
 button {
@@ -187,8 +187,8 @@ button {
 }
 
 button:hover { background: #2b3145; }
-button.primary { background: var(--accent); color: #1a1405; border-color: var(--accent); font-weight: 700; width: 100%; margin-top: 0.6rem; }
-button.primary:hover { background: #f0c65f; }
+button.primary { background: #2f3547; color: var(--text); border-color: #3d465c; font-weight: 700; width: 100%; margin-top: 0.6rem; }
+button.primary:hover { background: #39415a; }
 button:disabled { opacity: 0.55; cursor: wait; }
 
 .advanced { margin-top: 0.6rem; border-top: 1px dashed var(--line); padding-top: 0.8rem; }
@@ -225,29 +225,29 @@ button:disabled { opacity: 0.55; cursor: wait; }
   padding: 0.25rem 0.55rem;
   font-size: 0.85rem;
 }
-.ranking span:first-child { background: var(--accent); color: #1a1405; font-weight: 700; border-color: var(--accent); }
+.ranking span:first-child { border-color: var(--text); font-weight: 700; }
 
 footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1rem 1.2rem 2rem; }
 
 /* -- Interaktiv spelsession -- */
 .session-controls { display: flex; gap: 0.7rem; flex-wrap: wrap; }
 .session-controls .primary { width: auto; margin-top: 0; }
-#okBtn { background: var(--good); color: #06231a; border-color: var(--good); font-weight: 700; }
-#okBtn:hover { background: #5fd79c; }
+#okBtn { background: #2f3547; color: var(--text); border-color: #3d465c; font-weight: 700; }
+#okBtn:hover { background: #39415a; }
 
 .session-status { margin-top: 1rem; }
-.session-note { margin-bottom: 0.7rem; font-size: 0.9rem; color: #6b7280; }
+.session-note { margin-bottom: 0.7rem; font-size: 0.9rem; color: var(--muted); }
 .muted { color: var(--muted); }
 
 .dice-panel {
   background: var(--panel-2);
-  border: 2px solid var(--accent);
+  border: 1px solid var(--line);
   border-radius: 12px;
   padding: 0.8rem 1rem;
   margin-bottom: 0.6rem;
 }
 .panel-title {
-  color: var(--accent);
+  color: var(--muted);
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -257,13 +257,13 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 .die {
   font-size: 2.4rem;
   line-height: 1;
-  color: var(--accent);
+  color: var(--text);
   background: var(--bg);
   border-radius: 10px;
   padding: 0.15rem 0.4rem;
 }
 .dice-readout { margin-top: 0.4rem; font-size: 1.05rem; }
-.dice-readout strong { font-size: 1.5rem; color: var(--accent); }
+.dice-readout strong { font-size: 1.5rem; color: var(--text); }
 
 .bid-panel {
   background: var(--panel-2);
@@ -275,7 +275,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 .bid-value { font-size: 1.4rem; color: var(--fg); }
 .bid-by { color: var(--muted); font-size: 0.85rem; }
 
-.log-title { margin: 1.4rem 0 0.6rem; font-size: 0.95rem; color: var(--accent); text-transform: uppercase; letter-spacing: 1px; }
+.log-title { margin: 1.4rem 0 0.6rem; font-size: 0.95rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
 .log {
   display: flex;
   flex-direction: column;
@@ -294,8 +294,8 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 .log-head { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; font-size: 0.9rem; }
 .log-player { font-weight: 700; }
 .log-dice { color: var(--muted); }
-.log-dice .die { font-size: 1.4rem; padding: 0; background: none; color: var(--accent); }
-.log-dice strong { color: var(--accent); font-size: 1.05rem; }
+.log-dice .die { font-size: 1.4rem; padding: 0; background: none; color: var(--text); }
+.log-dice strong { color: var(--text); font-size: 1.05rem; }
 
 /* Tärningsutfall: indata-raden som OK-knappen hör till. Tonad, inte gul. */
 .log-row.is-roll {
@@ -306,12 +306,12 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 
 /* Spelarens svar: bara siffra eller åtgärd. */
 .log-row.is-action { border-left: 4px solid var(--line); }
-.log-row.is-action.is-call { border-left-color: var(--bad); background: rgba(239, 107, 107, 0.06); }
+.log-row.is-action.is-call { border-left-color: var(--bad); background: rgba(207, 131, 120, 0.10); }
 
 /* Förlorat liv: en egen rad efter synen. */
 .log-row.is-life {
   border-left: 4px solid var(--bad);
-  background: rgba(239, 107, 107, 0.1);
+  background: rgba(207, 131, 120, 0.14);
 }
 .log-life { color: var(--bad); font-weight: 700; margin-left: auto; }
 .log-action { color: var(--muted); }
@@ -321,7 +321,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 /* Synens resultat: kronologiskt i loggen, direkt efter liv-raden. */
 .log-row.is-call-result {
   border-left: 4px solid var(--bad);
-  background: rgba(239, 107, 107, 0.08);
+  background: rgba(207, 131, 120, 0.12);
   display: grid;
   gap: 0.2rem;
   font-size: 0.92rem;
@@ -349,7 +349,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
   align-items: center;
   gap: 0.6rem;
   background: var(--panel-2);
-  border: 2px dashed var(--accent);
+  border: 1px dashed var(--line);
   border-radius: 10px;
   padding: 0.7rem 0.9rem;
   margin-top: 0.3rem;
@@ -359,29 +359,30 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 .log-bid.lie { color: var(--bad); }
 .log-line { font-style: italic; margin: 0.4rem 0 0.2rem; }
 .log-reasoning { color: var(--muted); font-size: 0.85rem; }
-.log-corrected { font-size: 0.78rem; color: var(--accent); border: 1px dashed var(--accent); border-radius: 6px; padding: 0 0.4rem; }
-.log-action { color: var(--accent); font-size: 0.85rem; }
+.log-corrected { font-size: 0.78rem; color: var(--muted); border: 1px dashed var(--line); border-radius: 6px; padding: 0 0.4rem; }
+.log-action { color: var(--muted); font-size: 0.85rem; }
 .log-prev { color: var(--muted); font-size: 0.82rem; }
 .log-says { color: var(--muted); font-size: 0.82rem; }
 .order-note {
   margin-top: 1rem;
   padding: 0.8rem 1rem;
   border: 1px solid var(--line);
-  border-left: 4px solid var(--accent);
+  border-left: 4px solid var(--line);
   border-radius: 11px;
   background: var(--panel-2);
 }
-.order-title { font-size: 0.8rem; color: var(--accent); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem; }
+.order-title { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem; }
 .order-chain { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; font-size: 0.92rem; }
 .order-player { display: inline-flex; flex-direction: column; }
 .order-lives { color: var(--muted); font-size: 0.78rem; }
 .order-arrow { color: var(--muted); }
 .order-start { margin-top: 0.6rem; font-size: 0.9rem; color: var(--text); }
-.log-row.is-call { border-color: var(--bad); }
-.log-row.is-call .log-head { color: var(--bad); }
+.log-row.is-call { border-color: var(--line); }
+.log-row.is-call .log-head { color: var(--text); }
 
-.call-title { font-weight: 700; color: var(--bad); text-transform: uppercase; letter-spacing: 1px; }
-.call-loser { color: var(--bad); font-weight: 600; }
+.call-title { font-weight: 700; color: var(--text); text-transform: uppercase; letter-spacing: 1px; }
+.call-why { color: var(--muted); }
+.call-loser { font-weight: 600; }
 
 .error { color: var(--bad); }
 .loading { color: var(--muted); font-style: italic; }
@@ -404,7 +405,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 .stat-table { width: 100%; border-collapse: collapse; margin-top: 0.8rem; font-size: 0.9rem; }
 .stat-table th, .stat-table td { padding: 0.45rem 0.6rem; text-align: right; border-bottom: 1px solid var(--line); }
 .stat-table th:first-child, .stat-table td:first-child { text-align: left; }
-.stat-table th { color: var(--accent); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.5px; }
+.stat-table th { color: var(--muted); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.5px; }
 .stat-table tbody tr:hover { background: var(--panel-2); }
 
 .match-list { display: grid; gap: 0.5rem; }
@@ -423,7 +424,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
   list-style: none;
 }
 .match-row summary::-webkit-details-marker { display: none; }
-.match-no { font-weight: 700; color: var(--accent); }
+.match-no { font-weight: 700; color: var(--text); }
 .match-winner { font-weight: 600; }
 .match-meta { color: var(--muted); font-size: 0.85rem; }
 .match-body { margin-top: 0.6rem; }
@@ -432,4 +433,4 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 .ms-name { min-width: 11rem; font-weight: 600; }
 .ms-cell { color: var(--muted); }
 .match-download { margin-top: 0.8rem; }
-.match-download a { color: var(--accent); }
+.match-download a { color: var(--accent-2); }
