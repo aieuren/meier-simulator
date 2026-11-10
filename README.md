@@ -147,10 +147,11 @@ Protokollet är byggt för efteranalys. Varje match innehåller:
 
 - spelarna med roll och namn, spelordningen och vem som började,
 - vinnaren, antalet rundor, kvarvarande liv och utslagsordningen,
-- `events`: varje åtgärd med spelare, roll, tärningsutfall, bud, om budet var
-  sant eller en bluff, tidigare bud, livsställning och rundnummer,
-- `player_stats`: per spelare antal bud, bluffar, synar, höjningar, förlorade liv
-  och om spelaren slogs ut.
+- `events`: varje åtgärd med spelare, roll, tärningsutfall, bud, om spelaren hade
+  tittat på tärningarna (och om budet då var sant eller en bluff), tidigare bud,
+  livsställning och rundnummer,
+- `player_stats`: per spelare antal bud, blinda slag, bluffar, sanningar, synar,
+  höjningar, förlorade liv och om spelaren slogs ut.
 
 Med ett fast basfrö blir en serie reproducerbar. JSONL-formatet (en match per rad)
 gör att stora serier kan läsas och analyseras rad för rad utan att allt hålls i

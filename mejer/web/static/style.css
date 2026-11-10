@@ -357,12 +357,10 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 .pending-what { color: var(--muted); font-size: 0.9rem; margin-right: auto; }
 .log-bid.truth { color: var(--good); }
 .log-bid.lie { color: var(--bad); }
+.log-blind { font-size: 0.78rem; color: var(--muted); }
 .log-line { font-style: italic; margin: 0.4rem 0 0.2rem; }
 .log-reasoning { color: var(--muted); font-size: 0.85rem; }
 .log-corrected { font-size: 0.78rem; color: var(--muted); border: 1px dashed var(--line); border-radius: 6px; padding: 0 0.4rem; }
-.log-action { color: var(--muted); font-size: 0.85rem; }
-.log-prev { color: var(--muted); font-size: 0.82rem; }
-.log-says { color: var(--muted); font-size: 0.82rem; }
 .order-note {
   margin-top: 1rem;
   padding: 0.8rem 1rem;

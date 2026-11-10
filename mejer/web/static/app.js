@@ -491,10 +491,16 @@ function renderLog(entries, result) {
     } else {
       main = `<span class="log-action">Säger</span> <strong>${textOr(e.bid_name, "?")}</strong>`;
     }
-    const truthTag =
-      e.action === "bud" || e.action === "slå" || e.action === "höja"
-        ? `<span class="log-bid ${e.lie ? "lie" : "truth"}">${e.lie ? "bluff" : "sant"}</span>`
-        : "";
+    // Etiketten "sant/bluff" gäller bara bud där spelaren tittat på tärningarna.
+    // Ett blind slag ("slå") kan inte vara en bluff – spelaren såg dem inte.
+    const showsTruth =
+      (e.action === "bud" || e.action === "höja") && !e.blind;
+    const truthTag = showsTruth
+      ? `<span class="log-bid ${e.lie ? "lie" : "truth"}">${e.lie ? "bluff" : "sant"}</span>`
+      : "";
+    const blindTag = e.blind
+      ? `<span class="log-blind">blind slag – såg inte tärningarna</span>`
+      : "";
 
     row.innerHTML = `
       <div class="log-head">
@@ -502,6 +508,7 @@ function renderLog(entries, result) {
         ${main}
         ${truthTag}
       </div>
+      ${blindTag}
       ${corrected}
     `;
     frag.appendChild(row);
@@ -527,6 +534,7 @@ function matchRow(rec) {
         `<span class="ms-name">${p.name}</span>` +
         `<span class="ms-cell">bud ${s.bids || 0}</span>` +
         `<span class="ms-cell">bluff ${s.bluffs || 0}</span>` +
+        `<span class="ms-cell">blind ${s.blinds || 0}</span>` +
         `<span class="ms-cell">syn ${s.calls || 0}</span>` +
         `<span class="ms-cell">liv −${s.lives_lost || 0}</span>` +
         `<span class="ms-cell">${s.eliminated ? "ute" : (p.name === rec.winner ? "vinnare" : "kvar")}</span>` +

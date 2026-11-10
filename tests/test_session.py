@@ -2,7 +2,7 @@
 
 import pytest
 
-from mejer import rules
+from mejer import match, rules
 from mejer.agents.base import Role
 from mejer.agents.player import MejerPlayerAgent
 from mejer.session import Session
@@ -200,6 +200,38 @@ def test_slag_logs_fresh_roll_before_action():
     assert kinds == ["roll", "action", "roll", "action"]
     assert entry.action == "slå"
     assert entry.blind is True
+
+
+def test_blind_slag_is_not_counted_as_bluff():
+    # Ett blind slag ("slå") är inget medvetet löfte: spelaren såg inte
+    # tärningarna. Det ska räknas som "blind", inte som bluff eller sanning.
+    players = [
+        make_player(k, ScriptedLLM(bids=[44], actions=["slå"])) for k in ("a", "b")
+    ]
+    session = Session.new(players, seed=3)
+    session.advance()  # bud 44 (spelaren tittade)
+    entry = session.advance()  # nästa spelare slår blint
+
+    assert entry.action == "slå"
+    assert entry.blind is True
+
+    stats = match._player_stats(session.log, [p.name for p in players])
+    slagger = stats[entry.player_name]
+    assert slagger["blinds"] == 1
+    assert slagger["bluffs"] == 0
+    assert slagger["truths"] == 0
+
+
+def test_blind_flag_is_serialized():
+    players = [
+        make_player(k, ScriptedLLM(bids=[44], actions=["slå"])) for k in ("a", "b")
+    ]
+    session = Session.new(players, seed=3)
+    session.advance()
+    entry = session.advance()
+
+    row = next(r for r in session.to_dict()["log"] if r["action"] == "slå")
+    assert row["blind"] is True
 
 
 def test_illegal_slag_is_corrected_to_smallest_legal_raise():

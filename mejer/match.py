@@ -50,8 +50,9 @@ def _player_stats(log: list[LogEntry], names: list[str]) -> dict[str, dict[str, 
     stats: dict[str, dict[str, Any]] = {
         name: {
             "bids": 0,          # egna bud (bud/slå/höja)
-            "bluffs": 0,        # egna bud som inte var sanningen
-            "truths": 0,        # egna bud som var sanningen
+            "blinds": 0,        # egna bud efter ett blind slag (såg inte tärningarna)
+            "bluffs": 0,        # egna bud där spelaren tittat och inte sa sanningen
+            "truths": 0,        # egna bud där spelaren tittat och sa sanningen
             "decisions": 0,     # svar på andras bud
             "raises": 0,        # "slå" (blind höjning)
             "passes": 0,        # "skicka"
@@ -77,7 +78,10 @@ def _player_stats(log: list[LogEntry], names: list[str]) -> dict[str, dict[str, 
             continue
         if entry.action in BID_ACTIONS:
             s["bids"] += 1
-            if entry.truth:
+            # Ett blind slag är inget medvetet löfte – räkna det inte som bluff.
+            if entry.blind:
+                s["blinds"] += 1
+            elif entry.truth:
                 s["truths"] += 1
             else:
                 s["bluffs"] += 1
@@ -270,6 +274,7 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
                     "eliminated": 0,
                     "lives_lost": 0,
                     "bids": 0,
+                    "blinds": 0,
                     "bluffs": 0,
                     "truths": 0,
                     "decisions": 0,
@@ -290,6 +295,7 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
             bucket["lives_lost"] += s["lives_lost"]
             for key in (
                 "bids",
+                "blinds",
                 "bluffs",
                 "truths",
                 "decisions",
