@@ -194,7 +194,8 @@ python -m mejer.cli play rackar kalkyl trygg
   The repo was renamed from `majer-simulator`; GitHub redirects the old name.
   `git push` needs auth: a repo-local `credential.helper` reads
   `$GITHUB_PUSH_TOKEN` (not stored on disk), since `$GITHUB_TOKEN` lacks write
-  access to this repo.
+  access to this repo. The variable is only exported when its name appears in
+  the command, so run `GITHUB_PUSH_TOKEN="$GITHUB_PUSH_TOKEN" git push …`.
 - Secrets for this conversation live in the agent-server, not the shell:
   `GET/PUT /api/settings/secrets[/{name}]` manages them, and
   `POST /api/conversations/{id}/secrets` attaches one to a running conversation.
