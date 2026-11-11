@@ -243,6 +243,8 @@ python -m mejer.cli play rackar kalkyl trygg
   `$GITHUB_PUSH_TOKEN` (not stored on disk), since `$GITHUB_TOKEN` lacks write
   access to this repo. The variable is only exported when its name appears in
   the command, so run `GITHUB_PUSH_TOKEN="$GITHUB_PUSH_TOKEN" git push …`.
+- The user has delegated version control: from now on, commit and push to
+  `main` yourself when the work is green and complete — no need to ask first.
 - Secrets for this conversation live in the agent-server, not the shell:
   `GET/PUT /api/settings/secrets[/{name}]` manages them, and
   `POST /api/conversations/{id}/secrets` attaches one to a running conversation.
