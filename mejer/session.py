@@ -64,6 +64,8 @@ class LogEntry:
     proposed: int | None = None  # rå bud från modellen
     corrected: bool = False  # korrigerades budet?
     blind: bool = False  # slog spelaren bägaren på nytt (fick inte lyfta locket)?
+    choice_line: str = ""  # vid tvingad höjning: replik för titta/blint-valet
+    choice_reasoning: str = ""  # vid tvingad höjning: motivering för valet
     lives_lost: int = 0  # antal förlorade liv (endast life)
     lives_left: int | None = None  # kvarvarande liv (endast life)
     actor_lives: int | None = None  # den agerandes liv vid tillfället (analys)
@@ -101,6 +103,8 @@ class LogEntry:
             "proposed": self.proposed,
             "corrected": self.corrected,
             "blind": self.blind,
+            "choice_line": self.choice_line,
+            "choice_reasoning": self.choice_reasoning,
             "lives_lost": self.lives_lost,
             "lives_left": self.lives_left,
             "actor_lives": self.actor_lives,
@@ -125,6 +129,8 @@ class CallResult:
     caller_loses: bool
     loser: str  # namn på den som förlorar liv
     lives: int  # antal förlorade liv
+    reasoning: str = ""  # synarens motivering
+    line: str = ""  # synarens replik
 
     def to_dict(self) -> dict:
         return {
@@ -138,6 +144,8 @@ class CallResult:
             "caller_loses": self.caller_loses,
             "loser": self.loser,
             "lives": self.lives,
+            "reasoning": self.reasoning,
+            "line": self.line,
         }
 
 
@@ -390,7 +398,7 @@ class Session:
         decision = player.decide(bid, lives=self.lives[self.actor])
 
         if decision.action == "syna":
-            return self._resolve_call(player)
+            return self._resolve_call(player, decision)
 
         if decision.action == "slå":
             # Spelaren skakar bägaren på nytt: ett färskt slag, och locket lyfts inte.
@@ -457,6 +465,8 @@ class Session:
             previous_bid=bid,
             blind=ann.blind,
             actor_idx=self.bidder,
+            choice_line=ann.choice_line,
+            choice_reasoning=ann.choice_reasoning,
         )
         self.pending_dice = dice
         self.pending_bid = ann.bid
@@ -495,7 +505,7 @@ class Session:
             self._prepare_action(actor=nxt)
 
     # -- Steg 4: synen -----------------------------------------------------
-    def _resolve_call(self, caller_agent: MejerPlayerAgent) -> LogEntry:
+    def _resolve_call(self, caller_agent: MejerPlayerAgent, decision=None) -> LogEntry:
         bid = self.pending_bid
         dice = self.pending_dice
         assert bid is not None and dice is not None
@@ -519,8 +529,8 @@ class Session:
             player_name=caller_agent.name,
             bid=bid,
             truth=False,
-            line="",
-            reasoning="",
+            line=getattr(decision, "line", "") or "",
+            reasoning=getattr(decision, "reasoning", "") or "",
             action="syna",
             previous_bid=bid,
             accepted_bid=bid,
@@ -543,6 +553,8 @@ class Session:
             caller_loses=result.caller_loses,
             loser=self.name_of(loser_idx),
             lives=result.lives,
+            reasoning=getattr(decision, "reasoning", "") or "",
+            line=getattr(decision, "line", "") or "",
         )
 
         if len(self._active_indices()) <= 1:
@@ -585,6 +597,8 @@ class Session:
         blind: bool,
         accepted_bid: int | None = None,
         actor_idx: int | None = None,
+        choice_line: str = "",
+        choice_reasoning: str = "",
     ) -> LogEntry:
         entry = LogEntry(
             kind="action",
@@ -603,6 +617,8 @@ class Session:
             proposed=ann.proposed,
             corrected=ann.corrected,
             blind=blind,
+            choice_line=choice_line,
+            choice_reasoning=choice_reasoning,
             actor_lives=self.lives[actor_idx] if actor_idx is not None else None,
             active_players=len(self._active_indices()),
         )

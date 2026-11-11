@@ -12,7 +12,7 @@ Agenten kan också fatta beslut när den möter ett bud från en annan spelare:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from .. import rules
 from ..llm import LLMClient
@@ -86,6 +86,8 @@ class Announcement:
     proposed: int | None = None  # rå värdet modellen föreslog (kan vara ogiltigt)
     corrected: bool = False  # behövde budet korrigeras för att följa reglerna?
     blind: bool = False  # bjöd spelaren utan att titta på tärningarna?
+    choice_line: str = ""  # vid tvingad höjning: replik för titta/blint-valet
+    choice_reasoning: str = ""  # vid tvingad höjning: motivering för valet
 
     def to_dict(self) -> dict:
         return {
@@ -102,14 +104,20 @@ class Announcement:
             "proposed": self.proposed,
             "corrected": self.corrected,
             "blind": self.blind,
+            "choice_line": self.choice_line,
+            "choice_reasoning": self.choice_reasoning,
         }
 
 
 @dataclass
 class ActionDecision:
-    """Spelarens val när den möter ett bud: Slå, Syna eller Skicka vidare."""
+    """Spelarens val när den möter ett bud: Slå, Syna eller Skicka vidare.
 
-    action: str  # "slå", "syna" eller "skicka"
+    Används också för titta/blint-valet vid en tvingad höjning, där ``action``
+    är ``"titta"`` eller ``"blint"``.
+    """
+
+    action: str  # "slå", "syna", "skicka" (eller "titta"/"blint" vid tvingad höjning)
     bid: int | None  # nytt bud om spelaren slår
     line: str
     reasoning: str
@@ -235,17 +243,31 @@ class MejerPlayerAgent(Agent):
             raise ValueError(
                 f"Kan inte höja: {rules.name(previous_bid)} är högst, det finns inget högre bud"
             )
-        if self._wants_blind_forced(previous_bid, higher):
+        choice = self._wants_blind_forced(previous_bid, higher)
+        if choice.action == "blint":
             # Spelaren väljer att bjuda blint utan att titta på de nya tärningarna.
-            return self.announce_blind(dice, previous_bid=previous_bid)
-        # Spelaren tittar på de nya tärningarna och höjer som vid ett vanligt bud.
-        return self.announce(dice, previous_bid=previous_bid)
+            ann = self.announce_blind(dice, previous_bid=previous_bid)
+        else:
+            # Spelaren tittar på de nya tärningarna och höjer som vid ett vanligt bud.
+            ann = self.announce(dice, previous_bid=previous_bid)
+        return replace(ann, choice_line=choice.line, choice_reasoning=choice.reasoning)
 
-    def _wants_blind_forced(self, previous_bid: int, higher: list[int]) -> bool:
-        """Fråga spelaren: titta på de nya tärningarna eller bjuda blint?"""
+    def _wants_blind_forced(self, previous_bid: int, higher: list[int]) -> ActionDecision:
+        """Fråga spelaren: titta på de nya tärningarna eller bjuda blint?
+
+        Returnerar valet som en :class:`ActionDecision` så att både själva valet
+        (``action == "blint"`` eller ``"titta"``) och dess motivering bevaras.
+        """
         context = self._forced_choice_context(previous_bid, higher)
         data = self.respond(context)
-        return self._coerce_blind_choice(data.get("blind"))
+        blind = self._coerce_blind_choice(data.get("blind"))
+        return ActionDecision(
+            action="blint" if blind else "titta",
+            bid=None,
+            line=str(data.get("line") or "").strip(),
+            reasoning=str(data.get("reasoning") or "").strip(),
+            role=self.role.key,
+        )
 
     def _forced_choice_context(self, previous_bid: int, higher: list[int]) -> str:
         return "\n".join(

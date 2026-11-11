@@ -151,10 +151,11 @@ class Game:
                 bid = forced.bid
                 holder = bidder  # budgivaren ansvarar nu för det nya budet
                 blind_note = " (blint)" if forced.blind else ""
+                why = f" [{forced.choice_reasoning}]" if forced.choice_reasoning else ""
                 self._record(
                     f"  Bägaren tillbaka hos {self.players[bidder].name}, som slår om "
                     f"({rules.name(shown)}) och måste höja till {rules.name(bid)}{blind_note} "
-                    f"({forced.line})."
+                    f"({forced.line}).{why}"
                 )
                 pos += 1
                 continue

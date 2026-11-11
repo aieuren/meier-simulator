@@ -411,6 +411,9 @@ function callResultBlock(result) {
     holder !== result.bidder
       ? `<div>Ansvaret för budet hade gått vidare från ${result.bidder} till ${holder}.</div>`
       : "";
+  const why = result.reasoning
+    ? `<div class="call-why">Motivering: ${escapeHtml(result.reasoning)}</div>`
+    : "";
   box.innerHTML = `
     <div class="call-title">Syn!</div>
     <div>Tärningarna visade <strong>${result.shown_name}</strong> mot budet
@@ -418,6 +421,7 @@ function callResultBlock(result) {
     <div>${result.caller} synade ${holder}.</div>
     ${holderLine}
     <div class="call-why">${explainCall(result)}</div>
+    ${why}
     <div class="call-loser"><strong>${result.loser}</strong> förlorar
       ${result.lives} liv${result.lives === 2 ? " (Mejer kostar dubbelt)" : ""}.</div>
   `;
@@ -569,6 +573,10 @@ function renderLog(entries, result) {
     const blindTag = e.blind
       ? `<span class="log-blind">blint bud – tittar inte på egna tärningarna</span>`
       : "";
+    // Vid tvingad höjning valde spelaren att titta eller bjuda blint; visa varför.
+    const choiceTag = e.choice_reasoning
+      ? `<span class="log-choice">Val: ${e.blind ? "blint" : "tittade"} – ${escapeHtml(e.choice_reasoning)}</span>`
+      : "";
 
     row.innerHTML = `
       <div class="log-head">
@@ -577,6 +585,7 @@ function renderLog(entries, result) {
         ${truthTag}
       </div>
       ${blindTag}
+      ${choiceTag}
       ${corrected}
     `;
     frag.appendChild(row);

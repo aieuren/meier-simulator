@@ -161,6 +161,24 @@ def test_syna_logs_accepted_bid():
     assert entry.to_dict()["accepted_bid_name"] == "66"
 
 
+def test_syna_keeps_the_callers_reasoning():
+    # Synen är spelarens mest avgörande beslut – motiveringen måste bevaras.
+    players = [
+        make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b")
+    ]
+    session = Session.new(players, seed=3)
+    session.advance()  # bud 66
+    entry = session.advance()  # synar budet
+
+    assert entry.action == "syna"
+    assert entry.reasoning == "test"
+    assert entry.line == "Jag gör så."
+    # Samma motivering finns i synresultatet (som frontend visar).
+    assert session.result is not None
+    assert session.result.reasoning == "test"
+    assert session.to_dict()["result"]["reasoning"] == "test"
+
+
 def test_skicka_passes_bid_and_forces_raise_with_two_players():
     players = [
         make_player(k, ScriptedLLM(bids=[44], actions=["skicka"])) for k in ("a", "b")
@@ -236,6 +254,25 @@ def test_forced_raise_can_be_blind():
     assert stats[entry.player_name]["blinds"] == 1
     assert stats[entry.player_name]["bids"] == 2
     assert stats[entry.player_name]["bluffs"] + stats[entry.player_name]["truths"] == 1
+
+
+def test_forced_raise_keeps_the_look_or_blind_reasoning():
+    # Vid tvingad höjning väljer spelaren att titta eller bjuda blint.
+    # Motiveringen för *det valet* ska bevaras på höjningsraden.
+    players = [
+        make_player(k, ScriptedLLM(bids=[44, 33], actions=["skicka"], blind=True))
+        for k in ("a", "b")
+    ]
+    session = Session.new(players, seed=3)
+    session.advance()  # bud 44
+    session.advance()  # skicka -> tvingad höjning
+    entry = session.advance()  # höjning, blint
+
+    assert entry.action == "höja"
+    assert entry.blind is True
+    assert entry.choice_reasoning == "test"
+    assert entry.choice_line == "Jag höjer."
+    assert entry.to_dict()["choice_reasoning"] == "test"
 
 
 def test_slag_logs_fresh_roll_before_action():

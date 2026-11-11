@@ -135,6 +135,25 @@ and a later syna blames the wrong player. A forced raise is `blind=True` only
 when the bidder chose to bid blind. (`höja` is still a bid, so it counts in
 `BID_ACTIONS`; blind raises count as `blinds`, not bluffs.)
 
+## Reasoning is logged for every decision (for later analysis)
+
+The model's free-text `reasoning` (and `line`) is stored on every logged
+decision, so it can be mined later (e.g. by an LLM). Two gaps used to exist and
+are now closed:
+
+- **syna** was logged with empty `line`/`reasoning`. `Session._resolve_call`
+  now takes the caller's `ActionDecision` and stores its `line`/`reasoning` on
+  the log entry and on the `CallResult` (shown in the web UI).
+- **Forced raise (look or blind?)** discarded the choice's motivation.
+  `_wants_blind_forced` now returns an `ActionDecision` (`action` is `"titta"`
+  or `"blint"`), and `announce_forced` carries `choice_line`/`choice_reasoning`
+  onto the announcement, the log entry and `Game`'s text log.
+
+So `Announcement.choice_line`/`choice_reasoning` and
+`LogEntry.choice_line`/`choice_reasoning` are populated for `höja` rows.
+Note: `build_digest` does **not** include reasoning — to analyse it you must
+feed selected raw events to the model, not the digest.
+
 Investigated a reported "raise after a blind slå" bug: it is **not** reproducible.
 `accepted_bid` is the bid the player *answers*, so a raise showing
 `accepted=52, bid=61` is just the forced raise at the end of a full lap, not a
