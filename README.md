@@ -42,8 +42,9 @@ roller kan spela hela spel mot varandra.
 - **Mejer kostar dubbelt** – om budet är Mejer, eller om tärningarna visar Mejer
   när någon synar, förlorar man två liv.
 - När man mist tre liv är man ute. Sist kvar vinner.
-- Kommer bägaren ett helt varv tillbaka till budgivaren måste denne höja. Är
-  budet Mejer får spelaren i stället slå om och börja en ny runda.
+- Kommer bägaren ett helt varv tillbaka till budgivaren måste denne höja.
+  Tärningarna slås då om, och budgivaren får själv välja att titta på dem eller
+  bjuda blint. Är budet Mejer får spelaren i stället slå om och börja en ny runda.
 
 Poängordning (högst först):
 21, 11, 22, 33, 44, 55, 66, 65, 64, 63, 62, 61, 54, 53, 52, 51, 43, 42, 41, 32, 31.
@@ -121,7 +122,8 @@ I webbappen finns sektionen **"Fyra spelare spelar mot varandra"**:
      dem och säger ett högre bud — ett *blint bud*), **synar** eller **skickar
      vidare**.
    - Kommer bägaren ett helt varv tillbaka till budgivaren måste denne **höja**.
-     Är budet Mejer slår budgivaren i stället om och börjar en ny runda.
+     Tärningarna slås då om, och budgivaren får själv välja att titta på dem eller
+     bjuda blint. Är budet Mejer slår budgivaren i stället om och börjar en ny runda.
    - Vid en **syn** lyfts locket. Visar tärningarna lägre än budet förlorar
      den som ansvarar för budet ett liv (den som sa det senast, eller skickade
      vidare och tog över ansvaret), annars den som synade. Mejer kostar dubbelt.
@@ -130,7 +132,11 @@ Loggen byggs **nedåt**: äldst överst, nyast nederst. Varje runda börjar med 
 rad för tärningsutfallet (indata) med tärningssymboler. Därefter följer en rad
 per svar – bara siffran som sägs, eller **Synar** / **Skickar vidare** / **Slår**
 / **Höjer**. Inga repliker visas. Vid en syn visas resultatet och en egen rad om
-vem som förlorade hur många liv. Livsställningen syns i spelordningen.
+vem som förlorade hur många liv. Direkt efter den raden visas en
+**livsställning** med hur många liv varje spelare har kvar (och vilka som är
+ute). När matchen är slut läggs en sista rad till i loggen som säger vem som
+**vinner**, och en grön rad högst upp i sessionen visar vinnaren. Livsställningen
+syns också fortlöpande i spelordningen.
 
 **Knappen "Ett drag"** ligger i loggen, direkt under det senaste
 tärningsutfallet. Den utför steget så att nästa rad läggs till.

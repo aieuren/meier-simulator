@@ -308,8 +308,19 @@ function renderSession(data) {
 
   const finished = data.phase === "finished";
   const pending = data.pending || {};
+  const winner = data.winner;
 
-  $("sessionNote").textContent = finished ? "Sessionen är avslutad." : "";
+  const note = $("sessionNote");
+  if (finished && winner) {
+    note.innerHTML = `Matchen är slut. <strong>${winner.name}</strong> vinner!`;
+    note.className = "session-note is-winner";
+  } else if (finished) {
+    note.textContent = "Sessionen är avslutad.";
+    note.className = "session-note";
+  } else {
+    note.textContent = "";
+    note.className = "session-note";
+  }
 
   renderOrderNote(data);
   renderLog(data.log, data.result);
@@ -355,7 +366,7 @@ function placeControls(data, pending) {
   if (data.step_kind === "roll") {
     what.textContent = `${textOr((data.current || {}).name, "?")} ska säga sitt bud`;
   } else if (data.step_kind === "raise") {
-    what.textContent = `${textOr((data.current || {}).name, "?")} måste höja`;
+    what.textContent = `${textOr((data.current || {}).name, "?")} slår om och måste höja`;
   } else {
     what.textContent = `${textOr((data.current || {}).name, "?")} ska svara på budet`;
   }
@@ -409,6 +420,27 @@ function callResultBlock(result) {
     <div class="call-why">${explainCall(result)}</div>
     <div class="call-loser"><strong>${result.loser}</strong> förlorar
       ${result.lives} liv${result.lives === 2 ? " (Mejer kostar dubbelt)" : ""}.</div>
+  `;
+  return box;
+}
+
+// Sammanställning av kvarvarande liv för alla spelare – visas efter en syn.
+function standingsBlock(standings) {
+  const box = document.createElement("div");
+  box.className = "log-row is-standings";
+  const items = (standings || [])
+    .map((p) => {
+      const state = p.active ? `${p.lives} liv` : "ute";
+      const cls = p.active ? "is-active" : "is-out";
+      return `<span class="standings-item ${cls}">
+        <span class="standings-name">${p.name}</span>
+        <span class="standings-lives">${state}</span>
+      </span>`;
+    })
+    .join("");
+  box.innerHTML = `
+    <div class="standings-title">Livsställning</div>
+    <div class="standings-list">${items}</div>
   `;
   return box;
 }
@@ -475,10 +507,28 @@ function renderLog(entries, result) {
         </div>
       `;
       frag.appendChild(row);
-      // Direkt efter liv-raden för den senaste synen: synens resultat.
+      // Direkt efter liv-raden för den senaste synen: synens resultatruta.
       if (result && i === lastCallIdx + 1) {
         frag.appendChild(callResultBlock(result));
       }
+      // Livsställningen hör till just den här synen (snapshot i loggraden).
+      if (e.standings) {
+        frag.appendChild(standingsBlock(e.standings));
+      }
+      return;
+    }
+
+    // Matchen är slut: en egen rad om vinnaren, sist i loggen.
+    if (e.kind === "game_over") {
+      row.className = "log-row is-game-over";
+      row.innerHTML = `
+        <div class="log-head">
+          <span class="log-action">Matchen är slut</span>
+          <span class="log-player">${textOr(e.winner_name, "?")}</span>
+          <span class="log-winner">vinner!</span>
+        </div>
+      `;
+      frag.appendChild(row);
       return;
     }
 
@@ -499,9 +549,13 @@ function renderLog(entries, result) {
         `<span class="log-action">Höjer till</span> <strong>${textOr(e.bid_name, "?")}</strong>` +
         `<span class="log-prev">(över ${textOr(e.accepted_bid_name, "?")})</span>`;
     } else if (e.action === "höja") {
+      const reroll = e.dice
+        ? ` <span class="log-prev">(slog om: ${textOr(e.shown_name, "?")})</span>`
+        : "";
       main =
         `<span class="log-action">Måste höja till</span> <strong>${textOr(e.bid_name, "?")}</strong>` +
-        `<span class="log-prev">(över ${textOr(e.previous_bid_name, "?")})</span>`;
+        `<span class="log-prev">(över ${textOr(e.previous_bid_name, "?")})</span>` +
+        reroll;
     } else {
       main = `<span class="log-action">Säger</span> <strong>${textOr(e.bid_name, "?")}</strong>`;
     }

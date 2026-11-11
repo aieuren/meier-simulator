@@ -85,6 +85,21 @@ def test_full_loop_forces_bidder_to_raise():
     assert "63" in log
 
 
+def test_forced_raise_rerolls_the_dice():
+    # Vid tvingad höjning slås tärningarna om, och det nya slaget avgör en syn.
+    a = ScriptedAgent("A", [62], [])
+    b = ScriptedAgent("B", [11], [("skicka", None), ("syna", None)])
+    game = Game.new([a, b], seed=0)
+    rolls = iter([(6, 2), (5, 1)])  # först 62, sedan 51 vid omslaget
+    game.roll = lambda: next(rolls, (3, 1))  # därefter ny runda
+    game.play(max_rounds=1)
+    log = "\n".join(game.log)
+    # A slog om till 51 och höjde till 61; B synade och tärningarna (51) visade
+    # lägre än budet, alltså förlorar budgivaren A ett liv.
+    assert "slår om" in log
+    assert game.players[0].lives == 2
+
+
 def test_game_terminates_with_passive_agents():
     # Båda skickar alltid; skyddsnätet tvingar fram en syn så spelet tar slut.
     a = ScriptedAgent("A", [], [("skicka", None)] * 500)

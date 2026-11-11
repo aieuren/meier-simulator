@@ -36,6 +36,14 @@ class Agent:
     def system_prompt(self) -> str:
         raise NotImplementedError
 
+    def announce_forced(self, dice: tuple[int, int], *, previous_bid: int):
+        """Standardbeteende för tvingad höjning: höj som vid ett vanligt bud.
+
+        Agenten får de omslagna tärningarna ``dice`` och måste säga ett högre
+        bud. Spelaragenter kan överskugga detta för att i stället bjuda blint.
+        """
+        return self.announce(dice, previous_bid=previous_bid)
+
     def respond(self, context: str, *, json_mode: bool = True) -> dict:
         """Skicka sammanhanget till modellen och tolka svaret som JSON."""
         system = self.system_prompt()

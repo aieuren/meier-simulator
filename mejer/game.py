@@ -144,12 +144,17 @@ class Game:
                         "– slår om och börjar ny runda."
                     )
                     return bidder
-                # Budgivaren tittar på samma tärningar och måste höja.
-                forced = self.players[bidder].agent.announce(dice, previous_bid=bid)
+                # Tärningarna slås om; budgivaren väljer att titta eller bjuda blint.
+                dice = self.roll()
+                shown = rules.read_dice(*dice)
+                forced = self.players[bidder].agent.announce_forced(dice, previous_bid=bid)
                 bid = forced.bid
+                holder = bidder  # budgivaren ansvarar nu för det nya budet
+                blind_note = " (blint)" if forced.blind else ""
                 self._record(
-                    f"  Bägaren tillbaka hos {self.players[bidder].name}, som måste höja "
-                    f"till {rules.name(bid)} ({forced.line})."
+                    f"  Bägaren tillbaka hos {self.players[bidder].name}, som slår om "
+                    f"({rules.name(shown)}) och måste höja till {rules.name(bid)}{blind_note} "
+                    f"({forced.line})."
                 )
                 pos += 1
                 continue
@@ -172,6 +177,10 @@ class Game:
                 return self._previous_active(loser)
 
             if decision.action == "slå" and decision.bid is not None:
+                # Att slå är att skaka bägaren på nytt: nya tärningar gäller,
+                # så en senare syn döms mot det nya slaget.
+                dice = self.roll()
+                shown = rules.read_dice(*dice)
                 bid = decision.bid
                 bidder = idx
                 holder = idx

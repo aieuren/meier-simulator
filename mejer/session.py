@@ -44,13 +44,15 @@ class LogEntry:
       syn eller ett skickande.
     - ``kind == "life"``: någon har förlorat ett (eller två) liv efter en syn.
       Raden ligger direkt efter synen och visar hur många liv som är kvar.
+    - ``kind == "game_over"``: matchen är slut och en vinnare står kvar. Sista
+      raden i loggen. ``winner_name`` och ``winner_role`` anger vinnaren.
     """
 
-    kind: str  # "roll", "action" eller "life"
+    kind: str  # "roll", "action", "life" eller "game_over"
     round: int
     dice: tuple[int, int]
     shown: int
-    action: str = "bud"  # "bud", "slå", "skicka", "syna", "höja", "liv"
+    action: str = "bud"  # "bud", "slå", "skicka", "syna", "höja", "liv", "slut"
     player: str | None = None  # rollens nyckel (endast action/life)
     player_name: str | None = None
     bid: int | None = None  # sagt bud (endast action)
@@ -68,6 +70,9 @@ class LogEntry:
     active_players: int | None = None  # antal spelare kvar vid tillfället (analys)
     caller_loses: bool | None = None  # vid syn: förlorade den som synade? (analys)
     holder_name: str | None = None  # vid syn: den som ansvarar för budet (analys)
+    winner_name: str | None = None  # vid game_over: vinnarens namn
+    winner_role: str | None = None  # vid game_over: vinnarens rollnyckel
+    standings: list[dict] | None = None  # livsställning direkt efter en syn (life)
 
     def to_dict(self) -> dict:
         return {
@@ -102,6 +107,9 @@ class LogEntry:
             "active_players": self.active_players,
             "caller_loses": self.caller_loses,
             "holder_name": self.holder_name,
+            "winner_name": self.winner_name,
+            "winner_role": self.winner_role,
+            "standings": self.standings,
         }
 
 
@@ -248,9 +256,31 @@ class Session:
     def _active_indices(self) -> list[int]:
         return [i for i in self.order if self.lives[i] > 0]
 
+    def _log_game_over(self) -> LogEntry | None:
+        """Logga en egen rad när matchen är slut och en vinnare står kvar."""
+        alive = self._active_indices()
+        if len(alive) != 1:
+            return None
+        winner_idx = alive[0]
+        entry = LogEntry(
+            kind="game_over",
+            round=self.round,
+            dice=self.pending_dice or (1, 1),
+            shown=rules.read_dice(*(self.pending_dice or (1, 1))),
+            action="slut",
+            player=self.players[winner_idx].role.key,
+            player_name=self.name_of(winner_idx),
+            winner_name=self.name_of(winner_idx),
+            winner_role=self.players[winner_idx].role.key,
+            active_players=1,
+        )
+        self.log.append(entry)
+        return entry
+
     def _finish(self) -> None:
         self.finished = True
         self.step_kind = ""
+        self._log_game_over()
         self.pending_dice = None
         self.pending_bid = None
 
@@ -411,14 +441,24 @@ class Session:
     # -- Steg 3: tvingad höjning när bägaren gått ett helt varv ------------
     def _resolve_raise(self) -> LogEntry:
         bid = self.pending_bid
-        dice = self.pending_dice
-        assert bid is not None and dice is not None
+        assert bid is not None
         player = self.players[self.bidder]
-        ann = player.announce(dice, previous_bid=bid)
+        # Tärningarna slås om när bägaren gått ett helt varv. Budgivaren väljer
+        # själv om den tittar på dem eller bjuder blint (som vid ett slag).
+        dice = rules.roll(self.rng)
+        self._log_roll(player=player.name, dice=dice, shown=rules.read_dice(*dice))
+        ann = player.announce_forced(dice, previous_bid=bid)
         ann = self._enforce_bid(ann, previous_bid=bid)
         entry = self._log_entry(
-            player, dice, ann, action="höja", previous_bid=bid, blind=False, actor_idx=self.bidder
+            player,
+            dice,
+            ann,
+            action="höja",
+            previous_bid=bid,
+            blind=ann.blind,
+            actor_idx=self.bidder,
         )
+        self.pending_dice = dice
         self.pending_bid = ann.bid
         self.holder = self.bidder
         self._after_bid(actor=self.bidder)
@@ -528,6 +568,7 @@ class Session:
             lives_lost=lost,
             lives_left=self.lives[loser_idx],
             active_players=active_players,
+            standings=self._standings(),
         )
         self.log.append(entry)
         return entry
@@ -574,6 +615,26 @@ class Session:
         self.pending_dice = None
         self.pending_bid = None
 
+    def _standings(self) -> list[dict]:
+        """Livsställning per spelare i spelordning (för sammanställningen)."""
+        return [
+            {
+                "name": self.players[i].name,
+                "role": self.players[i].role.key,
+                "lives": self.lives[i],
+                "active": self.lives[i] > 0,
+            }
+            for i in self.order
+        ]
+
+    def _winner(self) -> dict | None:
+        """Vinnaren när matchen är slut (en spelare kvar), annars None."""
+        alive = self._active_indices()
+        if len(alive) != 1:
+            return None
+        idx = alive[0]
+        return {"name": self.name_of(idx), "role": self.players[idx].role.key}
+
     # -- Serialisering ------------------------------------------------------
     def to_dict(self) -> dict:
         pending = None
@@ -613,6 +674,8 @@ class Session:
             "step_kind": self.step_kind,
             "pending": pending,
             "result": self.result.to_dict() if self.result else None,
+            "standings": self._standings(),
+            "winner": self._winner(),
             "log": [e.to_dict() for e in self.log],
         }
 

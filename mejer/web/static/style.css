@@ -237,6 +237,35 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 
 .session-status { margin-top: 1rem; }
 .session-note { margin-bottom: 0.7rem; font-size: 0.9rem; color: var(--muted); }
+.session-note.is-winner { color: var(--good); font-size: 1rem; }
+.log-row.is-game-over {
+  border-left: 4px solid var(--good);
+  background: rgba(146, 184, 145, 0.12);
+}
+.log-row.is-game-over .log-player { color: var(--good); }
+.log-winner { color: var(--good); font-weight: 700; }
+.log-row.is-standings { border-left: 4px solid var(--line); }
+.standings-title {
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 0.5rem;
+}
+.standings-list { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.standings-item {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+.standings-item.is-out { opacity: 0.55; }
+.standings-name { font-weight: 700; }
+.standings-lives { color: var(--muted); font-size: 0.78rem; }
+.standings-item.is-out .standings-lives { color: var(--bad); }
 .muted { color: var(--muted); }
 
 .dice-panel {

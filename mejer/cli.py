@@ -72,7 +72,7 @@ def _describe_step(state: dict) -> str:
         )
     if kind == "raise":
         return (
-            f"{current} måste höja – bägaren har gått ett helt varv. "
+            f"{current} slår om – bägaren har gått ett helt varv – och måste höja. "
             f"Aktuellt bud: {pending.get('bid_name')}."
         )
     return (

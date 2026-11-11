@@ -85,6 +85,7 @@ class Announcement:
     role: str
     proposed: int | None = None  # rå värdet modellen föreslog (kan vara ogiltigt)
     corrected: bool = False  # behövde budet korrigeras för att följa reglerna?
+    blind: bool = False  # bjöd spelaren utan att titta på tärningarna?
 
     def to_dict(self) -> dict:
         return {
@@ -100,6 +101,7 @@ class Announcement:
             "role": self.role,
             "proposed": self.proposed,
             "corrected": self.corrected,
+            "blind": self.blind,
         }
 
 
@@ -144,6 +146,8 @@ class MejerPlayerAgent(Agent):
             "- Du har tittat i smyg på tärningarna och ska säga ett resultat till nästa spelare: "
             "det sanna, ett högre eller ett lägre.\n"
             "- Nästa spelare kan Slå (säga ett högre bud), Syna (lyfta locket) eller Skicka vidare.\n"
+            "- Om bägaren går ett helt varv tillbaka till budgivaren måste denne höja. "
+            "Tärningarna slås då om, och budgivaren får själv välja att titta på dem eller bjuda blint.\n"
             "- Om någon synar och tärningarna visar lägre än det sagda förlorar budgivaren ett liv. "
             "Visar de samma eller högre förlorar den som synade ett liv.\n"
             "- Mejer kostar dubbelt: om budet är Mejer, eller om tärningarna visar Mejer när någon synar, "
@@ -214,7 +218,67 @@ class MejerPlayerAgent(Agent):
             role=self.role.key,
             proposed=proposed,
             corrected=proposed != bid,
+            blind=True,
         )
+
+    def announce_forced(self, dice: tuple[int, int], *, previous_bid: int) -> Announcement:
+        """Budgivaren måste höja när bägaren gått ett helt varv.
+
+        Tärningarna har redan slagits om av motorn. Spelaren får själv välja om
+        den vill titta på dem (som vid ett vanligt bud) eller bjuda blint (som
+        vid ett slag). Båda sätten är tillåtna – valet är spelarens.
+        """
+        if not rules.is_valid_value(previous_bid):
+            raise ValueError(f"{previous_bid} är inte ett giltigt bud")
+        higher = rules.higher_options(previous_bid)
+        if not higher:
+            raise ValueError(
+                f"Kan inte höja: {rules.name(previous_bid)} är högst, det finns inget högre bud"
+            )
+        if self._wants_blind_forced(previous_bid, higher):
+            # Spelaren väljer att bjuda blint utan att titta på de nya tärningarna.
+            return self.announce_blind(dice, previous_bid=previous_bid)
+        # Spelaren tittar på de nya tärningarna och höjer som vid ett vanligt bud.
+        return self.announce(dice, previous_bid=previous_bid)
+
+    def _wants_blind_forced(self, previous_bid: int, higher: list[int]) -> bool:
+        """Fråga spelaren: titta på de nya tärningarna eller bjuda blint?"""
+        context = self._forced_choice_context(previous_bid, higher)
+        data = self.respond(context)
+        return self._coerce_blind_choice(data.get("blind"))
+
+    def _forced_choice_context(self, previous_bid: int, higher: list[int]) -> str:
+        return "\n".join(
+            [
+                "TITTA ELLER BLINT",
+                "SITUATIONEN",
+                f"Bägaren har gått ett helt varv och är tillbaka hos dig. Du måste höja "
+                f"över {rules.name(previous_bid)}.",
+                "Tärningarna har slagits om. Du får själv välja hur du gör:",
+                "- Titta på de nya tärningarna och säga ett bud (som vid ett vanligt bud).",
+                "- Bjuda blint utan att titta (som när man slår).",
+                "Båda sätten är tillåtna. Valet är ditt.",
+                f"Giltiga bud: {', '.join(rules.name(v) for v in higher)}.",
+                "",
+                "Svara med JSON:",
+                '{"blind": <true om du bjuder utan att titta, false om du tittar>, '
+                '"line": "<kort replik>", '
+                '"reasoning": "<kort motivering>"}',
+            ]
+        )
+
+    @staticmethod
+    def _coerce_blind_choice(value: object) -> bool:
+        """Tolka modellens val av titta (False) eller bjuda blint (True)."""
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            v = value.strip().lower()
+            if v in ("true", "ja", "j", "blint", "blind", "utan att titta"):
+                return True
+            if v in ("false", "nej", "n", "titta", "tittar"):
+                return False
+        return False
 
     def _blind_announce_context(self, previous_bid: int, higher: list[int]) -> str:
         return "\n".join(

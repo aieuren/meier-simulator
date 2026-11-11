@@ -74,6 +74,9 @@ def build_digest(records: list[dict[str, Any]]) -> dict[str, Any]:
 
     for i, rec in enumerate(records, start=1):
         for e in rec.get("events", []):
+            if e.get("kind") == "game_over":
+                # Vinnarraden är inte en spelåtgärd – räkna den inte i statistiken.
+                continue
             action = e.get("action")
             if action:
                 actions[str(action)] += 1

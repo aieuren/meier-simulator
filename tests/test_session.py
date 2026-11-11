@@ -15,9 +15,10 @@ class ScriptedLLM:
     ``actions`` används i tur och ordning för beslut mot ett bud.
     """
 
-    def __init__(self, bids=None, actions=None):
+    def __init__(self, bids=None, actions=None, blind=False):
         self.bids = list(bids or [])
         self.actions = list(actions or [])
+        self.blind = blind
         self._bid_i = 0
         self._act_i = 0
 
@@ -29,6 +30,13 @@ class ScriptedLLM:
         return default
 
     def complete(self, system, user, *, json_mode=False):
+        # Tvingad höjning: spelaren väljer att titta eller bjuda blint.
+        if "TITTA ELLER BLINT" in user:
+            return (
+                '{"blind": %s, "line": "Jag höjer.", "reasoning": "test"}'
+                % ("true" if self.blind else "false")
+            )
+
         # Slag (bägaren skakas på nytt) eller vanligt bud.
         if "MÅSTE säga" in user or "utan att titta" in user:
             bid = self._next_bid(52)
@@ -186,6 +194,48 @@ def test_full_loop_forces_bidder_to_raise():
     assert entry.previous_bid == 44
     assert rules.is_higher(33, 44)
     assert session.to_dict()["step_kind"] == "action"
+
+
+def test_forced_raise_rerolls_the_dice():
+    # När bägaren gått ett helt varv slås tärningarna om: en ny "roll"-rad
+    # loggas och pending_dice uppdateras till det nya slaget.
+    players = [
+        make_player(k, ScriptedLLM(bids=[44, 33], actions=["skicka"]))
+        for k in ("a", "b")
+    ]
+    session = Session.new(players, seed=3)
+    session.advance()  # bud 44
+    old_dice = session.pending_dice
+    session.advance()  # skicka -> tvingad höjning
+    entry = session.advance()  # höjning: tärningarna slås om
+
+    kinds = [row["kind"] for row in session.to_dict()["log"]]
+    # roll, action(bud), action(skicka), roll(omslag), action(höja)
+    assert kinds == ["roll", "action", "action", "roll", "action"]
+    assert entry.dice == session.pending_dice
+    assert session.pending_dice != old_dice
+    # En senare syn ska döma mot de omslagna tärningarna.
+    assert session.to_dict()["pending"]["dice"] == list(entry.dice)
+
+
+def test_forced_raise_can_be_blind():
+    # Budgivaren får själv välja att bjuda blint på de omslagna tärningarna.
+    players = [
+        make_player(k, ScriptedLLM(bids=[44, 33], actions=["skicka"], blind=True))
+        for k in ("a", "b")
+    ]
+    session = Session.new(players, seed=3)
+    session.advance()  # bud 44
+    session.advance()  # skicka -> tvingad höjning
+    entry = session.advance()  # höjning, blint
+
+    assert entry.action == "höja"
+    assert entry.blind is True
+    stats = match._player_stats(session.log, [p.name for p in players])
+    # Det blinda höjningsbudet räknas som "blint", inte som bluff eller sanning.
+    assert stats[entry.player_name]["blinds"] == 1
+    assert stats[entry.player_name]["bids"] == 2
+    assert stats[entry.player_name]["bluffs"] + stats[entry.player_name]["truths"] == 1
 
 
 def test_slag_logs_fresh_roll_before_action():
@@ -654,3 +704,121 @@ def test_mejer_call_logs_two_lives_lost():
     assert len(life_rows) == 1
     assert life_rows[0]["lives_lost"] == 2
     assert life_rows[0]["lives_left"] == 1
+
+
+# -- Livsställning och vinnarrad i loggen ----------------------------------
+
+
+def test_standings_lists_all_players_in_order():
+    players = [make_player(k) for k in ("a", "b", "c", "d")]
+    session = Session.new(players, seed=2, lives=3)
+    standings = session.to_dict()["standings"]
+    assert [p["name"] for p in standings] == [
+        session.name_of(i) for i in session.order
+    ]
+    assert all(p["lives"] == 3 and p["active"] is True for p in standings)
+
+
+def test_standings_reflect_lives_after_a_call():
+    players = [
+        make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b", "c")
+    ]
+    session = Session.new(players, seed=3, lives=3)
+    session.advance()  # bud
+    session.advance()  # syn -> någon tappar ett liv
+    standings = {p["name"]: p for p in session.to_dict()["standings"]}
+    total = sum(p["lives"] for p in standings.values())
+    assert total == 9 - session.result.lives
+    # Den som förlorade livet syns med färre liv kvar.
+    loser = standings[session.result.loser]
+    assert loser["lives"] == 3 - session.result.lives
+    assert loser["active"] is True
+
+
+def test_standings_marks_eliminated_player_inactive():
+    players = [
+        make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b")
+    ]
+    session = Session.new(players, seed=3, lives=1)
+    session.advance()  # bud
+    session.advance()  # syn -> någon är ute
+    standings = {p["name"]: p for p in session.to_dict()["standings"]}
+    out = [p for p in standings.values() if not p["active"]]
+    assert len(out) == 1 and out[0]["lives"] == 0
+
+
+def test_winner_is_none_while_match_runs():
+    players = [make_player(k) for k in ("a", "b", "c", "d")]
+    session = Session.new(players, seed=2)
+    assert session.to_dict()["winner"] is None
+
+
+def test_finished_match_logs_a_game_over_row_with_winner():
+    players = [
+        make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b")
+    ]
+    session = Session.new(players, seed=3, lives=1)
+    session.advance()  # bud
+    session.advance()  # syn -> matchen är slut
+    assert session.finished is True
+
+    state = session.to_dict()
+    assert state["phase"] == "finished"
+    winner = state["winner"]
+    assert winner is not None
+    assert winner["name"] in [p.name for p in players]
+    assert winner["role"] in ("a", "b")
+
+    # Sista loggraden är vinnarraden och pekar ut rätt spelare.
+    last = state["log"][-1]
+    assert last["kind"] == "game_over"
+    assert last["winner_name"] == winner["name"]
+    assert last["winner_role"] == winner["role"]
+    assert last["action"] == "slut"
+
+
+def test_game_over_row_is_last_and_only_one():
+    players = [
+        make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b", "c")
+    ]
+    session = Session.new(players, seed=11, lives=1)
+    session.run_to_end()
+    kinds = [row["kind"] for row in session.to_dict()["log"]]
+    assert kinds.count("game_over") == 1
+    assert kinds[-1] == "game_over"
+
+
+def test_winner_row_is_ignored_by_player_stats():
+    # Vinnarraden får inte räknas som en spelåtgärd i statistiken.
+    from mejer import match as match_mod
+
+    players = [
+        make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b")
+    ]
+    session = Session.new(players, seed=3, lives=1)
+    session.play_to_end()
+    # Vinnarraden finns i loggen ...
+    assert session.log[-1].kind == "game_over"
+    stats = match_mod._player_stats(session.log, [p.name for p in players])
+    # ... men räknas inte: summan matchar antalet riktiga action-rader.
+    action_rows = [e for e in session.log if e.kind == "action"]
+    counted = sum(s["bids"] + s["decisions"] for s in stats.values())
+    assert counted == len(action_rows)
+
+
+def test_every_life_row_carries_a_standings_snapshot():
+    # Livsställningen ska finnas med på varje livsrad, inte bara den sista.
+    players = [
+        make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b", "c")
+    ]
+    session = Session.new(players, seed=5, lives=2)
+    session.run_to_end()
+    life_rows = [r for r in session.to_dict()["log"] if r["kind"] == "life"]
+    assert life_rows, "matchen ska ha minst en livsrad"
+    for row in life_rows:
+        assert row["standings"], "varje livsrad ska ha en livsställning"
+        names = [p["name"] for p in row["standings"]]
+        assert names == [session.name_of(i) for i in session.order]
+        # Livsställningen speglar radens egen livsnivå.
+        loser = next(p for p in row["standings"] if p["name"] == row["player_name"])
+        assert loser["lives"] == row["lives_left"]

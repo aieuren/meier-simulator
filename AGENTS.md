@@ -24,7 +24,13 @@ lower bid). Multiple agents with distinct roles can also play full games.
   The log is built downward: each shake starts with a `kind="roll"`
   entry (the dice, pure input), then one `kind="action"` entry per answer (bid,
   raise, pass, or call), and after a call a `kind="life"` entry (who lost how
-  many lives, and how many remain). Every action entry carries `accepted_bid`
+  many lives, and how many remain). Every `kind="life"` entry also carries a
+  `standings` snapshot (each player's name, role and remaining lives, in seating
+  order) so the UI can show the life tally right after each call. When the match
+  ends, `_finish()` appends one `kind="game_over"` entry naming the winner, and
+  `to_dict()` adds `standings` and `winner` at the top level (the game-over row is
+  not counted as a player action by the analysis). Every action entry carries
+  `accepted_bid`
   (the bid the player answers) next to `bid` (the bid they then say), so the UI
   can show "Slår över X, säger Y" as separate parts. `to_dict` also reports
   `order` and `starter` so the UI can show the seating and who begins.
@@ -113,6 +119,29 @@ This is why the engine logs a fresh `kind="roll"` entry before every slå, and
 why `announce_blind` (not `announce`) is used for it. A slå that is not strictly
 higher is corrected to the smallest legal raise: `Session._enforce_bid`.
 
+## Forced raise (full lap) = a fresh shake too (gotcha)
+
+When the cup comes back to the bidder after a full lap, the rule we play is
+that the dice are **re-rolled** — not just a higher number said over the old
+dice. The bidder may then look at the new dice or bid blind; both are allowed,
+just like any other bid. So `Session._resolve_raise` and `Game._play_round`
+roll new dice, log a fresh `kind="roll"` entry, and call
+`MejerPlayerAgent.announce_forced` (which asks the model "look or blind?" via
+`_forced_choice_context`, then delegates to `announce` or `announce_blind`).
+`pending_dice` must be updated to the new roll, otherwise a later syna would be
+judged against the stale dice. The **holder must also become the bidder** in
+`Game._play_round` (Session already does `self.holder = self.bidder`) — miss it
+and a later syna blames the wrong player. A forced raise is `blind=True` only
+when the bidder chose to bid blind. (`höja` is still a bid, so it counts in
+`BID_ACTIONS`; blind raises count as `blinds`, not bluffs.)
+
+Investigated a reported "raise after a blind slå" bug: it is **not** reproducible.
+`accepted_bid` is the bid the player *answers*, so a raise showing
+`accepted=52, bid=61` is just the forced raise at the end of a full lap, not a
+double raise. A property check over 500 random matches (200 for `bid >=
+accepted`, 300 for the `slå → höja` pattern) found 0 violations, and every `slå`
+is `blind=True`.
+
 ## Agent Canvas: LLM profiles vanish on container restart (gotcha)
 
 The app talks to the LLM through the local agent-server proxy
@@ -180,9 +209,10 @@ python -m mejer.cli play rackar kalkyl trygg
   higher bid when the rules require it). Keep that safety net.
 - A "slå" bid is **blind**: the player shakes their *own* cup and does not look
   at their own dice, so the bid is not a truth-or-bluff claim. Only "bud" and
-  "höja" bids (where the player saw the dice) carry the sant/bluff label; blind
-  bids are labelled "blint bud" and counted as `blinds`, never as `bluffs`, in
-  the stats. This is deliberate: it adds a psychological dimension, so `blind_rate`
+  "höja" bids where the player actually looked carry the sant/bluff label; any
+  blind bid (a slå, or a forced raise where the bidder chose not to look) is
+  labelled "blint bud" and counted as `blinds`, never as `bluffs`, in the stats.
+  This is deliberate: it adds a psychological dimension, so `blind_rate`
   is tracked per role to see whether bidding blind pays off over many matches.
 - Note that pairs (11–66) outrank high singles, so e.g. 44 beats 65. When a call
   looks "wrong", check the ranking before assuming a bug.
