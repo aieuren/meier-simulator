@@ -71,7 +71,7 @@ async function boot() {
   // Om en matchserie redan kör i servern (t.ex. efter omladdning): visa och följ.
   resumeMatchSeries();
 
-  setupMatchMail();
+
   setupLogRepo();
   setupAnalysis();
 }
@@ -680,7 +680,6 @@ async function runMatchSeries() {
   const workers = parseInt($("matchWorkers").value, 10) || 1;
   const seedRaw = $("matchSeed").value.trim();
   const baseSeed = seedRaw === "" ? null : parseInt(seedRaw, 10);
-  const mailTo = ($("matchMailTo").value || "").trim() || null;
   const checkIn = $("matchCheckIn").checked;
 
   btn.disabled = true;
@@ -692,7 +691,7 @@ async function runMatchSeries() {
     const res = await fetch("/api/matches/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ count, lives, workers, base_seed: baseSeed, mail_to: mailTo, check_in: checkIn }),
+      body: JSON.stringify({ count, lives, workers, base_seed: baseSeed, check_in: checkIn }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -766,7 +765,6 @@ async function pollMatchSeries() {
     if (!data.running) {
       const name = data.file ? ` (${data.file})` : "";
       status.textContent = `Klart: ${data.done} matcher spelade${name}.`;
-      if (data.mail_status) status.textContent += ` ${data.mail_status}.`;
       if (data.push_status) status.textContent += ` ${data.push_status}.`;
       btn.disabled = false;
       return;
@@ -775,28 +773,6 @@ async function pollMatchSeries() {
     if (data.push_status) status.textContent += ` ${data.push_status}.`;
   }
 }
-
-// Visa om e-post är påslagen på servern, och fyll i standardmottagaren.
-async function setupMatchMail() {
-  const hint = $("matchMailHint");
-  const field = $("matchMailTo");
-  if (!hint || !field) return;
-  try {
-    const res = await fetch("/api/matches/mail");
-    if (!res.ok) return;
-    const data = await res.json();
-    if (!data.configured) return;
-    hint.hidden = false;
-    hint.textContent = data.default_to
-      ? `E-post är påslagen. Standardmottagare: ${data.default_to}. Lämna fältet tomt för den.`
-      : "E-post är påslagen. Fyll i en mottagare för att få resultatet mejlat.";
-    if (data.default_to && !field.value) field.placeholder = data.default_to;
-  } catch (e) {
-    /* tyst: e-post är valfritt */
-  }
-}
-
-// Visa om loggrepet är redo för automatisk incheckning.
 async function setupLogRepo() {
   const hint = $("matchLogRepoHint");
   const box = $("matchCheckIn");
@@ -824,13 +800,63 @@ async function setupLogRepo() {
 // -- Flik 5: analys mot insamlade matchprotokoll ---------------------------
 
 function setupAnalysis() {
-  const up = $("analysisUploadBtn");
-  if (!up) return;
-  up.onclick = uploadAnalysisFiles;
-  $("analysisLoadLatestBtn").onclick = loadLatestAnalysis;
+  const load = $("analysisLoadBtn");
+  if (!load) return;
+  load.onclick = loadSelectedLogs;
+  $("analysisRefreshBtn").onclick = refreshAnalysisLogs;
   $("analysisClearBtn").onclick = clearAnalysis;
   $("analysisAskBtn").onclick = askAnalysis;
+  refreshAnalysisLogs();
   refreshAnalysisData();
+}
+
+// Hämta listan över loggar som finns incheckade i loggrepet.
+async function refreshAnalysisLogs() {
+  const box = $("analysisLogList");
+  box.innerHTML = '<p class="hint">Hämtar loggar…</p>';
+  try {
+    const res = await fetch("/api/analysis/logs");
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Fel");
+    renderAnalysisLogs(data);
+  } catch (e) {
+    box.innerHTML = `<p class="error">Kunde inte hämta loggar: ${e.message}</p>`;
+  }
+}
+
+function renderAnalysisLogs(data) {
+  const box = $("analysisLogList");
+  box.innerHTML = "";
+  if (!data.ready) {
+    box.innerHTML = '<p class="hint">Inget loggrepo är konfigurerat på servern.</p>';
+    return;
+  }
+  if (!data.logs.length) {
+    box.innerHTML =
+      '<p class="hint">Inga loggar incheckade än. Spela en serie med incheckning påslagen.</p>';
+    return;
+  }
+  data.logs.forEach((log) => {
+    const label = document.createElement("label");
+    label.className = "analysis-log";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.value = log.name;
+    const name = document.createElement("span");
+    name.className = "analysis-log-name";
+    name.textContent = log.name;
+    const meta = document.createElement("span");
+    meta.className = "analysis-log-meta";
+    meta.textContent = `${log.games} matcher · ${formatBytes(log.size)}`;
+    label.append(cb, name, meta);
+    box.appendChild(label);
+  });
+}
+
+function formatBytes(n) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} kB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 async function refreshAnalysisData() {
@@ -867,36 +893,6 @@ function renderAnalysisData(data) {
 
   $("analysisExportLink").hidden = !data.games;
   $("analysisDigest").textContent = data.digest_text || "";
-  renderAnalysisSuggestions(data);
-}
-
-// Färdiga förslag så att det är lätt att komma igång.
-function renderAnalysisSuggestions(data) {
-  const box = $("analysisSuggestions");
-  box.innerHTML = "";
-  if (!data.games) return;
-  const ideas = [
-    "Vem bluffar mest, och lönar sig bluffandet?",
-    "Lönar det sig att syna? Jämför synarens framgång per roll.",
-    "Vinner startspelaren oftare än de andra?",
-    "Hur vanligt är blint bud, och hur går det för den som budar blint?",
-    "Vilka bud är vanligast?",
-  ];
-  const label = document.createElement("span");
-  label.className = "analysis-suggest-label";
-  label.textContent = "Förslag:";
-  box.appendChild(label);
-  ideas.forEach((q) => {
-    const b = document.createElement("button");
-    b.className = "analysis-suggest";
-    b.type = "button";
-    b.textContent = q;
-    b.onclick = () => {
-      $("analysisQuestion").value = q;
-      askAnalysis();
-    };
-    box.appendChild(b);
-  });
 }
 
 function showAnalysisStatus(text, isError) {
@@ -906,46 +902,32 @@ function showAnalysisStatus(text, isError) {
   status.classList.toggle("error", !!isError);
 }
 
-async function uploadAnalysisFiles() {
-  const input = $("analysisFiles");
-  const btn = $("analysisUploadBtn");
-  if (!input.files || input.files.length === 0) {
-    showAnalysisStatus("Välj minst en fil först.", true);
+async function loadSelectedLogs() {
+  const btn = $("analysisLoadBtn");
+  const names = Array.from(
+    $("analysisLogList").querySelectorAll("input[type=checkbox]:checked")
+  ).map((cb) => cb.value);
+  if (!names.length) {
+    showAnalysisStatus("Markera minst en logg först.", true);
     return;
   }
-  const form = new FormData();
-  for (const f of input.files) form.append("files", f);
-
   btn.disabled = true;
-  btn.textContent = "Laddar…";
+  btn.textContent = "Läser in…";
   try {
-    const res = await fetch("/api/analysis/upload", { method: "POST", body: form });
+    const res = await fetch("/api/analysis/load-logs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ names }),
+    });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || "Fel");
     showAnalysisStatus(`Lade till ${data.added} matcher.`, false);
-    input.value = "";
     await refreshAnalysisData();
   } catch (e) {
     showAnalysisStatus(`Fel: ${e.message}`, true);
   } finally {
     btn.disabled = false;
-    btn.textContent = "Ladda upp filer";
-  }
-}
-
-async function loadLatestAnalysis() {
-  const btn = $("analysisLoadLatestBtn");
-  btn.disabled = true;
-  try {
-    const res = await fetch("/api/analysis/load-latest", { method: "POST" });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "Fel");
-    showAnalysisStatus(`Lade till ${data.added} matcher från senaste serien.`, false);
-    await refreshAnalysisData();
-  } catch (e) {
-    showAnalysisStatus(`Fel: ${e.message}`, true);
-  } finally {
-    btn.disabled = false;
+    btn.textContent = "Läs in valda";
   }
 }
 

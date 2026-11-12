@@ -148,16 +148,12 @@
         <label>Samtidiga matcher
           <input type="number" id="matchWorkers" min="1" max="8" value="3" />
         </label>
-        <label>Mejla resultatet till (valfritt)
-          <input type="email" id="matchMailTo" placeholder="namn@exempel.se" />
-        </label>
         <label class="check">
           <input type="checkbox" id="matchCheckIn" />
           Checka in loggen till GitHub efter varje match
         </label>
         <button id="matchRunBtn" class="primary">Spela serien</button>
       </div>
-      <p class="hint" id="matchMailHint" hidden></p>
       <p class="hint" id="matchLogRepoHint" hidden></p>
 
       <div id="matchStatus" class="session-status" hidden></div>
@@ -182,16 +178,15 @@
   <!-- Flik 5: analys – ställ frågor mot insamlade matchprotokoll -->
   <div class="tab-panel" id="tab-analys" hidden>
     <section class="card">
-      <h2>1. Ladda in matchdata</h2>
+      <h2>1. Datakällor</h2>
       <p class="hint">
-        Ladda upp en eller flera JSONL-filer som du tidigare laddat ner efter en
-        matchserie. Flera filer sammanställs tillsammans, så du kan bygga en
-        större datamängd över tid.
+        Välj en eller flera loggar som checkats in i loggrepet. Markera flera
+        för att sammanställa dem tillsammans till en större datamängd.
       </p>
-      <div class="analysis-upload">
-        <input type="file" id="analysisFiles" accept=".jsonl,.ndjson,.json,text/plain" multiple />
-        <button id="analysisUploadBtn" class="primary">Ladda upp filer</button>
-        <button id="analysisLoadLatestBtn">Använd senaste serien</button>
+      <div id="analysisLogList" class="analysis-log-list"></div>
+      <div class="analysis-actions">
+        <button id="analysisLoadBtn" class="primary">Läs in valda</button>
+        <button id="analysisRefreshBtn">Uppdatera listan</button>
         <button id="analysisClearBtn">Töm</button>
       </div>
       <div id="analysisDataStatus" class="session-status" hidden></div>
@@ -214,11 +209,10 @@
           placeholder="T.ex. Vem bluffar mest, och lönar det sig?"></textarea>
         <button id="analysisAskBtn" class="primary">Analysera</button>
       </div>
-      <div id="analysisSuggestions" class="analysis-suggestions"></div>
     </section>
 
     <section class="card" id="analysisResultCard" hidden>
-      <h2>Svar</h2>
+      <h2>3. Resultat</h2>
       <div id="analysisAnswer" class="analysis-answer"></div>
       <div id="analysisChart" class="analysis-chart"></div>
       <div id="analysisFollowups" class="analysis-followups"></div>

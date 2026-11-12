@@ -18,7 +18,6 @@ from .agents.player import ROLES, get_role, MejerPlayerAgent
 from .game import Game
 from .match import read_jsonl, run_matches, summarize, write_jsonl
 from .session import Session
-from . import notify
 
 
 def _cmd_announce(args: argparse.Namespace) -> int:
@@ -174,17 +173,6 @@ def _cmd_match(args: argparse.Namespace) -> int:
             f"syn {b['call_rate'] * 100:4.1f}% (lyckas {b['call_success_rate'] * 100:4.1f}%)"
         )
 
-    if args.mail:
-        try:
-            sent = notify.send_matches(
-                out,
-                to=args.mail,
-                subject=f"Mejer: {n} matcher klara",
-                body=notify.summary_body(stats, count=n, file_name=out),
-            )
-            print(f"\nMejlade protokollet till {', '.join(sent)}")
-        except notify.MailError as exc:
-            print(f"\nKunde inte mejla protokollet: {exc}", file=sys.stderr)
     return 0
 
 
@@ -235,12 +223,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--workers", type=int, default=1, help="Antal matcher som spelas samtidigt"
     )
     p_match.add_argument("--verbose", action="store_true")
-    p_match.add_argument(
-        "--mail",
-        default=None,
-        metavar="ADRESS",
-        help="Mejla protokollet till ADRESS när serien är klar (kräver MEJER_SMTP_*)",
-    )
     p_match.set_defaults(func=_cmd_match)
 
     p_sum = sub.add_parser("summarize", help="Sammanfatta ett JSONL-protokoll")

@@ -145,6 +145,40 @@ class LogRepo:
         """Best-effort: hämta eventuella ändringar från fjärren före körning."""
         self._git("pull", "--rebase", "--autostash", check=False)
 
+    # -- läsa loggar -------------------------------------------------------
+    def list_logs(self, sync: bool = True) -> list[dict]:
+        """Lista JSONL-filerna i klonen, nyaste först.
+
+        Hämtar nya commits från fjärren först (om möjligt), så att loggar som
+        checkats in från en annan körning också syns.
+        """
+        if not self.is_repo():
+            return []
+        if sync:
+            self.sync()
+        out: list[dict] = []
+        for p in sorted(self.directory.glob("*.jsonl")):
+            try:
+                stat = p.stat()
+            except OSError:
+                continue
+            out.append({
+                "name": p.name,
+                "size": stat.st_size,
+                "modified": int(stat.st_mtime),
+            })
+        out.sort(key=lambda d: d["modified"], reverse=True)
+        return out
+
+    def log_path(self, name: str) -> Path:
+        """Sökväg till en logg i klonen. Skyddar mot sökvägar utanför klonen."""
+        if not name or Path(name).name != name or not name.endswith(".jsonl"):
+            raise LogRepoError(f"Ogiltigt loggnamn: {name!r}")
+        path = self.directory / name
+        if not path.is_file():
+            raise LogRepoError(f"Loggen finns inte: {name}")
+        return path
+
     # -- commit och push ---------------------------------------------------
     def commit_and_push(self, path: Path, message: str) -> str:
         """Checka in ``path`` och pusha. Returnerar en statusrad (fel kastas ej)."""

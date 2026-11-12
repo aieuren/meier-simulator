@@ -196,61 +196,24 @@ loggrepet. Lägg den i en fil utanför kodrepet (t.ex.
 omstarter. Loggrepet är avsiktligt skilt från kodrepet, så att en token som
 läcker via webbappen bara kan skriva loggar – aldrig kod.
 
-### Få resultatet mejlat
+### Få resultatet incheckat
 
-En lång serie tar tid. Fyll i en adress i fältet **Mejla resultatet till** innan
-du startar serien, så skickas JSONL-protokollet som bilaga när körningen är klar.
-Mejlet innehåller också en kort sammanfattning (antal matcher, vinster och
-vinstfrekvens per roll).
-
-E-posten är avstängd tills servern fått SMTP-inställningar. Sätt dem i miljön
-innan du startar servern:
-
-| Variabel | Betydelse |
-|---|---|
-| `MEJER_SMTP_HOST` | SMTP-server (krävs för att slå på mejl) |
-| `MEJER_SMTP_PORT` | Port (standard 587; 465 ger implicit TLS) |
-| `MEJER_SMTP_USER` | Användarnamn |
-| `MEJER_SMTP_PASSWORD` | Lösenord eller app-lösenord |
-| `MEJER_MAIL_FROM` | Avsändare (standard: `MEJER_SMTP_USER`) |
-| `MEJER_MAIL_TO` | Standardmottagare, kommaseparerad |
-| `MEJER_SMTP_TLS` | Sätt till `0` för att stänga av STARTTLS (testservrar) |
-
-Exempel med ett Gmail-konto och ett app-lösenord:
-
-```bash
-export MEJER_SMTP_HOST=smtp.gmail.com
-export MEJER_SMTP_PORT=587
-export MEJER_SMTP_USER=du@gmail.com
-export MEJER_SMTP_PASSWORD=app-losenord
-export MEJER_MAIL_TO=du@gmail.com
-./run.sh --background
-```
-
-Samma sak finns i kommandoraden:
-
-```bash
-python -m mejer.cli match --count 20 --mail du@gmail.com
-```
-
-Ett mejlfel fäller aldrig körningen. Resultatet ligger kvar på servern och kan
-laddas ner som vanligt; felet visas bara i statusraden.
+Filen skrivs radvis medan serien spelas. Kryssa i **Checka in loggen till GitHub
+efter varje match** innan du startar serien, så checkas loggen in i loggrepet
+efter varje färdig match. Se avsnittet om loggrepet ovan.
 
 ## Analys
 
-Fliken **Analys** låter dig borra vidare i insamlat material. Du laddar upp en
-eller flera JSONL-filer (sådana du laddat ner från fliken **Matchserie**), och
-filerna sammanställs tillsammans. På så sätt kan du bygga en stor datamängd över
-tid, från flera körningar.
+Fliken **Analys** låter dig borra vidare i insamlat material. Under
+**Datakällor** väljer du en eller flera loggar som redan checkats in i loggrepet.
+De sammanställs tillsammans, så att du kan bygga en stor datamängd över tid, från
+flera körningar. Knappen **Uppdatera listan** hämtar nya loggar från fjärren.
 
 Därefter ställer du frågor i fritext. En LLM svarar utifrån en kompakt
 sammanställning av materialet – aggregerade mått per roll, fördelningar över bud
 och tärningsutfall, och en matchlista. Modellen kan också rita ett diagram:
 stapel, linje eller tabell. Diagrammen ritas som ren SVG i webbläsaren, utan
 externa bibliotek.
-
-Knappen **Använd senaste serien** läser in protokollet från den senaste
-matchserien som körts i servern, så att du slipper ladda ner och upp igen.
 
 Tre saker är värda att veta:
 
@@ -282,11 +245,10 @@ Tre saker är värda att veta:
 | GET | `/api/matches/status` | Läge och hittills spelade matcher för serien |
 | GET | `/api/matches/summary` | Statistik för den senaste matchserien |
 | GET | `/api/matches/download` | Ladda ner protokollet (JSONL) |
-| GET | `/api/matches/mail` | Om e-post är påslagen och standardmottagare |
 | GET | `/api/matches/logrepo` | Om loggrepet är redo för automatisk incheckning |
 | GET | `/api/analysis/data` | Inläst material: antal matcher, källor och sammanställning |
-| POST | `/api/analysis/upload` | Ladda upp en eller flera JSONL-filer (multipart, fältet `files`) |
-| POST | `/api/analysis/load-latest` | Läs in protokollet från senaste matchserien |
+| GET | `/api/analysis/logs` | Lista loggar som finns incheckade i loggrepet |
+| POST | `/api/analysis/load-logs` | Läs in valda loggar från loggrepet (fältet `names`) |
 | POST | `/api/analysis/ask` | Ställ en fråga mot materialet (svar + ev. diagram) |
 | GET | `/api/analysis/export` | Ladda ner allt inläst material som JSONL |
 | POST | `/api/analysis/clear` | Töm allt inläst analysmaterial |
@@ -319,13 +281,12 @@ saker avgör hur länge en körning får hålla på:
 
 Behöver du en körning som garanterat får ta mer än en timme, kör du den utanför
 Agent Canvas – koden är portabel. Sätt `ANTHROPIC_API_KEY` och kör kommandoraden
-i en egen terminal (eller med `nohup`), och låt den mejla resultatet när den är
-klar:
+i en egen terminal (eller med `nohup`):
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
 python -m mejer.cli match --count 60 --workers 4 \
-  --out matcher.jsonl --mail du@gmail.com
+  --out matcher.jsonl
 ```
 
 Exempel:
@@ -401,7 +362,6 @@ mejer/
   session.py          Interaktiv session: fullt flöde och logg
   match.py            Batchkörning av många matcher + statistik (JSONL)
   analysis.py         Analys: digest av protokoll + LLM-frågor med diagram
-  notify.py           E-postavisering med resultatfilen som bilaga (SMTP)
   cli.py              Kommandoradsgränssnitt
   agents/
     base.py           Agent-grundklass och roll

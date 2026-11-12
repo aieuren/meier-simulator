@@ -12,7 +12,7 @@ import os
 import threading
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, UploadFile
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -23,7 +23,7 @@ from ..llm import LLMClient, LLMError
 from ..agents.player import MejerPlayerAgent
 from ..match import GameRecord, read_jsonl, run_matches, summarize
 from ..session import Session
-from .. import analysis, logrepo, notify
+from .. import analysis, logrepo
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -269,10 +269,6 @@ class MatchRequest(BaseModel):
     workers: int = Field(
         3, ge=1, le=8, description="Antal matcher som spelas samtidigt"
     )
-    mail_to: str | None = Field(
-        None,
-        description="E-postmottagare för resultatfilen. Annars MEJER_MAIL_TO i miljön.",
-    )
     check_in: bool = Field(
         False,
         description="Checka in loggfilen till loggrepet på GitHub efter varje match.",
@@ -289,7 +285,6 @@ class _MatchJob:
         base_seed: int | None,
         lives: int,
         workers: int = 1,
-        mail_to: str | None = None,
         check_in: bool = False,
     ):
         self.roles = roles
@@ -297,12 +292,10 @@ class _MatchJob:
         self.base_seed = base_seed
         self.lives = lives
         self.workers = workers
-        self.mail_to = mail_to
         self.check_in = check_in
         self.done = 0
         self.records: list[GameRecord] = []
         self.error: str | None = None
-        self.mail_status: str | None = None
         self.push_status: str | None = None
         self.file: Path = _FALLBACK_MATCH_FILE
         self.running = True
@@ -349,7 +342,6 @@ class _MatchJob:
                     fh.flush()
                     if repo is not None:
                         self._check_in(repo, rec)
-            self._maybe_mail()
         except LLMError as exc:
             self.error = f"LLM-fel: {exc}"
         except Exception as exc:  # pragma: no cover - skyddsnät
@@ -365,26 +357,6 @@ class _MatchJob:
         with self.lock:
             self.push_status = status
 
-    def _maybe_mail(self) -> None:
-        """Skicka resultatfilen när serien är klar, om e-post är påslagen."""
-        if not (self.mail_to or notify.mail_configured()):
-            return
-        with self.lock:
-            snapshot = [rec.to_dict() for rec in self.records]
-        try:
-            sent = notify.send_matches(
-                self.file,
-                to=self.mail_to,
-                subject=f"Mejer: {self.done} matcher klara",
-                body=notify.summary_body(
-                    summarize(snapshot), count=self.count, file_name=self.file.name
-                ),
-            )
-            self.mail_status = f"Skickat till {', '.join(sent)}"
-        except notify.MailError as exc:
-            # Ett mejlfel ska inte fälla körningen – resultatet finns kvar.
-            self.mail_status = f"Kunde inte skicka: {exc}"
-
     def status(self) -> dict:
         with self.lock:
             snapshot = [rec.to_dict() for rec in self.records]
@@ -394,7 +366,6 @@ class _MatchJob:
             "done": self.done,
             "count": self.count,
             "error": self.error,
-            "mail_status": self.mail_status,
             "push_status": self.push_status,
             "file": self.file.name,
             "games": self.done,
@@ -422,7 +393,7 @@ def matches_run(req: MatchRequest) -> dict:
 
     _match_job = _MatchJob(
         roles, req.count, req.base_seed, req.lives, req.workers,
-        mail_to=req.mail_to, check_in=req.check_in,
+        check_in=req.check_in,
     )
     _match_job.thread.start()
     return _match_job.status()
@@ -458,15 +429,6 @@ def matches_download() -> FileResponse:
     )
 
 
-@app.get("/api/matches/mail")
-def matches_mail() -> dict:
-    """Om e-post är påslagen, och i så fall standardmottagaren."""
-    return {
-        "configured": notify.mail_configured(),
-        "default_to": os.environ.get("MEJER_MAIL_TO", "").strip(),
-    }
-
-
 @app.get("/api/matches/logrepo")
 def matches_logrepo() -> dict:
     """Om loggrepet är konfigurerat för automatisk incheckning."""
@@ -481,15 +443,21 @@ def matches_logrepo() -> dict:
 
 # -- Analys: ställ frågor mot insamlade matchprotokoll ---------------------
 #
-# Användaren laddar upp en eller flera JSONL-filer (nedladdade efter tidigare
-# körningar). De sammanställs till en kompakt digest som en LLM får svara på
-# frågor om. Digesten hålls liten med flit: hela händelseloggarna ryms inte i
+# Användaren väljer en eller flera loggar som redan checkats in i loggrepet.
+# De sammanställs till en kompakt digest som en LLM får svara på frågor om.
+# Digesten hålls liten med flit: hela händelseloggarna ryms inte i
 # modellkontexten.
 
-#: Största tillåtna uppladdning per fil (skydd mot misstag).
-_MAX_UPLOAD_BYTES = 25 * 1024 * 1024
-
 _store = analysis.AnalysisStore()
+
+
+def _count_lines(path: Path) -> int:
+    """Antal matcher i en JSONL-fil (en match per rad)."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return sum(1 for line in fh if line.strip())
+    except OSError:
+        return 0
 
 
 @app.get("/api/analysis/data")
@@ -504,46 +472,47 @@ def analysis_data() -> dict:
     }
 
 
-@app.post("/api/analysis/upload")
-async def analysis_upload(files: list[UploadFile]) -> dict:
-    """Ladda upp en eller flera JSONL-filer med matchprotokoll."""
-    if not files:
-        raise HTTPException(status_code=400, detail="Inga filer skickades")
+@app.get("/api/analysis/logs")
+def analysis_logs() -> dict:
+    """Lista de loggar som finns incheckade i loggrepet."""
+    repo = logrepo.LogRepo()
+    if not repo.is_repo():
+        return {"ready": False, "logs": []}
+    try:
+        logs = repo.list_logs()
+    except logrepo.LogRepoError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    for entry in logs:
+        entry["games"] = _count_lines(repo.directory / entry["name"])
+    return {"ready": True, "logs": logs}
+
+
+class _LoadLogsRequest(BaseModel):
+    names: list[str] = Field(default_factory=list, description="Loggfilnamn att läsa in")
+
+
+@app.post("/api/analysis/load-logs")
+def analysis_load_logs(req: _LoadLogsRequest) -> dict:
+    """Läs in valda loggar från loggrepet i analysmaterialet."""
+    if not req.names:
+        raise HTTPException(status_code=400, detail="Välj minst en logg.")
+    repo = logrepo.LogRepo()
     added = 0
-    details: list[dict] = []
-    for f in files:
-        raw = await f.read()
-        if len(raw) > _MAX_UPLOAD_BYTES:
-            raise HTTPException(
-                status_code=413,
-                detail=f"Filen {f.filename} är för stor (max 25 MB)",
-            )
+    files: list[dict] = []
+    for name in req.names:
         try:
-            text = raw.decode("utf-8")
-        except UnicodeDecodeError as exc:
-            raise HTTPException(
-                status_code=400, detail=f"Filen {f.filename} är inte UTF-8-text"
-            ) from exc
-        n = _store.add_text(f.filename or "fil", text)
+            path = repo.log_path(name)
+        except logrepo.LogRepoError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        n = _store.add_file(path)
         added += n
-        details.append({"name": f.filename, "games": n})
+        files.append({"name": name, "games": n})
     if added == 0:
         raise HTTPException(
             status_code=400,
-            detail="Inga giltiga matchprotokoll hittades i filerna",
+            detail="Inga giltiga matchprotokoll hittades i loggarna.",
         )
-    info = _store.info()
-    return {**info, "added": added, "files": details}
-
-
-@app.post("/api/analysis/load-latest")
-def analysis_load_latest() -> dict:
-    """Läs in protokollet från den senaste matchserien i servern."""
-    path = _match_file()
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="Ingen matchserie körd ännu.")
-    added = _store.add_file(path)
-    return {**_store.info(), "added": added}
+    return {**_store.info(), "added": added, "files": files}
 
 
 @app.post("/api/analysis/clear")

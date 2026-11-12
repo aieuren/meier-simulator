@@ -68,14 +68,10 @@ lower bid). Multiple agents with distinct roles can also play full games.
   polls `/api/matches/status` (field `running`) and renders matches as they
   finish. Only one series runs at a time (a second start gives 409). The request
   field `workers` (1–8) plays several matches at once; the JSONL file is written
-  line by line as matches finish, so the download works mid-run. If `mail_to`
-  (request) or `MEJER_MAIL_TO`/`MEJER_SMTP_HOST` (env) is set, `_MatchJob` mails
-  the finished JSONL as an attachment via `mejer/notify.py`; the outcome lands in
-  the status field `mail_status`. A mail failure never fails the run.
-- `mejer/notify.py` – optional SMTP e-mail of the result file. Off unless
-  `MEJER_SMTP_HOST` plus a recipient are set. `send_matches` attaches the JSONL
-  and returns the recipient list; `mail_configured` gates it; `summary_body`
-  builds the plain-text summary. Tests inject a fake `smtp_factory`.
+  line by line as matches finish, so the download works mid-run. With
+  `check_in` set, each finished match is committed and pushed to the log repo
+  (see below); the outcome lands in the status field `push_status`. A push
+  failure never fails the run.
 - `mejer/match.py` – batch play of many full matches between the roles, for
   strategy analysis. `play_match` plays one match to the end via
   `Session.play_to_end()` and returns a `GameRecord`; `run_matches` yields a
@@ -88,8 +84,7 @@ lower bid). Multiple agents with distinct roles can also play full games.
   `actor_lives`, `active_players`, `caller_loses`). Tests swap the module-level
   `_new_agents` factory for scripted agents.
 - `mejer/cli.py` – command line entry points (`announce`, `decide`, `play`,
-  `session`, `match`, `summarize`). `match --mail ADDRESS` mails the protocol
-  when the series finishes (same env vars as the web app).
+  `session`, `match`, `summarize`).
 - `mejer/analysis.py` – analysis of collected match protocols. `build_digest`
   turns a list of `GameRecord.to_dict()` records into a compact summary
   (per-role stats from `summarize`, plus action/bid/outcome distributions and a
@@ -97,9 +92,12 @@ lower bid). Multiple agents with distinct roles can also play full games.
   not. `render_digest_text` formats it for the prompt (and for the UI). `ask`
   sends a question with the digest and expects JSON
   (`{"answer", "chart", "followups"}`); `_clean_chart` drops charts the frontend
-  cannot draw. `AnalysisStore` accumulates uploaded records across files. The
+  cannot draw. `AnalysisStore` accumulates loaded records across files. The
   chart types are `bar` (`labels`/`values`), `line` (`labels`/`series`) and
-  `table` (`columns`/`rows`); the frontend renders them as plain SVG.
+  `table` (`columns`/`rows`); the frontend renders them as plain SVG. Records
+  are loaded from logs already checked into the log repo: `/api/analysis/logs`
+  lists them (`LogRepo.list_logs`) and `/api/analysis/load-logs` reads the
+  selected names (`LogRepo.log_path` rejects anything outside the clone).
 - `tests/` – unit tests. No real LLM calls; `FakeLLM`/`ScriptedAgent` are used.
 
 ## Mejer ranking is non-numeric (gotcha)
@@ -250,11 +248,8 @@ python -m mejer.cli play rackar kalkyl trygg
   background thread, so closing the tab does not stop it, and the JSONL is
   appended as matches finish — a pause mid-series does not lose finished games.
   For runs that must exceed the idle window, run the CLI outside Canvas with a
-  real `ANTHROPIC_API_KEY` (optionally `nohup`) and `match --mail`.
-- File upload (`/api/analysis/upload`) needs `python-multipart`; it is in
-  `requirements.txt` and `run.sh` reinstalls missing deps after a container
-  restart. Without it FastAPI raises at import/route-definition time.
-- The analysis tab keeps uploaded protocols **in memory** (`web.app._store`),
+  real `ANTHROPIC_API_KEY` (optionally `nohup`).
+- The analysis tab keeps loaded protocols **in memory** (`web.app._store`),
   so they are lost on restart. Tests clear the store to stay isolated.
 - Git remote: `https://github.com/aieuren/mejer-simulator.git` (branch `main`).
   The repo was renamed from `majer-simulator`; GitHub redirects the old name.
@@ -287,11 +282,11 @@ which a container restart wipes. Now a series can be committed and pushed to a
   line (it would otherwise show up in `ps`). Fine-grained PAT with only
   Contents: Read and write on the log repo. `MEJER_LOGS_PUSH=0` disables push.
 - Wire-up: `web/app.py` `_MatchJob(check_in=...)`. Each record is appended and
-  then `commit_and_push` runs; `push_status` is reported alongside `mail_status`.
+  then `commit_and_push` runs; `push_status` reports the outcome.
   A push failure is caught and returned as a string — it must never kill a run.
   When no token/clone is available the log falls back to `/tmp/mejer_matches.jsonl`.
 - `_current_match_file` (module global) holds the file for the latest series;
-  `/api/matches/download|summary` and `/api/analysis/load-latest` read it.
+  `/api/matches/download|summary` read it.
 - Gotcha: `git -c key=value` must be passed as **two** argv items before the
   subcommand. `["-c", "user.name=Mejer Bot"]` works; `["-cuser.name=Mejer Bot"]`
   fails with "unknown option".

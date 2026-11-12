@@ -104,35 +104,79 @@ def test_ask_rejects_empty_question():
 # -- Web-API ----------------------------------------------------------------
 
 
-def test_analysis_upload_and_data(monkeypatch):
-    monkeypatch.setattr(match, "_new_agents", make_agents)
+def _log_repo(monkeypatch, tmp_path, games: int = 2) -> str:
+    """Sätt upp ett lokalt loggrepo med en incheckad logg. Returnerar filnamnet."""
+    import subprocess
+
+    remote = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--bare", "-q", str(remote)], check=True)
+    work = tmp_path / "work"
+    subprocess.run(["git", "clone", "-q", str(remote), str(work)], check=True)
+    subprocess.run(["git", "-C", str(work), "config", "user.name", "t"], check=True)
+    subprocess.run(["git", "-C", str(work), "config", "user.email", "t@e"], check=True)
+    name = "mejer-matcher-2026-01-01-1200.jsonl"
+    text = "".join(json.dumps(rec) + "\n" for rec in _records(games))
+    (work / name).write_text(text, encoding="utf-8")
+    subprocess.run(["git", "-C", str(work), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(work), "commit", "-q", "-m", "logg"], check=True)
+    subprocess.run(["git", "-C", str(work), "push", "-q", "origin", "HEAD"], check=True)
+
+    token = tmp_path / "token"
+    token.write_text("dummy\n", encoding="utf-8")
+    monkeypatch.setenv("MEJER_LOGS_DIR", str(tmp_path / "clone"))
+    monkeypatch.setenv("MEJER_LOGS_REMOTE_URL", str(remote))
+    monkeypatch.setenv("MEJER_LOGS_TOKEN_FILE", str(token))
+    # Klona in i testets katalog.
+    from mejer import logrepo
+
+    logrepo.LogRepo().ensure_clone()
+    return name
+
+
+def test_analysis_lists_logs_from_repo(monkeypatch, tmp_path):
+    name = _log_repo(monkeypatch, tmp_path, games=2)
+    client = TestClient(web_app.app)
+    web_app._store.clear()
+    data = client.get("/api/analysis/logs").json()
+    assert data["ready"] is True
+    assert [e["name"] for e in data["logs"]] == [name]
+    assert data["logs"][0]["games"] == 2
+
+
+def test_analysis_loads_selected_logs(monkeypatch, tmp_path):
+    name = _log_repo(monkeypatch, tmp_path, games=2)
     client = TestClient(web_app.app)
     web_app._store.clear()
 
-    rec = json.dumps(_records(2)[0]) + "\n"
-    res = client.post(
-        "/api/analysis/upload",
-        files=[("files", ("min.jsonl", rec, "application/x-ndjson"))],
-    )
+    res = client.post("/api/analysis/load-logs", json={"names": [name]})
     assert res.status_code == 200
-    assert res.json()["games"] == 1
+    assert res.json()["added"] == 2
 
     data = client.get("/api/analysis/data").json()
-    assert data["games"] == 1
-    assert "min.jsonl" in data["sources"]
+    assert data["games"] == 2
+    assert name in data["sources"]
     assert data["digest_text"]
 
     assert client.post("/api/analysis/clear").json()["games"] == 0
 
 
-def test_analysis_upload_rejects_garbage(monkeypatch):
+def test_analysis_load_rejects_unknown_and_empty(monkeypatch, tmp_path):
+    _log_repo(monkeypatch, tmp_path, games=1)
     client = TestClient(web_app.app)
     web_app._store.clear()
-    res = client.post(
-        "/api/analysis/upload",
-        files=[("files", ("skrap.txt", "ingen data här\n", "text/plain"))],
-    )
-    assert res.status_code == 400
+
+    assert client.post("/api/analysis/load-logs", json={"names": []}).status_code == 400
+    bad = client.post("/api/analysis/load-logs", json={"names": ["../x.jsonl"]})
+    assert bad.status_code == 404
+    missing = client.post("/api/analysis/load-logs", json={"names": ["saknas.jsonl"]})
+    assert missing.status_code == 404
+
+
+def test_analysis_logs_without_repo(monkeypatch, tmp_path):
+    monkeypatch.setenv("MEJER_LOGS_DIR", str(tmp_path / "finns-inte"))
+    client = TestClient(web_app.app)
+    data = client.get("/api/analysis/logs").json()
+    assert data == {"ready": False, "logs": []}
 
 
 def test_analysis_ask_requires_data(monkeypatch):
@@ -156,20 +200,16 @@ def test_analysis_ask_uses_llm(monkeypatch):
     assert res.json()["answer"] == "42"
 
 
-def test_analysis_export_roundtrip(monkeypatch):
-    monkeypatch.setattr(match, "_new_agents", make_agents)
+def test_analysis_export_roundtrip(monkeypatch, tmp_path):
+    name = _log_repo(monkeypatch, tmp_path, games=1)
     client = TestClient(web_app.app)
     web_app._store.clear()
-    rec = json.dumps(_records(1)[0]) + "\n"
-    client.post("/api/analysis/upload", files=[("files", ("a.jsonl", rec, "text/plain"))])
+    client.post("/api/analysis/load-logs", json={"names": [name]})
     export = client.get("/api/analysis/export")
     assert export.status_code == 200
     assert export.text.strip()
     # Det exporterade materialet går att läsa in igen.
-    again = client.post(
-        "/api/analysis/upload",
-        files=[("files", ("b.jsonl", export.text, "text/plain"))],
-    )
+    again = client.post("/api/analysis/load-logs", json={"names": [name]})
     assert again.status_code == 200
     assert client.get("/api/analysis/data").json()["games"] == 2
     web_app._store.clear()

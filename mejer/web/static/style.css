@@ -466,9 +466,22 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 .match-download a { color: var(--accent-2); }
 
 /* -- Flik 5: analys -- */
-.analysis-upload { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; }
-.analysis-upload input[type="file"] { color: var(--muted); font-size: 0.9rem; flex: 1 1 18rem; }
-.analysis-upload button { margin-top: 0; width: auto; }
+.analysis-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; }
+.analysis-actions button { margin-top: 0; width: auto; }
+.analysis-log-list { display: grid; gap: 0.4rem; margin-bottom: 0.9rem; }
+.analysis-log {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.55rem 0.75rem;
+  cursor: pointer;
+}
+.analysis-log:hover { background: var(--panel-2); }
+.analysis-log input[type="checkbox"] { width: auto; flex: none; }
+.analysis-log-name { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.88rem; }
+.analysis-log-meta { margin-left: auto; color: var(--muted); font-size: 0.8rem; }
 .analysis-sources { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.7rem; }
 .analysis-source-chip {
   border: 1px solid var(--line);
@@ -490,21 +503,12 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
   resize: vertical;
 }
 .analysis-ask button { margin-top: 0; width: auto; justify-self: start; }
-.analysis-suggestions, .analysis-followups {
+.analysis-followups {
   display: flex;
   gap: 0.4rem;
   flex-wrap: wrap;
   align-items: center;
   margin-top: 0.7rem;
-}
-.analysis-suggest-label { color: var(--muted); font-size: 0.85rem; }
-.analysis-suggest {
-  margin-top: 0;
-  width: auto;
-  font-size: 0.82rem;
-  padding: 0.35rem 0.7rem;
-  border-radius: 999px;
-  text-align: left;
 }
 .analysis-answer p { margin: 0.4rem 0; }
 .analysis-answer ul { margin: 0.4rem 0; padding-left: 1.2rem; }
