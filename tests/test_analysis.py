@@ -129,7 +129,7 @@ def _log_repo(monkeypatch, tmp_path, games: int = 2) -> str:
     subprocess.run(["git", "clone", "-q", str(remote), str(work)], check=True)
     subprocess.run(["git", "-C", str(work), "config", "user.name", "t"], check=True)
     subprocess.run(["git", "-C", str(work), "config", "user.email", "t@e"], check=True)
-    name = "meier-matcher-2026-01-01-1200.jsonl"
+    name = "meier-matcher-2026-01-01-120000.jsonl"
     text = "".join(json.dumps(rec) + "\n" for rec in _records(games))
     (work / name).write_text(text, encoding="utf-8")
     subprocess.run(["git", "-C", str(work), "add", "-A"], check=True)
@@ -156,7 +156,7 @@ def test_analysis_lists_logs_from_repo(monkeypatch, tmp_path):
     assert data["ready"] is True
     assert [e["name"] for e in data["logs"]] == [name]
     assert data["logs"][0]["games"] == 2
-    assert data["logs"][0]["label"] == "1 januari 2026, 12:00"
+    assert data["logs"][0]["label"] == "1 januari 2026, 12:00:00"
     assert data["logs"][0]["loaded"] is False
 
 

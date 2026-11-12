@@ -285,9 +285,10 @@ which a container restart wipes. Now a series can be committed and pushed to a
 **separate** log repo after every finished match.
 
 - Module: `meier/logrepo.py` (`LogRepo`, `series_filename`, `series_label`,
-  `push_enabled`). One file per series: `meier-matcher-<YYYY-MM-DD-HHMM>.jsonl`.
+  `push_enabled`). One file per series: `meier-matcher-<YYYY-MM-DD-HHMMSS>.jsonl`
+  (seconds, so two runs cannot collide and truncate each other).
   `series_label` turns the filename into a readable Swedish label
-  ("12 november 2026, 02:46") used by the analysis tab and `list_logs`.
+  ("12 november 2026, 02:46:13") used by the analysis tab and `list_logs`.
 - Log repo: `aieuren/meier-simulator-logs` (private), clone at
   `/workspace/meier-logs` — deliberately **outside** the code repo, so the two
   are not nested git repos. `MEIER_LOGS_DIR` overrides the path.

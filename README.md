@@ -174,7 +174,7 @@ minnet.
 En lång serie kan avbrytas om miljön startar om. Kryssa därför i **Checka in
 loggen till GitHub efter varje match** innan du startar serien. Då skrivs
 protokollet i en separat klon av ett loggrepo och checkas in (commit + push)
-efter varje färdig match. Filen heter `meier-matcher-ÅÅÅÅ-MM-DD-TTMM.jsonl`, så
+efter varje färdig match. Filen heter `meier-matcher-ÅÅÅÅ-MM-DD-TTMMSS.jsonl`, så
 varje serie blir en egen fil med datum och klockslag. Även om servern dör mitt i
 serien finns de färdiga matcherna kvar på GitHub.
 

@@ -63,12 +63,13 @@ def push_enabled() -> bool:
 
 
 def series_filename(now: datetime | None = None) -> str:
-    """Filnamn för en serie: meier-matcher-ÅÅÅÅ-MM-DD-TTMM.jsonl."""
-    stamp = (now or datetime.now()).strftime("%Y-%m-%d-%H%M")
+    """Filnamn för en serie: meier-matcher-ÅÅÅÅ-MM-DD-TTMMSS.jsonl."""
+    stamp = (now or datetime.now()).strftime("%Y-%m-%d-%H%M%S")
     return f"meier-matcher-{stamp}.jsonl"
 
 
-_SERIES_STAMP = "%Y-%m-%d-%H%M"
+_SERIES_STAMP = "%Y-%m-%d-%H%M%S"
+_SERIES_STAMP_LEGACY = "%Y-%m-%d-%H%M"
 _SERIES_PREFIX = "meier-matcher-"
 
 #: Svenska månadsnamn för läsbara etiketter.
@@ -78,26 +79,42 @@ _MONTHS = (
 )
 
 
+def _parse_stamp(stamp: str) -> tuple[datetime, bool] | None:
+    """Tidpunkt och om namnet har sekunder, ur en tidsstämpel."""
+    for fmt, has_seconds in ((_SERIES_STAMP_LEGACY, False), (_SERIES_STAMP, True)):
+        try:
+            return datetime.strptime(stamp, fmt), has_seconds
+        except ValueError:
+            continue
+    return None
+
+
 def parse_series_time(name: str) -> datetime | None:
-    """Tidpunkten ur ett seriefilnamn, eller None om namnet inte matchar."""
+    """Tidpunkten ur ett seriefilnamn, eller None om namnet inte matchar.
+
+    Accepterar även det äldre formatet utan sekunder, så att loggar från
+    tidigare körningar får rätt etikett.
+    """
     if not name.startswith(_SERIES_PREFIX) or not name.endswith(".jsonl"):
         return None
-    stamp = name[len(_SERIES_PREFIX):-len(".jsonl")]
-    try:
-        return datetime.strptime(stamp, _SERIES_STAMP)
-    except ValueError:
-        return None
+    parsed = _parse_stamp(name[len(_SERIES_PREFIX):-len(".jsonl")])
+    return parsed[0] if parsed else None
 
 
 def series_label(name: str) -> str:
-    """Läsbar etikett ur filnamnet: "12 november 2026, 02:46".
+    """Läsbar etikett ur filnamnet: "12 november 2026, 02:46:13".
 
-    Faller tillbaka på själva filnamnet om det inte går att tolka.
+    Äldre namn utan sekunder visar bara timme och minut. Faller tillbaka på
+    själva filnamnet om det inte går att tolka.
     """
-    when = parse_series_time(name)
-    if when is None:
+    if not name.startswith(_SERIES_PREFIX) or not name.endswith(".jsonl"):
         return name
-    return f"{when.day} {_MONTHS[when.month - 1]} {when.year}, {when:%H:%M}"
+    parsed = _parse_stamp(name[len(_SERIES_PREFIX):-len(".jsonl")])
+    if parsed is None:
+        return name
+    when, has_seconds = parsed
+    clock = f"{when:%H:%M:%S}" if has_seconds else f"{when:%H:%M}"
+    return f"{when.day} {_MONTHS[when.month - 1]} {when.year}, {clock}"
 
 
 class LogRepo:
