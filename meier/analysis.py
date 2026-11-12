@@ -170,7 +170,7 @@ def render_digest_text(digest: dict[str, Any]) -> str:
 
 
 _SYSTEM_PROMPT = """\
-Du är dataanalytiker för tärningsspelet Mejer (bluffspel med två tärningar). Du
+Du är dataanalytiker för tärningsspelet Meier (bluffspel med två tärningar). Du
 får en sammanställning av spelade matcher och en fråga om materialet.
 
 Svara ALLTID med ett JSON-objekt och inget annat:

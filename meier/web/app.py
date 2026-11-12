@@ -1,4 +1,4 @@
-"""FastAPI-webbapp för Mejer-agenterna.
+"""FastAPI-webbapp för Meier-agenterna.
 
 Webbappen låter dig skriva in tärningsutfallet (två tärningar) och få
 spelarens svar från en LLM-baserad agent. Du kan välja roll och ange ett
@@ -20,17 +20,17 @@ from pydantic import BaseModel, Field
 from .. import rules
 from ..agents.player import ROLES, get_role
 from ..llm import LLMClient, LLMError
-from ..agents.player import MejerPlayerAgent
+from ..agents.player import MeierPlayerAgent
 from ..match import GameRecord, read_jsonl, run_matches, summarize
 from ..session import Session
 from .. import analysis, logrepo
 
 STATIC_DIR = Path(__file__).parent / "static"
 
-app = FastAPI(title="Mejer-agenten", version="1.2.0")
+app = FastAPI(title="Meier-agenten", version="1.2.0")
 
 # En agent per roll, skapade på begäran så att LLM-klienten återanvänds.
-_agents: dict[str, MejerPlayerAgent] = {}
+_agents: dict[str, MeierPlayerAgent] = {}
 
 # Den aktiva interaktiva sessionen (en åt gången).
 _session: Session | None = None
@@ -38,7 +38,7 @@ _session: Session | None = None
 # Senaste batchkörningen av matcher (för nedladdning och statistik).
 # Skrivs normalt i loggrepet; faller tillbaka på /tmp om loggrepet inte är
 # konfigurerat.
-_FALLBACK_MATCH_FILE = Path("/tmp/mejer_matches.jsonl")
+_FALLBACK_MATCH_FILE = Path("/tmp/meier_matches.jsonl")
 _current_match_file: Path = _FALLBACK_MATCH_FILE
 
 
@@ -46,9 +46,9 @@ def _match_file() -> Path:
     return _current_match_file
 
 
-def _get_agent(role_key: str) -> MejerPlayerAgent:
+def _get_agent(role_key: str) -> MeierPlayerAgent:
     if role_key not in _agents:
-        _agents[role_key] = MejerPlayerAgent(role=get_role(role_key), llm=LLMClient())
+        _agents[role_key] = MeierPlayerAgent(role=get_role(role_key), llm=LLMClient())
     return _agents[role_key]
 
 
@@ -142,7 +142,7 @@ def decide(req: DecideRequest) -> dict:
         # Vad som händer vid en syn beror på de dolda tärningarna; visa regeln.
         result["note"] = (
             "Vid syn: visar tärningarna lägre än budet förlorar budgivaren, "
-            "annars förlorar den som synar. Mejer kostar dubbelt."
+            "annars förlorar den som synar. Meier kostar dubbelt."
         )
     return result
 
@@ -352,7 +352,7 @@ class _MatchJob:
     def _check_in(self, repo: logrepo.LogRepo, rec: GameRecord) -> None:
         """Commit + push efter en färdig match. Får aldrig fälla körningen."""
         winner = rec.winner_role or rec.winner
-        msg = f"Mejer: match {self.done}/{self.count} klar (seed {rec.seed}, vinnare {winner})"
+        msg = f"Meier: match {self.done}/{self.count} klar (seed {rec.seed}, vinnare {winner})"
         status = repo.commit_and_push(self.file, msg)
         with self.lock:
             self.push_status = status
@@ -531,7 +531,7 @@ def analysis_export() -> PlainTextResponse:
     return PlainTextResponse(
         _store.to_jsonl() + "\n",
         media_type="application/x-ndjson",
-        headers={"Content-Disposition": 'attachment; filename="mejer-analys.jsonl"'},
+        headers={"Content-Disposition": 'attachment; filename="meier-analys.jsonl"'},
     )
 
 

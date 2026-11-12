@@ -1,4 +1,4 @@
-"""Interaktiv spelsession för Mejer – ett fullt flöde fram till en syn.
+"""Interaktiv spelsession för Meier – ett fullt flöde fram till en syn.
 
 Flera oberoende agenter spelar mot varandra, steg för steg. Slumpen avgör
 ordningen på spelarna och vem som börjar. Varje svar sparas i en logg med
@@ -11,10 +11,10 @@ Flödet följer reglerna:
 2. Nästa spelare väljer **Slå** (skakar bägaren på nytt och säger ett högre bud),
    **Syna** (lyfter locket) eller **Skicka vidare** (samma bud).
 3. När bägaren kommer ett helt varv tillbaka till budgivaren måste denne höja.
-   Är budet Mejer får spelaren i stället slå om och börja en ny runda.
+   Är budet Meier får spelaren i stället slå om och börja en ny runda.
 4. Vid en syn lyfts locket: visar tärningarna lägre än budet förlorar den
    spelare som ansvarar för budet (den som sa det senast, eller skickade vidare
-   och därmed tog över ansvaret) ett liv, annars den som synade. Mejer kostar
+   och därmed tog över ansvaret) ett liv, annars den som synade. Meier kostar
    dubbelt. Den som förlorar livet loggas som en egen rad.
 
 Sessionen är grindad: varje steg (ett tärningsslag, en höjning eller ett svar)
@@ -29,7 +29,7 @@ import random
 from dataclasses import dataclass, field, replace
 
 from . import rules
-from .agents.player import MejerPlayerAgent
+from .agents.player import MeierPlayerAgent
 
 
 @dataclass
@@ -151,9 +151,9 @@ class CallResult:
 
 @dataclass
 class Session:
-    """En pågående interaktiv Mejer-session med flera agenter."""
+    """En pågående interaktiv Meier-session med flera agenter."""
 
-    players: list[MejerPlayerAgent]
+    players: list[MeierPlayerAgent]
     order: list[int] = field(default_factory=list)
     round: int = 1
     lives: list[int] = field(default_factory=list)
@@ -173,13 +173,13 @@ class Session:
     @classmethod
     def new(
         cls,
-        players: list[MejerPlayerAgent],
+        players: list[MeierPlayerAgent],
         *,
         seed: int | None = None,
         lives: int = 3,
     ) -> "Session":
         if len(players) < 2:
-            raise ValueError("En Mejer-session kräver minst två spelare")
+            raise ValueError("En Meier-session kräver minst två spelare")
         rng = random.Random(seed)
         # Slumpen avgör ordningen på spelarna (och därmed vem som börjar).
         order = list(range(len(players)))
@@ -195,7 +195,7 @@ class Session:
 
     # -- Hjälpare -----------------------------------------------------------
     @property
-    def current_player(self) -> MejerPlayerAgent:
+    def current_player(self) -> MeierPlayerAgent:
         return self.players[self.actor]
 
     def name_of(self, idx: int) -> str:
@@ -359,7 +359,7 @@ class Session:
         """Kör flödet fram till rundans slut.
 
         En runda tar slut när någon synar (någon förlorar ett liv) eller när
-        budet Mejer går ett helt varv tillbaka och budgivaren slår om. Båda
+        budet Meier går ett helt varv tillbaka och budgivaren slår om. Båda
         fallen startar en ny runda, så vi kör tills rundnumret ändras – eller
         tills spelet tar slut.
         """
@@ -478,7 +478,7 @@ class Session:
         """Se till att ett bud som står kvar är strikt högre än det förra.
 
         Spelaragenten korrigerar redan ett olagligt bud (se
-        ``MejerPlayerAgent._coerce_bid``), men budet som *står* får aldrig vara
+        ``MeierPlayerAgent._coerce_bid``), men budet som *står* får aldrig vara
         lägre än det förra. Minsta lagliga höjning tar över i så fall, och
         ``corrected`` markeras så att loggen visar att budet rättades.
         """
@@ -486,7 +486,7 @@ class Session:
             return ann
         higher = rules.higher_options(previous_bid)
         if not higher:
-            # Ingen höjning finns (budet är Mejer) – kan inte korrigeras här.
+            # Ingen höjning finns (budet är Meier) – kan inte korrigeras här.
             return ann
         return replace(ann, bid=higher[-1], truth=False, corrected=True)
 
@@ -494,8 +494,8 @@ class Session:
         """Efter ett bud: gå vidare till nästa spelare – eller hela varvet runt."""
         nxt = self._next_actor(actor)
         if nxt == self.bidder:
-            if rules.is_mejer(self.pending_bid):
-                # Budet är Mejer – budgivaren slår om och börjar en ny runda.
+            if rules.is_meier(self.pending_bid):
+                # Budet är Meier – budgivaren slår om och börjar en ny runda.
                 starter = self.bidder
                 self.round += 1
                 self._prepare_round(starter=starter)
@@ -505,7 +505,7 @@ class Session:
             self._prepare_action(actor=nxt)
 
     # -- Steg 4: synen -----------------------------------------------------
-    def _resolve_call(self, caller_agent: MejerPlayerAgent, decision=None) -> LogEntry:
+    def _resolve_call(self, caller_agent: MeierPlayerAgent, decision=None) -> LogEntry:
         bid = self.pending_bid
         dice = self.pending_dice
         assert bid is not None and dice is not None
@@ -588,7 +588,7 @@ class Session:
     # -- Hjälpare för loggposter -------------------------------------------
     def _log_entry(
         self,
-        player: MejerPlayerAgent,
+        player: MeierPlayerAgent,
         dice: tuple[int, int],
         ann,
         *,

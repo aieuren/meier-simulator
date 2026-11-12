@@ -2,10 +2,10 @@
 
 import pytest
 
-from mejer import rules
-from mejer.agents.base import Agent, Role
-from mejer.agents.player import ActionDecision, Announcement
-from mejer.game import Game
+from meier import rules
+from meier.agents.base import Agent, Role
+from meier.agents.player import ActionDecision, Announcement
+from meier.game import Game
 
 
 class ScriptedAgent(Agent):
@@ -23,7 +23,7 @@ class ScriptedAgent(Agent):
         shown = rules.read_dice(*dice)
         if previous_bid is not None:
             # Tvingad höjning: välj nästa högre bud.
-            bid = rules.next_higher(previous_bid) or rules.MEJER
+            bid = rules.next_higher(previous_bid) or rules.MEIER
         else:
             bid = self._announcements.pop(0) if self._announcements else shown
         return Announcement(
@@ -63,8 +63,8 @@ def test_game_call_when_shown_higher_loses_caller():
     assert game.players[1].lives == 2  # B förlorade ett liv
 
 
-def test_game_mejer_costs_double():
-    # A säger 21 (Mejer), B synar. Tärningarna visar 31 -> A förlorar två liv.
+def test_game_meier_costs_double():
+    # A säger 21 (Meier), B synar. Tärningarna visar 31 -> A förlorar två liv.
     a = ScriptedAgent("A", [21], [])
     b = ScriptedAgent("B", [11], [("syna", None)])
     game = Game.new([a, b], seed=0)
@@ -109,12 +109,12 @@ def test_game_terminates_with_passive_agents():
     assert winner is not None
 
 
-def test_mejer_full_loop_triggers_reroll():
-    # A säger Mejer (21), B skickar vidare -> bägaren tillbaka, A slår om.
+def test_meier_full_loop_triggers_reroll():
+    # A säger Meier (21), B skickar vidare -> bägaren tillbaka, A slår om.
     a = ScriptedAgent("A", [21], [])
     b = ScriptedAgent("B", [11], [("skicka", None), ("syna", None)])
     game = Game.new([a, b], seed=0)
-    game.roll = lambda: (2, 1)  # -> 21 (Mejer)
+    game.roll = lambda: (2, 1)  # -> 21 (Meier)
     game.play()
     log = "\n".join(game.log)
-    assert "Mejer" in log and "slår om" in log
+    assert "Meier" in log and "slår om" in log

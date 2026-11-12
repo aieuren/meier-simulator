@@ -397,7 +397,7 @@ function explainCall(result) {
     return `Tärningarna visade exakt ${bidName} – alltså förlorar den som synade.`;
   }
   if (rankIndex(shown) < rankIndex(bid)) {
-    const why = shown === 21 ? "Mejer är högst" : isPair(shown) ? `${shownName} är ett par` : `${shownName} är högre`;
+    const why = shown === 21 ? "Meier är högst" : isPair(shown) ? `${shownName} är ett par` : `${shownName} är högre`;
     return `${why} och slår budet ${bidName} – alltså förlorar den som synade.`;
   }
   return `${shownName} är lägre än budet ${bidName} – alltså förlorar budgivaren.`;
@@ -424,7 +424,7 @@ function callResultBlock(result) {
     <div class="call-why">${explainCall(result)}</div>
     ${why}
     <div class="call-loser"><strong>${result.loser}</strong> förlorar
-      ${result.lives} liv${result.lives === 2 ? " (Mejer kostar dubbelt)" : ""}.</div>
+      ${result.lives} liv${result.lives === 2 ? " (Meier kostar dubbelt)" : ""}.</div>
   `;
   return box;
 }
@@ -503,7 +503,7 @@ function renderLog(entries, result) {
     if (e.kind === "life") {
       row.className = "log-row is-life";
       const lost = e.lives_lost || 1;
-      const double = lost === 2 ? " (Mejer kostar dubbelt)" : "";
+      const double = lost === 2 ? " (Meier kostar dubbelt)" : "";
       row.innerHTML = `
         <div class="log-head">
           <span class="log-action">Liv förlorat</span>
@@ -789,7 +789,7 @@ async function setupLogRepo() {
       box.disabled = true;
       box.checked = false;
       hint.textContent = data.ready
-        ? "Automatisk incheckning är avstängd på servern (MEJER_LOGS_PUSH=0)."
+        ? "Automatisk incheckning är avstängd på servern (MEIER_LOGS_PUSH=0)."
         : "Incheckning är inte konfigurerad på servern. Loggen sparas lokalt tills vidare.";
     }
   } catch (e) {

@@ -2,9 +2,9 @@
 
 import json
 
-from mejer import match, rules
-from mejer.agents.base import Role
-from mejer.agents.player import MejerPlayerAgent
+from meier import match, rules
+from meier.agents.base import Role
+from meier.agents.player import MeierPlayerAgent
 
 
 class ScriptedLLM:
@@ -43,7 +43,7 @@ def make_agents(role_keys):
     agents = []
     for key in role_keys:
         role = Role(key=key, name=f"Spelare-{key}", description="test", style="spela")
-        agents.append(MejerPlayerAgent(role=role, llm=ScriptedLLM(bids=[31], actions=["syna"])))
+        agents.append(MeierPlayerAgent(role=role, llm=ScriptedLLM(bids=[31], actions=["syna"])))
     return agents
 
 

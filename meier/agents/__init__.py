@@ -1,14 +1,14 @@
-"""Agenter för Mejer."""
+"""Agenter för Meier."""
 
 from .base import Agent, Role
-from .player import ROLES, ActionDecision, Announcement, MejerPlayerAgent, get_role
+from .player import ROLES, ActionDecision, Announcement, MeierPlayerAgent, get_role
 
 __all__ = [
     "Agent",
     "Role",
     "ROLES",
     "get_role",
-    "MejerPlayerAgent",
+    "MeierPlayerAgent",
     "Announcement",
     "ActionDecision",
 ]

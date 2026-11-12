@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from mejer.agents.base import Role
-from mejer.agents.player import MejerPlayerAgent
-from mejer.web import app as web_app
+from meier.agents.base import Role
+from meier.agents.player import MeierPlayerAgent
+from meier.web import app as web_app
 from tests.test_session import ScriptedLLM
 
 
-def _agent(key: str) -> MejerPlayerAgent:
+def _agent(key: str) -> MeierPlayerAgent:
     role = Role(key=key, name=f"Spelare-{key}", description="test", style="spela")
-    return MejerPlayerAgent(role=role, llm=ScriptedLLM(bids=[11], actions=["syna"]))
+    return MeierPlayerAgent(role=role, llm=ScriptedLLM(bids=[11], actions=["syna"]))
 
 
 def _client(monkeypatch) -> TestClient:

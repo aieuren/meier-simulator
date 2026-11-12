@@ -1,4 +1,4 @@
-"""Batchkörning och statistik för Mejer.
+"""Batchkörning och statistik för Meier.
 
 Modulen spelar många matcher mellan LLM-baserade agenter och samlar varje
 match i ett strukturerat, JSON-serialiserbart protokoll. Protokollet är byggt
@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .agents.player import MejerPlayerAgent, get_role
+from .agents.player import MeierPlayerAgent, get_role
 from .llm import LLMClient
 from .session import LogEntry, Session
 
@@ -29,8 +29,8 @@ BID_ACTIONS = ("bud", "slå", "höja")
 DECISION_ACTIONS = ("slå", "skicka", "syna")
 
 
-def _new_agents(role_keys: Iterable[str]) -> list[MejerPlayerAgent]:
-    return [MejerPlayerAgent(role=get_role(key), llm=LLMClient()) for key in role_keys]
+def _new_agents(role_keys: Iterable[str]) -> list[MeierPlayerAgent]:
+    return [MeierPlayerAgent(role=get_role(key), llm=LLMClient()) for key in role_keys]
 
 
 def _elimination_order(log: list[LogEntry]) -> list[str]:

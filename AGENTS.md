@@ -1,25 +1,25 @@
 # AGENTS.md
 
-Repository memory for the Mejer AI-agent project.
+Repository memory for the Meier AI-agent project.
 
 ## What this project is
 
 A Python library plus FastAPI web app where independent, LLM-based AI agents
-play the Swedish dice game **Mejer**. The core deliverable: given the outcome of
+play the Swedish dice game **Meier**. The core deliverable: given the outcome of
 a two-dice roll, an agent decides how the player responds (truth, higher, or
 lower bid). Multiple agents with distinct roles can also play full games.
 
 ## Layout
 
-- `mejer/rules.py` – game rules. Single source of truth for the ranking order,
+- `meier/rules.py` – game rules. Single source of truth for the ranking order,
   bid comparison, and call resolution. Change rules here only.
-- `mejer/llm.py` – LLM client. Prefers Anthropic (Claude) via
+- `meier/llm.py` – LLM client. Prefers Anthropic (Claude) via
   `ANTHROPIC_API_KEY`; falls back to the OpenHands agent-server proxy.
   `LLMClient.last_usage` holds the token count from the last call.
   Self-heals the agent-server LLM profile (see gotcha below).
-- `mejer/game.py` – multi-agent game engine. Keeps each agent isolated; no agent
+- `meier/game.py` – multi-agent game engine. Keeps each agent isolated; no agent
   sees another's secret dice.
-- `mejer/session.py` – interactive session: full flow to a call (roll → raise
+- `meier/session.py` – interactive session: full flow to a call (roll → raise
   (new shake) / pass → forced raise → call), random player order, and the log.
   The log is built downward: each shake starts with a `kind="roll"`
   entry (the dice, pure input), then one `kind="action"` entry per answer (bid,
@@ -36,7 +36,7 @@ lower bid). Multiple agents with distinct roles can also play full games.
   `order` and `starter` so the UI can show the seating and who begins.
   `advance()` does one gated step;
   `run_to_round_end()` runs to the end of the current round (a call, or a new
-  round after Mejer), `run_to_call()` runs the whole flow to the next call, and
+  round after Meier), `run_to_call()` runs the whole flow to the next call, and
   `run_to_end()` plays the whole match to a winner.
   The web UI moves the *Ett drag* button into the log so it sits under the
   latest dice roll; the *Till slut på runda*, *Till syn* and *Hela matchen*
@@ -47,14 +47,14 @@ lower bid). Multiple agents with distinct roles can also play full games.
   *holds* the bid — the last player to say or pass the bid — not necessarily the
   one who first set it. `Session.holder` tracks this and is updated on every bid,
   blind shake, forced raise, and pass. The next round starts with the active
-  player *before* the loser in turn order (`_previous_active`). `mejer/game.py`
+  player *before* the loser in turn order (`_previous_active`). `meier/game.py`
   keeps the same `holder` logic in its text log.
-- `mejer/agents/base.py` – `Agent`/`Role` base classes.
-- `mejer/agents/player.py` – `MejerPlayerAgent` and the role registry. The agent
+- `meier/agents/base.py` – `Agent`/`Role` base classes.
+- `meier/agents/player.py` – `MeierPlayerAgent` and the role registry. The agent
   is the source of truth for legality: `_coerce_bid` and `_coerce_blind_bid`
   keep every bid valid and strictly higher, and `Session._enforce_bid` is the
   engine's backstop. The tests guard the rules.
-- `mejer/web/app.py` + `mejer/web/static/` – web UI and JSON API. The UI has
+- `meier/web/app.py` + `meier/web/static/` – web UI and JSON API. The UI has
   four tabs: *Spelarna* (the four player cards with name, description, and
   style), *Enskild spelare* (one player answers a roll),
   *Fyra spelare* (the interactive session), and *Matchserie* (run a series of
@@ -72,7 +72,7 @@ lower bid). Multiple agents with distinct roles can also play full games.
   `check_in` set, each finished match is committed and pushed to the log repo
   (see below); the outcome lands in the status field `push_status`. A push
   failure never fails the run.
-- `mejer/match.py` – batch play of many full matches between the roles, for
+- `meier/match.py` – batch play of many full matches between the roles, for
   strategy analysis. `play_match` plays one match to the end via
   `Session.play_to_end()` and returns a `GameRecord`; `run_matches` yields a
   series (optional sequential seeds, and `workers>1` plays matches in parallel
@@ -83,9 +83,9 @@ lower bid). Multiple agents with distinct roles can also play full games.
   (`accepted_bid`, `proposed`, `corrected`, `blind`, `lives_lost`, `lives_left`,
   `actor_lives`, `active_players`, `caller_loses`). Tests swap the module-level
   `_new_agents` factory for scripted agents.
-- `mejer/cli.py` – command line entry points (`announce`, `decide`, `play`,
+- `meier/cli.py` – command line entry points (`announce`, `decide`, `play`,
   `session`, `match`, `summarize`).
-- `mejer/analysis.py` – analysis of collected match protocols. `build_digest`
+- `meier/analysis.py` – analysis of collected match protocols. `build_digest`
   turns a list of `GameRecord.to_dict()` records into a compact summary
   (per-role stats from `summarize`, plus action/bid/outcome distributions and a
   per-match series) so it fits in the model context — the full event logs do
@@ -100,9 +100,9 @@ lower bid). Multiple agents with distinct roles can also play full games.
   selected names (`LogRepo.log_path` rejects anything outside the clone).
 - `tests/` – unit tests. No real LLM calls; `FakeLLM`/`ScriptedAgent` are used.
 
-## Mejer ranking is non-numeric (gotcha)
+## Meier ranking is non-numeric (gotcha)
 
-Higher is *not* the larger number. The order is `21` (Mejer, highest), then
+Higher is *not* the larger number. The order is `21` (Meier, highest), then
 `11, 22, 33, 44, 55, 66`, then `65, 64, …` down to `31` (lowest). So `33` is
 higher than `44`, and `55` is higher than `66`. Always compare with
 `rules.is_higher` / `rules.compare` — never with `<`/`>` on the raw value.
@@ -124,7 +124,7 @@ that the dice are **re-rolled** — not just a higher number said over the old
 dice. The bidder may then look at the new dice or bid blind; both are allowed,
 just like any other bid. So `Session._resolve_raise` and `Game._play_round`
 roll new dice, log a fresh `kind="roll"` entry, and call
-`MejerPlayerAgent.announce_forced` (which asks the model "look or blind?" via
+`MeierPlayerAgent.announce_forced` (which asks the model "look or blind?" via
 `_forced_choice_context`, then delegates to `announce` or `announce_blind`).
 `pending_dice` must be updated to the new roll, otherwise a later syna would be
 judged against the stale dice. The **holder must also become the bidder** in
@@ -168,7 +168,7 @@ a container restart wipes them. Then every call fails with
 `404 {"detail":"Profile '<name>' not found"}`, and the web app looks dead.
 
 `LLMClient` self-heals: on that 404 it recreates the profile and retries once.
-The profile points at a concrete model (`MEJER_PROFILE_MODEL`, default
+The profile points at a concrete model (`MEIER_PROFILE_MODEL`, default
 `openhands/deepseek-v4.1-flash`). Note the model-name forms:
 
 - `openhands_Default` – a *profile* name; must exist in the agent server.
@@ -191,16 +191,16 @@ land in `~/.local/bin` (not always on PATH).
 
 Fix: run `./run.sh`. It checks imports, installs from `requirements.txt` if
 anything is missing, then starts the server. Use `./run.sh --background` to
-detach (log at `/tmp/mejer_web.log`) and `./run.sh --check` to test only.
+detach (log at `/tmp/meier_web.log`) and `./run.sh --check` to test only.
 It also refuses to double-start if `/api/health` already answers on the port.
 
 Manual fallback: `pip install -r requirements.txt`, then
-`python3 -m uvicorn mejer.web.app:app --host 0.0.0.0 --port 12000`.
+`python3 -m uvicorn meier.web.app:app --host 0.0.0.0 --port 12000`.
 
 ## The engine is the source of truth
 
 Legality lives in the engine and the player agent, not in a separate judge:
-`MejerPlayerAgent._coerce_bid` / `_coerce_blind_bid` keep every bid valid and
+`MeierPlayerAgent._coerce_bid` / `_coerce_blind_bid` keep every bid valid and
 strictly higher, and `Session._enforce_bid` is the engine's backstop for the bid
 that actually stands. The tests in `tests/` guard the rules. There is no referee
 agent — do not reintroduce a deterministic check as a "judge".
@@ -210,16 +210,16 @@ agent — do not reintroduce a deterministic check as a "judge".
 ```bash
 pip install -r requirements.txt
 python -m pytest tests/ -q                     # run tests (fast, no network)
-python -m uvicorn mejer.web.app:app --port 12000
-python -m mejer.cli announce 2 5 --role rackar
-python -m mejer.cli play rackar kalkyl trygg
+python -m uvicorn meier.web.app:app --port 12000
+python -m meier.cli announce 2 5 --role rackar
+python -m meier.cli play rackar kalkyl trygg
 ```
 
 ## Conventions
 
 - Code comments and docstrings are in Swedish, matching the domain. Keep them.
 - The 21-outcome ranking is fixed: 21, 11, 22, 33, 44, 55, 66, 65, 64, 63, 62,
-  61, 54, 53, 52, 51, 43, 42, 41, 32, 31. Mejer (21) is highest and costs double.
+  61, 54, 53, 52, 51, 43, 42, 41, 32, 31. Meier (21) is highest and costs double.
 - Agents must always respond with a JSON object; parsing tolerates code fences
   and surrounding text (`llm.parse_json_object`).
 - The engine coerces illegal model output back to legal moves (e.g. forces a
@@ -252,7 +252,11 @@ python -m mejer.cli play rackar kalkyl trygg
 - The analysis tab keeps loaded protocols **in memory** (`web.app._store`),
   so they are lost on restart. Tests clear the store to stay isolated.
 - Git remote: `https://github.com/aieuren/mejer-simulator.git` (branch `main`).
-  The repo was renamed from `majer-simulator`; GitHub redirects the old name.
+  The game was renamed Mejer → **Meier** everywhere in the code, but the GitHub
+  repo still carries the old name: renaming it needs `administration:write`,
+  which `$GITHUB_PUSH_TOKEN` does not have (it has `push`/`admin` on the repo
+  itself but the rename endpoint returned 403). Rename it by hand in the GitHub
+  UI to `meier-simulator`; the log repo is already `meier-simulator-logs`.
   `git push` needs auth: a repo-local `credential.helper` reads
   `$GITHUB_PUSH_TOKEN` (not stored on disk), since `$GITHUB_TOKEN` lacks write
   access to this repo. The variable is only exported when its name appears in
@@ -268,30 +272,30 @@ python -m mejer.cli play rackar kalkyl trygg
 
 ## Match logs are checked into a separate GitHub repo
 
-Long series used to be lost: the protocol was written to `/tmp/mejer_matches.jsonl`,
+Long series used to be lost: the protocol was written to `/tmp/meier_matches.jsonl`,
 which a container restart wipes. Now a series can be committed and pushed to a
 **separate** log repo after every finished match.
 
-- Module: `mejer/logrepo.py` (`LogRepo`, `series_filename`, `series_label`,
-  `push_enabled`). One file per series: `mejer-matcher-<YYYY-MM-DD-HHMM>.jsonl`.
+- Module: `meier/logrepo.py` (`LogRepo`, `series_filename`, `series_label`,
+  `push_enabled`). One file per series: `meier-matcher-<YYYY-MM-DD-HHMM>.jsonl`.
   `series_label` turns the filename into a readable Swedish label
   ("12 november 2026, 02:46") used by the analysis tab and `list_logs`.
 - Log repo: `aieuren/meier-simulator-logs` (private), clone at
   `/workspace/meier-logs` — deliberately **outside** the code repo, so the two
-  are not nested git repos. `MEJER_LOGS_DIR` overrides the path.
-- Token: `/workspace/mejer-secrets/logs.token` (mode 600), read by a git
+  are not nested git repos. `MEIER_LOGS_DIR` overrides the path.
+- Token: `/workspace/meier-secrets/logs.token` (mode 600), read by a git
   credential-helper passed via `-c`, so the value never lands on the command
   line (it would otherwise show up in `ps`). Fine-grained PAT with only
-  Contents: Read and write on the log repo. `MEJER_LOGS_PUSH=0` disables push.
+  Contents: Read and write on the log repo. `MEIER_LOGS_PUSH=0` disables push.
 - Wire-up: `web/app.py` `_MatchJob(check_in=...)`. Each record is appended and
   then `commit_and_push` runs; `push_status` reports the outcome.
   A push failure is caught and returned as a string — it must never kill a run.
-  When no token/clone is available the log falls back to `/tmp/mejer_matches.jsonl`.
+  When no token/clone is available the log falls back to `/tmp/meier_matches.jsonl`.
 - `_current_match_file` (module global) holds the file for the latest series;
   `/api/matches/download|summary` read it.
 - Gotcha: `git -c key=value` must be passed as **two** argv items before the
-  subcommand. `["-c", "user.name=Mejer Bot"]` works; `["-cuser.name=Mejer Bot"]`
+  subcommand. `["-c", "user.name=Meier Bot"]` works; `["-cuser.name=Meier Bot"]`
   fails with "unknown option".
-- Tests use a local bare repo via `MEJER_LOGS_REMOTE_URL` — no network, no real
+- Tests use a local bare repo via `MEIER_LOGS_REMOTE_URL` — no network, no real
   token. See `tests/test_logrepo.py` and the check-in tests in
   `tests/test_web_matches.py`.

@@ -8,11 +8,11 @@ Token skickas till git via en credential-helper som läser den från en fil,
 så att den aldrig hamnar på kommandoraden (och därmed inte i processlistan).
 
 Miljövariabler:
-    MEJER_LOGS_DIR         katalog för klonen (standard /workspace/meier-logs)
-    MEJER_LOGS_REPO        GitHub-repo (standard aieuren/meier-simulator-logs)
-    MEJER_LOGS_TOKEN_FILE  fil med åtkomsttoken
-                           (standard /workspace/mejer-secrets/logs.token)
-    MEJER_LOGS_PUSH        "0" stänger av automatisk push
+    MEIER_LOGS_DIR         katalog för klonen (standard /workspace/meier-logs)
+    MEIER_LOGS_REPO        GitHub-repo (standard aieuren/meier-simulator-logs)
+    MEIER_LOGS_TOKEN_FILE  fil med åtkomsttoken
+                           (standard /workspace/meier-secrets/logs.token)
+    MEIER_LOGS_PUSH        "0" stänger av automatisk push
 """
 
 from __future__ import annotations
@@ -24,9 +24,9 @@ from pathlib import Path
 
 DEFAULT_DIR = "/workspace/meier-logs"
 DEFAULT_REPO = "aieuren/meier-simulator-logs"
-DEFAULT_TOKEN_FILE = "/workspace/mejer-secrets/logs.token"
-COMMIT_NAME = "Mejer Bot"
-COMMIT_EMAIL = "mejer-bot@users.noreply.github.com"
+DEFAULT_TOKEN_FILE = "/workspace/meier-secrets/logs.token"
+COMMIT_NAME = "Meier Bot"
+COMMIT_EMAIL = "meier-bot@users.noreply.github.com"
 
 
 class LogRepoError(RuntimeError):
@@ -38,38 +38,38 @@ def _env(name: str, default: str = "") -> str:
 
 
 def logs_dir() -> Path:
-    return Path(_env("MEJER_LOGS_DIR", DEFAULT_DIR))
+    return Path(_env("MEIER_LOGS_DIR", DEFAULT_DIR))
 
 
 def logs_repo() -> str:
-    return _env("MEJER_LOGS_REPO", DEFAULT_REPO)
+    return _env("MEIER_LOGS_REPO", DEFAULT_REPO)
 
 
 def remote_url() -> str:
-    """Klonings-URL. Kan överstyras helt med MEJER_LOGS_REMOTE_URL."""
-    override = _env("MEJER_LOGS_REMOTE_URL")
+    """Klonings-URL. Kan överstyras helt med MEIER_LOGS_REMOTE_URL."""
+    override = _env("MEIER_LOGS_REMOTE_URL")
     if override:
         return override
     return f"https://github.com/{logs_repo()}.git"
 
 
 def token_file() -> Path:
-    return Path(_env("MEJER_LOGS_TOKEN_FILE", DEFAULT_TOKEN_FILE))
+    return Path(_env("MEIER_LOGS_TOKEN_FILE", DEFAULT_TOKEN_FILE))
 
 
 def push_enabled() -> bool:
-    """Är automatisk push påslagen? (stäng av med MEJER_LOGS_PUSH=0)"""
-    return _env("MEJER_LOGS_PUSH", "1").lower() not in ("0", "false", "no", "off")
+    """Är automatisk push påslagen? (stäng av med MEIER_LOGS_PUSH=0)"""
+    return _env("MEIER_LOGS_PUSH", "1").lower() not in ("0", "false", "no", "off")
 
 
 def series_filename(now: datetime | None = None) -> str:
-    """Filnamn för en serie: mejer-matcher-ÅÅÅÅ-MM-DD-TTMM.jsonl."""
+    """Filnamn för en serie: meier-matcher-ÅÅÅÅ-MM-DD-TTMM.jsonl."""
     stamp = (now or datetime.now()).strftime("%Y-%m-%d-%H%M")
-    return f"mejer-matcher-{stamp}.jsonl"
+    return f"meier-matcher-{stamp}.jsonl"
 
 
 _SERIES_STAMP = "%Y-%m-%d-%H%M"
-_SERIES_PREFIX = "mejer-matcher-"
+_SERIES_PREFIX = "meier-matcher-"
 
 #: Svenska månadsnamn för läsbara etiketter.
 _MONTHS = (

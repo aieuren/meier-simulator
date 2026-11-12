@@ -471,6 +471,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 .analysis-log-list { display: grid; gap: 0.4rem; margin-bottom: 0.9rem; }
 .analysis-log {
   display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 0.7rem;
   border: 1px solid var(--line);

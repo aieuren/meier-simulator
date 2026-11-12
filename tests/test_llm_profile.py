@@ -11,7 +11,7 @@ import json
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-from mejer.llm import LLMClient, LLMConfig
+from meier.llm import LLMClient, LLMConfig
 
 
 class _Handler(BaseHTTPRequestHandler):

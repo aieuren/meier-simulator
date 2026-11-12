@@ -12,8 +12,8 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from mejer import match
-from mejer.web import app as web_app
+from meier import match
+from meier.web import app as web_app
 from tests.test_match import make_agents
 
 
@@ -113,9 +113,9 @@ def test_check_in_writes_file_to_log_repo(monkeypatch, tmp_path):
     _git("init", "--bare", "-q", str(remote))
     token = tmp_path / "token"
     token.write_text("dummy\n", encoding="utf-8")
-    monkeypatch.setenv("MEJER_LOGS_DIR", str(tmp_path / "clone"))
-    monkeypatch.setenv("MEJER_LOGS_REMOTE_URL", str(remote))
-    monkeypatch.setenv("MEJER_LOGS_TOKEN_FILE", str(token))
+    monkeypatch.setenv("MEIER_LOGS_DIR", str(tmp_path / "clone"))
+    monkeypatch.setenv("MEIER_LOGS_REMOTE_URL", str(remote))
+    monkeypatch.setenv("MEIER_LOGS_TOKEN_FILE", str(token))
 
     client = _client(monkeypatch)
     client.post("/api/matches/run", json={"count": 2, "base_seed": 1, "check_in": True})
@@ -125,12 +125,12 @@ def test_check_in_writes_file_to_log_repo(monkeypatch, tmp_path):
     assert data["done"] == 2
     assert data["push_status"] and "pushat" in data["push_status"].lower()
     # Filnamnet har datum och klockslag.
-    assert data["file"].startswith("mejer-matcher-") and data["file"].endswith(".jsonl")
+    assert data["file"].startswith("meier-matcher-") and data["file"].endswith(".jsonl")
     # Filen finns i fjärren med båda matcherna.
     names = _git("--git-dir", str(remote), "ls-tree", "-r", "--name-only", "HEAD").stdout
     assert data["file"] in names
     log = _git("--git-dir", str(remote), "log", "--oneline", "HEAD").stdout
-    assert log.count("Mejer: match") == 2
+    assert log.count("Meier: match") == 2
 
 
 def test_logrepo_endpoint_reports_ready(monkeypatch, tmp_path):
@@ -138,9 +138,9 @@ def test_logrepo_endpoint_reports_ready(monkeypatch, tmp_path):
     _git("init", "--bare", "-q", str(remote))
     token = tmp_path / "token"
     token.write_text("dummy\n", encoding="utf-8")
-    monkeypatch.setenv("MEJER_LOGS_DIR", str(tmp_path / "clone"))
-    monkeypatch.setenv("MEJER_LOGS_REMOTE_URL", str(remote))
-    monkeypatch.setenv("MEJER_LOGS_TOKEN_FILE", str(token))
+    monkeypatch.setenv("MEIER_LOGS_DIR", str(tmp_path / "clone"))
+    monkeypatch.setenv("MEIER_LOGS_REMOTE_URL", str(remote))
+    monkeypatch.setenv("MEIER_LOGS_TOKEN_FILE", str(token))
     client = _client(monkeypatch)
     # Före första körningen är klonen inte gjord – inte redo.
     assert client.get("/api/matches/logrepo").json()["ready"] is False

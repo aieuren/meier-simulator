@@ -6,8 +6,8 @@ import json
 
 from fastapi.testclient import TestClient
 
-from mejer import analysis, match
-from mejer.web import app as web_app
+from meier import analysis, match
+from meier.web import app as web_app
 from tests.test_match import make_agents
 
 
@@ -114,7 +114,7 @@ def _log_repo(monkeypatch, tmp_path, games: int = 2) -> str:
     subprocess.run(["git", "clone", "-q", str(remote), str(work)], check=True)
     subprocess.run(["git", "-C", str(work), "config", "user.name", "t"], check=True)
     subprocess.run(["git", "-C", str(work), "config", "user.email", "t@e"], check=True)
-    name = "mejer-matcher-2026-01-01-1200.jsonl"
+    name = "meier-matcher-2026-01-01-1200.jsonl"
     text = "".join(json.dumps(rec) + "\n" for rec in _records(games))
     (work / name).write_text(text, encoding="utf-8")
     subprocess.run(["git", "-C", str(work), "add", "-A"], check=True)
@@ -123,11 +123,11 @@ def _log_repo(monkeypatch, tmp_path, games: int = 2) -> str:
 
     token = tmp_path / "token"
     token.write_text("dummy\n", encoding="utf-8")
-    monkeypatch.setenv("MEJER_LOGS_DIR", str(tmp_path / "clone"))
-    monkeypatch.setenv("MEJER_LOGS_REMOTE_URL", str(remote))
-    monkeypatch.setenv("MEJER_LOGS_TOKEN_FILE", str(token))
+    monkeypatch.setenv("MEIER_LOGS_DIR", str(tmp_path / "clone"))
+    monkeypatch.setenv("MEIER_LOGS_REMOTE_URL", str(remote))
+    monkeypatch.setenv("MEIER_LOGS_TOKEN_FILE", str(token))
     # Klona in i testets katalog.
-    from mejer import logrepo
+    from meier import logrepo
 
     logrepo.LogRepo().ensure_clone()
     return name
@@ -174,7 +174,7 @@ def test_analysis_load_rejects_unknown_and_empty(monkeypatch, tmp_path):
 
 
 def test_analysis_logs_without_repo(monkeypatch, tmp_path):
-    monkeypatch.setenv("MEJER_LOGS_DIR", str(tmp_path / "finns-inte"))
+    monkeypatch.setenv("MEIER_LOGS_DIR", str(tmp_path / "finns-inte"))
     client = TestClient(web_app.app)
     data = client.get("/api/analysis/logs").json()
     assert data == {"ready": False, "logs": []}

@@ -1,4 +1,4 @@
-"""Tester för Mejer-spelaragenten med en fejkad LLM.
+"""Tester för Meier-spelaragenten med en fejkad LLM.
 
 Vi testar agentens logik (tolkning av LLM-svar, regelkoercion) utan att
 anropa en riktig modell.
@@ -6,8 +6,8 @@ anropa en riktig modell.
 
 import json
 
-from mejer.agents.player import ROLES, MejerPlayerAgent, get_role
-from mejer.llm import LLMClient
+from meier.agents.player import ROLES, MeierPlayerAgent, get_role
+from meier.llm import LLMClient
 
 
 class FakeLLM(LLMClient):
@@ -25,7 +25,7 @@ class FakeLLM(LLMClient):
 
 
 def make_agent(payload, role="kalkyl"):
-    return MejerPlayerAgent(role=get_role(role), llm=FakeLLM(payload))
+    return MeierPlayerAgent(role=get_role(role), llm=FakeLLM(payload))
 
 
 def test_announce_parses_valid_bid():
@@ -53,10 +53,10 @@ def test_announce_falls_back_to_truth_on_invalid_bid():
 
 def test_announce_forces_higher_bid_when_required():
     # Modellen föreslår ett för lågt bud trots att den måste höja.
-    from mejer import rules
+    from meier import rules
 
     agent = make_agent({"bid": 41, "line": "41", "reasoning": ""})
-    ann = agent.announce((2, 1), previous_bid=52)  # tärningarna visar 21 (Mejer)
+    ann = agent.announce((2, 1), previous_bid=52)  # tärningarna visar 21 (Meier)
     assert rules.is_higher(ann.bid, 52)
 
 
@@ -69,7 +69,7 @@ def test_announce_accepts_string_bid():
 def test_system_prompt_contains_rules():
     agent = make_agent({"bid": 11})
     prompt = agent.system_prompt()
-    assert "Mejer" in prompt
+    assert "Meier" in prompt
     assert "21" in prompt
     assert agent.name in prompt
 
@@ -96,7 +96,7 @@ def test_decide_raise_gets_higher_bid():
 def test_decide_raise_with_invalid_bid_picks_higher():
     agent = make_agent({"action": "slå", "bid": 11, "line": "", "reasoning": ""})
     decision = agent.decide(52)  # måste höja över 52
-    from mejer import rules
+    from meier import rules
 
     assert decision.bid is not None
     assert rules.is_higher(decision.bid, 52)
@@ -108,8 +108,8 @@ def test_decide_unknown_action_defaults_to_skicka():
     assert decision.action == "skicka"
 
 
-def test_decide_cannot_raise_over_mejer():
-    # Budet är Mejer (högst) – går inte att slå, agenten får skicka vidare.
+def test_decide_cannot_raise_over_meier():
+    # Budet är Meier (högst) – går inte att slå, agenten får skicka vidare.
     agent = make_agent({"action": "slå", "bid": 11, "line": "", "reasoning": ""})
     decision = agent.decide(21)
     assert decision.action == "skicka"

@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from mejer import logrepo
-from mejer.logrepo import LogRepo
+from meier import logrepo
+from meier.logrepo import LogRepo
 
 
 def _git(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess:
@@ -43,17 +43,17 @@ def log_repo(tmp_path: Path):
 
 def test_series_filename_has_date_and_minute():
     name = logrepo.series_filename(datetime(2026, 11, 12, 1, 48))
-    assert name == "mejer-matcher-2026-11-12-0148.jsonl"
+    assert name == "meier-matcher-2026-11-12-0148.jsonl"
 
 
 def test_series_label_reads_date_and_time():
-    label = logrepo.series_label("mejer-matcher-2026-11-12-0148.jsonl")
+    label = logrepo.series_label("meier-matcher-2026-11-12-0148.jsonl")
     assert label == "12 november 2026, 01:48"
 
 
 def test_series_label_falls_back_to_the_name():
     assert logrepo.series_label("nagot-annat.jsonl") == "nagot-annat.jsonl"
-    assert logrepo.parse_series_time("mejer-matcher-2026-11-12-0148.jsonl") == datetime(
+    assert logrepo.parse_series_time("meier-matcher-2026-11-12-0148.jsonl") == datetime(
         2026, 11, 12, 1, 48
     )
     assert logrepo.parse_series_time("trasig.jsonl") is None
@@ -61,18 +61,18 @@ def test_series_label_falls_back_to_the_name():
 
 def test_commit_and_push_publishes_the_file(log_repo):
     repo, remote, work = log_repo
-    path = work / "mejer-matcher-2026-11-12-0148.jsonl"
+    path = work / "meier-matcher-2026-11-12-0148.jsonl"
     path.write_text('{"game": 1}\n', encoding="utf-8")
 
-    status = repo.commit_and_push(path, "Mejer: 1 match")
+    status = repo.commit_and_push(path, "Meier: 1 match")
 
     assert "pushat" in status.lower()
     # Filen ska finnas i fjärren efter push.
     names = _git("--git-dir", str(remote), "ls-tree", "-r", "--name-only", "HEAD").stdout
-    assert "mejer-matcher-2026-11-12-0148.jsonl" in names
+    assert "meier-matcher-2026-11-12-0148.jsonl" in names
     # Och en commit ska ha skapats.
     log = _git("--git-dir", str(remote), "log", "--oneline", "HEAD").stdout
-    assert "Mejer: 1 match" in log
+    assert "Meier: 1 match" in log
 
 
 def test_commit_without_changes_is_a_noop(log_repo):
@@ -88,10 +88,10 @@ def test_push_failure_is_reported_not_raised(log_repo):
     repo, remote, work = log_repo
     # Gör fjärren oåtkomlig.
     subprocess.run(["rm", "-rf", str(remote)], check=True)
-    path = work / "mejer-matcher-2026-11-12-0148.jsonl"
+    path = work / "meier-matcher-2026-11-12-0148.jsonl"
     path.write_text('{"game": 1}\n', encoding="utf-8")
 
-    status = repo.commit_and_push(path, "Mejer: 1 match")
+    status = repo.commit_and_push(path, "Meier: 1 match")
 
     # Felet rapporteras som en sträng – körningen får aldrig fällas av en push.
     assert "misslyckades" in status.lower()

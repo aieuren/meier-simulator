@@ -5,7 +5,7 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from mejer.llm import LLMClient, LLMConfig, LLMError, _Transient
+from meier.llm import LLMClient, LLMConfig, LLMError, _Transient
 
 
 def _client(max_retries=3, backoff=0.0) -> LLMClient:
@@ -71,7 +71,7 @@ def test_complete_retries_real_timeout_then_succeeds(monkeypatch):
             {"choices": [{"message": {"content": '{"bid": 52}'}}], "usage": {"total_tokens": 3}}
         )
 
-    monkeypatch.setattr("mejer.llm.httpx.post", fake_post)
+    monkeypatch.setattr("meier.llm.httpx.post", fake_post)
     client = _client(max_retries=3)
     assert client.complete("system", "user") == '{"bid": 52}'
     assert calls["n"] == 2

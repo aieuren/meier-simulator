@@ -1,7 +1,7 @@
-# Mejer – LLM-baserade AI-spelare
+# Meier – LLM-baserade AI-spelare
 
 En webapplikation och ett Python-bibliotek med **oberoende, LLM-baserade
-AI-agenter** som spelar tärningsspelet **Mejer** (också kallat Mia, Mire,
+AI-agenter** som spelar tärningsspelet **Meier** (också kallat Mia, Mire,
 Kuriki och Kunito).
 
 Fokus för första versionen: en agent som simulerar en spelare. Givet utfallet av
@@ -25,7 +25,7 @@ roller kan spela hela spel mot varandra.
   eller **Till slut på runda**. Varje svar sparas i en logg.
 - **Matchserie och statistik** – spela N matcher mellan rollerna, se vinstfrekvens,
   bluffrekvens, höjningar och synar, och ladda ner hela protokollet som JSONL.
-- **Spelmotor** – flera oberoende agenter spelar ett fullt Mejer-spel mot varandra.
+- **Spelmotor** – flera oberoende agenter spelar ett fullt Meier-spel mot varandra.
 - **Kommandoradsgränssnitt** – kör agenten, en session eller ett helt spel.
 - **Regelmotor** – fullständig poängordning, budjämförelse, syn-avgörande och
   slumpade tärningsslag.
@@ -33,18 +33,18 @@ roller kan spela hela spel mot varandra.
 ## Regler (sammanfattning)
 
 - Två tärningar läses som ett tal med den högsta tärningen först: 2 och 5 blir 52.
-- 21 kallas **Mejer** och är högst. Sedan faller ordningen ner till 31 (lägst).
+- 21 kallas **Meier** och är högst. Sedan faller ordningen ner till 31 (lägst).
 - Spelaren skakar, tittar i smyg och säger ett resultat: sant, högre eller lägre.
 - Nästa spelare kan **Slå** (säga ett högre bud), **Syna** (lyfta locket) eller
   **Skicka vidare** (samma bud).
 - Vid syn: visar tärningarna lägre än budet förlorar budgivaren ett liv. Visar de
   samma eller högre förlorar den som synade ett liv.
-- **Mejer kostar dubbelt** – om budet är Mejer, eller om tärningarna visar Mejer
+- **Meier kostar dubbelt** – om budet är Meier, eller om tärningarna visar Meier
   när någon synar, förlorar man två liv.
 - När man mist tre liv är man ute. Sist kvar vinner.
 - Kommer bägaren ett helt varv tillbaka till budgivaren måste denne höja.
   Tärningarna slås då om, och budgivaren får själv välja att titta på dem eller
-  bjuda blint. Är budet Mejer får spelaren i stället slå om och börja en ny runda.
+  bjuda blint. Är budet Meier får spelaren i stället slå om och börja en ny runda.
 
 Poängordning (högst först):
 21, 11, 22, 33, 44, 55, 66, 65, 64, 63, 62, 61, 54, 53, 52, 51, 43, 42, 41, 32, 31.
@@ -56,7 +56,7 @@ webbappen.
 
 ```bash
 ./run.sh                # startar i förgrunden (Ctrl-C stoppar)
-./run.sh --background   # startar i bakgrunden, loggar till /tmp/mejer_web.log
+./run.sh --background   # startar i bakgrunden, loggar till /tmp/meier_web.log
 ./run.sh --check        # kontrollerar bara att beroenden och port är redo
 ```
 
@@ -66,7 +66,7 @@ Manuellt, om du hellre vill:
 
 ```bash
 pip install -r requirements.txt
-python -m uvicorn mejer.web.app:app --host 0.0.0.0 --port 12000
+python -m uvicorn meier.web.app:app --host 0.0.0.0 --port 12000
 ```
 
 > **Efter en omstart av miljön:** globalt installerade paket försvinner, och
@@ -77,25 +77,25 @@ python -m uvicorn mejer.web.app:app --host 0.0.0.0 --port 12000
 
 ```bash
 # Givet tärningsslaget 2 och 5: hur svarar spelaren?
-python -m mejer.cli announce 2 5 --role rackar
+python -m meier.cli announce 2 5 --role rackar
 
 # Om spelaren slår efter ett tidigare bud (måste höja)
-python -m mejer.cli announce 2 5 --role kalkyl --previous-bid 43
+python -m meier.cli announce 2 5 --role kalkyl --previous-bid 43
 
 # Spelaren möter en motståndares bud
-python -m mejer.cli decide 43 --role trygg
+python -m meier.cli decide 43 --role trygg
 
 # Spela ett helt spel med flera oberoende agenter
-python -m mejer.cli play rackar kalkyl trygg
+python -m meier.cli play rackar kalkyl trygg
 
 # Interaktiv session med steg-grind och logg
-python -m mejer.cli session
+python -m meier.cli session
 
 # Spela många matcher och skriv ett JSONL-protokoll för analys
-python -m mejer.cli match --count 20 --out matches.jsonl --workers 3
+python -m meier.cli match --count 20 --out matches.jsonl --workers 3
 
 # Sammanfatta ett tidigare protokoll
-python -m mejer.cli summarize matches.jsonl
+python -m meier.cli summarize matches.jsonl
 ```
 
 ### Roller
@@ -123,10 +123,10 @@ I webbappen finns sektionen **"Fyra spelare spelar mot varandra"**:
      vidare**.
    - Kommer bägaren ett helt varv tillbaka till budgivaren måste denne **höja**.
      Tärningarna slås då om, och budgivaren får själv välja att titta på dem eller
-     bjuda blint. Är budet Mejer slår budgivaren i stället om och börjar en ny runda.
+     bjuda blint. Är budet Meier slår budgivaren i stället om och börjar en ny runda.
    - Vid en **syn** lyfts locket. Visar tärningarna lägre än budet förlorar
      den som ansvarar för budet ett liv (den som sa det senast, eller skickade
-     vidare och tog över ansvaret), annars den som synade. Mejer kostar dubbelt.
+     vidare och tog över ansvaret), annars den som synade. Meier kostar dubbelt.
 
 Loggen byggs **nedåt**: äldst överst, nyast nederst. Varje runda börjar med en
 rad för tärningsutfallet (indata) med tärningssymboler. Därefter följer en rad
@@ -174,7 +174,7 @@ minnet.
 En lång serie kan avbrytas om miljön startar om. Kryssa därför i **Checka in
 loggen till GitHub efter varje match** innan du startar serien. Då skrivs
 protokollet i en separat klon av ett loggrepo och checkas in (commit + push)
-efter varje färdig match. Filen heter `mejer-matcher-ÅÅÅÅ-MM-DD-TTMM.jsonl`, så
+efter varje färdig match. Filen heter `meier-matcher-ÅÅÅÅ-MM-DD-TTMM.jsonl`, så
 varje serie blir en egen fil med datum och klockslag. Även om servern dör mitt i
 serien finns de färdiga matcherna kvar på GitHub.
 
@@ -185,14 +185,14 @@ Ställ in servern med:
 
 | Variabel | Betydelse | Standard |
 |---|---|---|
-| `MEJER_LOGS_DIR` | katalog för klonen av loggrepet | `/workspace/meier-logs` |
-| `MEJER_LOGS_REPO` | loggrepet på GitHub | `aieuren/meier-simulator-logs` |
-| `MEJER_LOGS_TOKEN_FILE` | fil med åtkomsttoken | `/workspace/mejer-secrets/logs.token` |
-| `MEJER_LOGS_PUSH` | `0` stänger av automatisk push | `1` |
+| `MEIER_LOGS_DIR` | katalog för klonen av loggrepet | `/workspace/meier-logs` |
+| `MEIER_LOGS_REPO` | loggrepet på GitHub | `aieuren/meier-simulator-logs` |
+| `MEIER_LOGS_TOKEN_FILE` | fil med åtkomsttoken | `/workspace/meier-secrets/logs.token` |
+| `MEIER_LOGS_PUSH` | `0` stänger av automatisk push | `1` |
 
 Använd en fine-grained token som bara har **Contents: Read and write** på
 loggrepet. Lägg den i en fil utanför kodrepet (t.ex.
-`/workspace/mejer-secrets/logs.token`, rättigheter `600`), så att den överlever
+`/workspace/meier-secrets/logs.token`, rättigheter `600`), så att den överlever
 omstarter. Loggrepet är avsiktligt skilt från kodrepet, så att en token som
 läcker via webbappen bara kan skriva loggar – aldrig kod.
 
@@ -288,7 +288,7 @@ i en egen terminal (eller med `nohup`):
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
-python -m mejer.cli match --count 60 --workers 4 \
+python -m meier.cli match --count 60 --workers 4 \
   --out matcher.jsonl
 ```
 
@@ -311,12 +311,12 @@ Agenterna föredrar ditt **Anthropic-konto (Claude)**. Sätt nyckeln och kör:
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
-export MEJER_MODEL=claude-sonnet-4-5   # valfritt
-python -m uvicorn mejer.web.app:app --port 12000
+export MEIER_MODEL=claude-sonnet-4-5   # valfritt
+python -m uvicorn meier.web.app:app --port 12000
 ```
 
 Saknas `ANTHROPIC_API_KEY` faller klienten tillbaka på en OpenAI-liknande proxy
-(OpenHands agent-server), som används i Agent Canvas-miljön. Se `mejer/llm.py`.
+(OpenHands agent-server), som används i Agent Canvas-miljön. Se `meier/llm.py`.
 
 Miljövariabler:
 
@@ -324,9 +324,9 @@ Miljövariabler:
 |---|---|
 | `ANTHROPIC_API_KEY` | Claude-nyckel (föredras) |
 | `ANTHROPIC_BASE_URL` | Egen Anthropic-bas-URL (valfritt) |
-| `MEJER_MODEL` | Modellnamn |
-| `MEJER_BASE_URL` | Bas-URL för OpenAI-liknande proxy |
-| `MEJER_PROFILE_MODEL` | Konkret modell som profilen `openhands_<namn>` pekar på |
+| `MEIER_MODEL` | Modellnamn |
+| `MEIER_BASE_URL` | Bas-URL för OpenAI-liknande proxy |
+| `MEIER_PROFILE_MODEL` | Konkret modell som profilen `openhands_<namn>` pekar på |
 
 > **Obs (Agent Canvas):** agent-servern håller sina LLM-profiler i minnet. Startas
 > containern om försvinner de, och modellnamnet `openhands_Default` slutar
@@ -343,7 +343,7 @@ Klienten sparar tokenräkningen från senaste anropet i `LLMClient.last_usage`
   av vår egen text (våra prompter är ~1 000–1 500 tecken).
 - Att be modellen om fältet `reasoning` kostar extra **utdata-tokens**, ungefär
   200–600 fler, och mer när modellen resonerar längre.
-- Ett vanligt Mejer-svar landar därför kring **17 900 prompt + 200–700
+- Ett vanligt Meier-svar landar därför kring **17 900 prompt + 200–700
   completion ≈ 18 000–19 000 tokens totalt**.
 
 ## Tester
@@ -352,13 +352,13 @@ Klienten sparar tokenräkningen från senaste anropet i `LLMClient.last_usage`
 python -m pytest tests/ -q
 ```
 
-Testerna täcker regelmotorn (poängordning, budjämförelse, syn-avgörande, Mejer
+Testerna täcker regelmotorn (poängordning, budjämförelse, syn-avgörande, Meier
 dubbelt) och agentens logik med en fejkad LLM – inga riktiga modellanrop behövs.
 
 ## Projektstruktur
 
 ```
-mejer/
+meier/
   rules.py            Regler: poängordning, jämförelse, syn, slumpat slag
   llm.py              LLM-klient (Anthropic + OpenHands-fallback)
   game.py             Spelmotor för flera oberoende agenter
@@ -368,7 +368,7 @@ mejer/
   cli.py              Kommandoradsgränssnitt
   agents/
     base.py           Agent-grundklass och roll
-    player.py         Mejer-spelaragenten och rollerna
+    player.py         Meier-spelaragenten och rollerna
   web/
     app.py            FastAPI-app
     static/           Frontend (HTML/CSS/JS)

@@ -1,6 +1,6 @@
-"""Mejer-spelaragenten.
+"""Meier-spelaragenten.
 
-Agenten simulerar en spelare i tärningsspelet Mejer. Den centrala uppgiften är:
+Agenten simulerar en spelare i tärningsspelet Meier. Den centrala uppgiften är:
 givet utfallet av ett tärningsslag med två tärningar, bestäm hur spelaren
 svarar. Spelaren har tittat i smyg på tärningarna och ska säga ett resultat till
 nästa spelare – sanningen, ett högre eller ett lägre.
@@ -47,7 +47,7 @@ ROLES: dict[str, Role] = {
         style=(
             "Du är en kall och beräknande spelare. Du väger sannolikheter mot risker och "
             "väljer det bud som maximerar din förväntade vinst. Du bluffar bara när "
-            "sannolikheten talar för det, och du håller koll på att Mejer kostar dubbelt."
+            "sannolikheten talar för det, och du håller koll på att Meier kostar dubbelt."
         ),
     ),
     "trygg": Role(
@@ -57,7 +57,7 @@ ROLES: dict[str, Role] = {
         style=(
             "Du är en mycket försiktig spelare som helst undviker att förlora liv. Du "
             "säger hellre sanningen eller ett försiktigt lågt bud än att riskera en syn. "
-            "Du undviker Mejer och höga bud."
+            "Du undviker Meier och höga bud."
         ),
     ),
 }
@@ -134,8 +134,8 @@ class ActionDecision:
         }
 
 
-class MejerPlayerAgent(Agent):
-    """En oberoende LLM-baserad Mejer-spelare."""
+class MeierPlayerAgent(Agent):
+    """En oberoende LLM-baserad Meier-spelare."""
 
     def __init__(self, role: Role, llm: LLMClient | None = None):
         super().__init__(role=role, llm=llm or LLMClient())
@@ -144,12 +144,12 @@ class MejerPlayerAgent(Agent):
     def system_prompt(self) -> str:
         ranking = ", ".join(rules.name(v) for v in rules.RANKING)
         return (
-            f"Du spelar tärningsspelet Mejer som spelaren {self.role.name}.\n"
+            f"Du spelar tärningsspelet Meier som spelaren {self.role.name}.\n"
             f"Roll: {self.role.description}\n"
             f"Spelstil: {self.role.style}\n\n"
             "REGLER\n"
             "- Två tärningar läses som ett tal med den högsta tärningen först: 2 och 5 blir 52.\n"
-            "- 21 kallas Mejer och är högst. Sedan faller ordningen:\n"
+            "- 21 kallas Meier och är högst. Sedan faller ordningen:\n"
             f"  {ranking}.\n"
             "- Du har tittat i smyg på tärningarna och ska säga ett resultat till nästa spelare: "
             "det sanna, ett högre eller ett lägre.\n"
@@ -158,7 +158,7 @@ class MejerPlayerAgent(Agent):
             "Tärningarna slås då om, och budgivaren får själv välja att titta på dem eller bjuda blint.\n"
             "- Om någon synar och tärningarna visar lägre än det sagda förlorar budgivaren ett liv. "
             "Visar de samma eller högre förlorar den som synade ett liv.\n"
-            "- Mejer kostar dubbelt: om budet är Mejer, eller om tärningarna visar Mejer när någon synar, "
+            "- Meier kostar dubbelt: om budet är Meier, eller om tärningarna visar Meier när någon synar, "
             "förlorar man två liv.\n\n"
             "Du svarar ALLTID med ett JSON-objekt och inget annat."
         )
@@ -433,7 +433,7 @@ class MejerPlayerAgent(Agent):
         new_bid: int | None = None
         if action == "slå":
             if not higher:
-                # Budet är redan högst (Mejer) – går inte att slå.
+                # Budet är redan högst (Meier) – går inte att slå.
                 action = "skicka"
             else:
                 new_bid = self._coerce_bid(data.get("bid"), higher[-1], bid, higher)
@@ -456,7 +456,7 @@ class MejerPlayerAgent(Agent):
                 "DITT VAL",
                 "- Slå: säg ett strikt högre bud än det förra.",
                 "- Syna: lyft locket. Visar tärningarna lägre än budet förlorar den förra spelaren ett liv. "
-                "Är värdet samma eller högre förlorar du ett liv. Mejer kostar dubbelt.",
+                "Är värdet samma eller högre förlorar du ett liv. Meier kostar dubbelt.",
                 "- Skicka vidare: skicka bägaren vidare med samma bud.",
                 "",
                 f"Om du slår är giltiga bud: {', '.join(rules.name(v) for v in higher) or 'inga (budet är högst)'}.",

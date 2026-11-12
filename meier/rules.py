@@ -1,8 +1,8 @@
-"""Regler för tärningsspelet Mejer (också kallat Mia, Mire, Kuriki, Kunito).
+"""Regler för tärningsspelet Meier (också kallat Mia, Mire, Kuriki, Kunito).
 
 Två tärningar läses som ett tvåsiffrigt tal med den högsta tärningen först:
 2 och 5 blir 52. Alla 21 möjliga utfall har en fast rangordning där 21
-("Mejer") är högst och 31 är lägst.
+("Meier") är högst och 31 är lägst.
 """
 
 from __future__ import annotations
@@ -10,9 +10,9 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass
 
-# Rangordning, högst först. Index 0 är Mejer (21), index 20 är lägst (31).
+# Rangordning, högst först. Index 0 är Meier (21), index 20 är lägst (31).
 RANKING: tuple[int, ...] = (
-    21,  # Mejer – högst
+    21,  # Meier – högst
     11,
     22,
     33,
@@ -38,7 +38,7 @@ RANKING: tuple[int, ...] = (
 # value -> rangordningsindex (0 = bäst). Praktiskt för uppslag.
 _RANK_INDEX: dict[int, int] = {value: i for i, value in enumerate(RANKING)}
 
-MEJER = 21
+MEIER = 21
 
 
 def roll(rng: random.Random | None = None) -> tuple[int, int]:
@@ -73,12 +73,12 @@ def is_valid_value(value: int) -> bool:
     return value in _RANK_INDEX
 
 
-def is_mejer(value: int) -> bool:
-    return value == MEJER
+def is_meier(value: int) -> bool:
+    return value == MEIER
 
 
 def rank(value: int) -> int:
-    """Rangordningsindex för ett utfall. Lägre är bättre (0 = Mejer)."""
+    """Rangordningsindex för ett utfall. Lägre är bättre (0 = Meier)."""
     try:
         return _RANK_INDEX[value]
     except KeyError:
@@ -115,8 +115,8 @@ def higher_options(value: int) -> list[int]:
 
 def name(value: int) -> str:
     """Läsbart namn för ett utfall."""
-    if value == MEJER:
-        return "21 – Mejer"
+    if value == MEIER:
+        return "21 – Meier"
     return str(value)
 
 
@@ -150,7 +150,7 @@ def resolve_call(bid: int, shown: int) -> CallResult:
 
     - Visar tärningarna lägre än det sagda förlorar föregående spelare (budgivaren).
     - Är värdet samma eller högre förlorar den som synade.
-    - Mejer kostar dubbelt: om budet är Mejer, eller om tärningarna visar Mejer
+    - Meier kostar dubbelt: om budet är Meier, eller om tärningarna visar Meier
       när någon synar, förloras två liv i stället för ett.
     """
     if not is_valid_value(bid):
@@ -161,12 +161,12 @@ def resolve_call(bid: int, shown: int) -> CallResult:
     # Lägre visat värde än budet -> budgivaren förlorar.
     caller_loses = compare(shown, bid) >= 0
 
-    double = is_mejer(bid) or is_mejer(shown)
+    double = is_meier(bid) or is_meier(shown)
     lives = 2 if double else 1
 
     return CallResult(bid=bid, shown=shown, caller_loses=caller_loses, lives=lives)
 
 
-def lives_for_mejer(value: int) -> int:
-    """Mejer kostar dubbelt."""
-    return 2 if is_mejer(value) else 1
+def lives_for_meier(value: int) -> int:
+    """Meier kostar dubbelt."""
+    return 2 if is_meier(value) else 1

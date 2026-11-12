@@ -1,4 +1,4 @@
-"""Spelmotor för Mejer.
+"""Spelmotor för Meier.
 
 Motorn håller ordning på spelare, liv, bud och turen, och låter oberoende
 agenter spela mot varandra. Varje agent får bara den information en riktig
@@ -12,7 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from . import rules
-from .agents.player import MejerPlayerAgent
+from .agents.player import MeierPlayerAgent
 
 
 class GameError(RuntimeError):
@@ -22,7 +22,7 @@ class GameError(RuntimeError):
 @dataclass
 class PlayerState:
     name: str
-    agent: MejerPlayerAgent
+    agent: MeierPlayerAgent
     lives: int = 3
     out: bool = False
 
@@ -48,7 +48,7 @@ class Turn:
 
 @dataclass
 class Game:
-    """Ett pågående Mejer-spel."""
+    """Ett pågående Meier-spel."""
 
     players: list[PlayerState]
     rng: random.Random = field(default_factory=random.Random)
@@ -57,9 +57,9 @@ class Game:
     on_log: "Callable[[str], None] | None" = None
 
     @classmethod
-    def new(cls, agents: list[MejerPlayerAgent], *, seed: int | None = None) -> "Game":
+    def new(cls, agents: list[MeierPlayerAgent], *, seed: int | None = None) -> "Game":
         if len(agents) < 2:
-            raise GameError("Mejer kräver minst två spelare")
+            raise GameError("Meier kräver minst två spelare")
         players = [PlayerState(name=a.name, agent=a) for a in agents]
         return cls(players=players, rng=random.Random(seed))
 
@@ -94,7 +94,7 @@ class Game:
         Turen går i sittordning bland de spelare som är kvar. Den som sätter
         budet ("budgivaren") slår och säger ett bud. När bägaren kommer tillbaka
         till budgivaren ett helt varv senare måste denne höja – eller, om budet
-        är Mejer, slå om och börja en ny runda.
+        är Meier, slå om och börja en ny runda.
         """
         active_idx = [i for i, p in enumerate(self.players) if not p.out]
         if starter not in active_idx:
@@ -138,9 +138,9 @@ class Game:
             idx = order[pos % len(order)]
             if idx == bidder:
                 # Bägaren har gått ett helt varv tillbaka till budgivaren.
-                if rules.is_mejer(bid):
+                if rules.is_meier(bid):
                     self._record(
-                        f"  Bägaren tillbaka hos {self.players[bidder].name} med Mejer "
+                        f"  Bägaren tillbaka hos {self.players[bidder].name} med Meier "
                         "– slår om och börjar ny runda."
                     )
                     return bidder

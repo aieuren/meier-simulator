@@ -2,10 +2,10 @@
 
 import pytest
 
-from mejer import match, rules
-from mejer.agents.base import Role
-from mejer.agents.player import MejerPlayerAgent
-from mejer.session import Session
+from meier import match, rules
+from meier.agents.base import Role
+from meier.agents.player import MeierPlayerAgent
+from meier.session import Session
 
 
 class ScriptedLLM:
@@ -64,7 +64,7 @@ class ScriptedLLM:
 
 def make_player(key, llm=None):
     role = Role(key=key, name=f"Spelare-{key}", description="test", style="spela")
-    return MejerPlayerAgent(role=role, llm=llm or ScriptedLLM())
+    return MeierPlayerAgent(role=role, llm=llm or ScriptedLLM())
 
 
 def test_session_requires_two_players():
@@ -196,7 +196,7 @@ def test_skicka_passes_bid_and_forces_raise_with_two_players():
 
 
 def test_full_loop_forces_bidder_to_raise():
-    # 33 är högre än 44 i Mejer-ordningen, så budgivaren kan höja till 33.
+    # 33 är högre än 44 i Meier-ordningen, så budgivaren kan höja till 33.
     players = [
         make_player(k, ScriptedLLM(bids=[44, 33], actions=["skicka"]))
         for k in ("a", "b")
@@ -401,13 +401,13 @@ def test_new_round_starts_with_previous_active_before_loser():
     assert last["player_name"] == players[expected].name
 
 
-def test_lives_never_go_negative_on_mejer_call():
-    # Mejer kostar två liv. Med bara ett liv kvar får livet aldrig bli negativt.
+def test_lives_never_go_negative_on_meier_call():
+    # Meier kostar två liv. Med bara ett liv kvar får livet aldrig bli negativt.
     players = [
         make_player(k, ScriptedLLM(bids=[21], actions=["syna"])) for k in ("a", "b")
     ]
     session = Session.new(players, seed=3, lives=1)
-    session.advance()  # bud Mejer
+    session.advance()  # bud Meier
     session.advance()  # syn -> två livs kostnad, men bara ett finns
     assert all(lives >= 0 for lives in session.lives)
     assert session.to_dict()["phase"] == "finished"
@@ -442,12 +442,12 @@ def test_call_resolves_lives_and_result():
     assert call_row["holder_name"] == result.holder
 
 
-def test_mejer_call_costs_two_lives():
+def test_meier_call_costs_two_lives():
     players = [
         make_player(k, ScriptedLLM(bids=[21], actions=["syna"])) for k in ("a", "b")
     ]
     session = Session.new(players, seed=3)
-    session.advance()  # bud Mejer
+    session.advance()  # bud Meier
     session.advance()  # syn
     assert session.result is not None
     assert session.result.lives == 2
@@ -727,10 +727,10 @@ def test_life_loss_is_logged_as_its_own_row():
     assert kinds.index("life") == kinds.index("action") + 1
 
 
-def test_mejer_call_logs_two_lives_lost():
+def test_meier_call_logs_two_lives_lost():
     session, players = _session_with_state([0, 1])
-    session.pending_bid = 21  # Mejer
-    session.pending_dice = (2, 1)  # visar Mejer
+    session.pending_bid = 21  # Meier
+    session.pending_dice = (2, 1)  # visar Meier
     session.bidder = 0
     session.holder = 0
     session.actor = 1
@@ -827,7 +827,7 @@ def test_game_over_row_is_last_and_only_one():
 
 def test_winner_row_is_ignored_by_player_stats():
     # Vinnarraden får inte räknas som en spelåtgärd i statistiken.
-    from mejer import match as match_mod
+    from meier import match as match_mod
 
     players = [
         make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b")
