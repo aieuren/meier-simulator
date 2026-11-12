@@ -205,13 +205,13 @@ efter varje färdig match. Se avsnittet om loggrepet ovan.
 ## Analys
 
 Fliken **Analys** låter dig borra vidare i insamlat material. Under
-**Data källor (match-data)** markerar du de loggar som redan checkats in i
+**Välj datakällor** markerar du de matchloggar som redan checkats in i
 loggrepet. En markerad logg läses in direkt, och avmarkerar du den tas den bort
 igen. Varje rad visar datum och tid samt antal matcher. Knappen **Uppdatera
 listan** hämtar nya loggar från fjärren. Flera loggar sammanställs tillsammans,
 så att du kan bygga en stor datamängd över tid, från flera körningar.
 
-Därefter ställer du frågor i fritext under **Ställ frågor om matchdatat**. Svaret
+Därefter ställer du frågor i fritext under **Ställ frågor**. Svaret
 bygger på en kompakt sammanställning av materialet – aggregerade mått per roll,
 fördelningar över bud och tärningsutfall, och en matchlista. Du kan också be om
 ett diagram: stapel, linje eller tabell. Diagrammen ritas som ren SVG i
