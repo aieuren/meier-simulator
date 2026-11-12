@@ -227,6 +227,10 @@ Tre saker är värda att veta:
   underlag.
 - Frågorna besvaras av samma LLM-uppkoppling som agenterna använder (se
   **LLM-konfiguration**). Varje fråga är alltså ett modellanrop.
+- Om en fråga kräver detaljer som inte finns i sammanställningen (t.ex. enskilda
+  tärningsslag eller rundsekvenser) visas en röd notis i resultatet: *Underlaget
+  räcker inte*. Notisen säger vilken detalj som saknas, så att det går att avgöra
+  om sammanställningen behöver byggas ut.
 
 ## API
 

@@ -69,11 +69,13 @@ def build_digest(records: list[dict[str, Any]]) -> dict[str, Any]:
     bids: Counter = Counter()
     outcomes: Counter = Counter()
     blind_bids = 0
+    total_events = 0
     calls = {"caller_wins": 0, "caller_loses": 0}
     series: list[dict[str, Any]] = []
 
     for i, rec in enumerate(records, start=1):
         for e in rec.get("events", []):
+            total_events += 1
             if e.get("kind") == "game_over":
                 # Vinnarraden är inte en spelåtgärd – räkna den inte i statistiken.
                 continue
@@ -109,6 +111,7 @@ def build_digest(records: list[dict[str, Any]]) -> dict[str, Any]:
         "bids": _top(bids),
         "outcomes": _top(outcomes),
         "blind_bids": blind_bids,
+        "events_total": total_events,
         "games_series": series[:_MAX_SERIES],
         "games_series_truncated": len(series) > _MAX_SERIES,
     }
@@ -166,6 +169,32 @@ def render_digest_text(digest: dict[str, Any]) -> str:
         if digest.get("games_series_truncated"):
             lines.append(f"(endast de första {_MAX_SERIES} matcherna visas)")
 
+    lines.append("")
+    lines.append("VAD SAMMANSTÄLLNINGEN INTE INNEHÅLLER")
+    events = digest.get("events_total", 0)
+    lines.append(
+        f"Den bygger på {digest.get('games', 0)} matcher och {events} spelhändelser, "
+        "men visar bara aggregat och den korta matchlistan ovan."
+    )
+    lines.append(
+        "- Inga enskilda tärningsslag eller rundsekvenser. Frågor som "
+        "'vad slogs i runda 3' går inte att besvara härifrån."
+    )
+    lines.append(
+        "- Inga enskilda bud per spelare och tillfälle, bara fördelningar."
+    )
+    lines.append(
+        "- Ingen information om vem som mötte vem i en viss runda, utöver "
+        "matchlistans startspelare och vinnare."
+    )
+    lines.append(
+        "- Inga motiveringar från agenterna bakom sina beslut."
+    )
+    lines.append(
+        "- Bara de vanligaste värdena per fördelning, och bara de första "
+        f"{_MAX_SERIES} matcherna i matchlistan."
+    )
+
     return "\n".join(lines)
 
 
@@ -174,7 +203,15 @@ Du är dataanalytiker för tärningsspelet Meier (bluffspel med två tärningar)
 får en sammanställning av spelade matcher och en fråga om materialet.
 
 Svara ALLTID med ett JSON-objekt och inget annat:
-{"answer": "<ditt svar i markdown>", "chart": <diagram eller null>, "followups": ["<fråga>", "<fråga>"]}
+{"answer": "<ditt svar i markdown>", "chart": <diagram eller null>, "followups": ["<fråga>", "<fråga>"], "cannot_answer": <null eller text>}
+
+Fältet "cannot_answer":
+- Sätt det till null när du kan besvara frågan med sammanställningen.
+- Sätt det annars till en kort mening (på svenska) om vilken detalj som
+  saknas, t.ex. "Frågan kräver enskilda tärningsslag, som inte finns i
+  sammanställningen". Skriv då också i "answer" vad som ändå går att säga.
+- Sätt det INTE för att frågan är svår eller för att underlaget är litet. Det
+  gäller bara när själva detaljtypen saknas i sammanställningen.
 
 Diagrammet ska vara null om inget diagram passar. Annars något av:
 - stapel: {"type": "bar", "title": "...", "labels": ["a", "b"], "values": [1, 2]}
@@ -231,17 +268,28 @@ def ask(
         data = parse_json_object(raw)
     except LLMError:
         # Modellen svarade utan giltig JSON: visa texten som den är.
-        return {"answer": raw, "chart": None, "followups": [], "usage": llm.last_usage}
+        return {
+            "answer": raw,
+            "chart": None,
+            "followups": [],
+            "cannot_answer": None,
+            "usage": llm.last_usage,
+        }
 
     followups = data.get("followups")
     if not isinstance(followups, list):
         followups = []
     followups = [str(f) for f in followups if str(f).strip()][:4]
 
+    cannot = data.get("cannot_answer")
+    cannot = str(cannot).strip() if cannot else ""
+    cannot = cannot or None
+
     return {
         "answer": str(data.get("answer") or "").strip(),
         "chart": _clean_chart(data.get("chart")),
         "followups": followups,
+        "cannot_answer": cannot,
         "usage": llm.last_usage,
     }
 

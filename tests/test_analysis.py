@@ -40,6 +40,8 @@ def test_digest_text_mentions_roles():
     text = analysis.render_digest_text(digest)
     assert "Antal matcher: 2" in text
     assert "PER ROLL" in text
+    assert "VAD SAMMANSTÄLLNINGEN INTE INNEHÅLLER" in text
+    assert digest["events_total"] > 0
 
 
 def test_store_accumulates_and_removes():
@@ -76,12 +78,22 @@ def test_ask_parses_answer_and_chart():
             "answer": "Svar",
             "chart": {"type": "bar", "labels": ["a"], "values": [1]},
             "followups": ["F1", "F2"],
+            "cannot_answer": "Enskilda tärningsslag saknas.",
         }
     )
     result = analysis.ask(digest, "Vem bluffar mest?", client=_StubLLM(payload))
     assert result["answer"] == "Svar"
     assert result["chart"]["type"] == "bar"
     assert result["followups"] == ["F1", "F2"]
+    assert result["cannot_answer"] == "Enskilda tärningsslag saknas."
+
+
+def test_ask_cannot_answer_defaults_to_none():
+    digest = analysis.build_digest(_records(1))
+    payload = json.dumps({"answer": "x", "chart": None, "followups": []})
+    assert analysis.ask(digest, "?", client=_StubLLM(payload))["cannot_answer"] is None
+    blank = json.dumps({"answer": "x", "cannot_answer": "   "})
+    assert analysis.ask(digest, "?", client=_StubLLM(blank))["cannot_answer"] is None
 
 
 def test_ask_filters_bad_chart_and_non_json():

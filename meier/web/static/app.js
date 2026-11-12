@@ -895,6 +895,7 @@ async function askAnalysis() {
   btn.textContent = "Analyserar…";
   card.hidden = false;
   $("analysisAnswer").innerHTML = '<p class="hint">Tänker…</p>';
+  $("analysisCannot").hidden = true;
   $("analysisChart").innerHTML = "";
   $("analysisFollowups").innerHTML = "";
   $("analysisUsage").textContent = "";
@@ -917,6 +918,14 @@ async function askAnalysis() {
 }
 
 function renderAnalysisResult(data) {
+  const note = $("analysisCannot");
+  if (data.cannot_answer) {
+    note.hidden = false;
+    note.textContent = `Underlaget räcker inte: ${data.cannot_answer}`;
+  } else {
+    note.hidden = true;
+    note.textContent = "";
+  }
   $("analysisAnswer").innerHTML = markdownLite(data.answer || "");
   $("analysisChart").innerHTML = "";
   if (data.chart) renderChart($("analysisChart"), data.chart);

@@ -91,8 +91,13 @@ lower bid). Multiple agents with distinct roles can also play full games.
   per-match series) so it fits in the model context — the full event logs do
   not. `render_digest_text` formats it for the prompt (and for the UI). `ask`
   sends a question with the digest and expects JSON
-  (`{"answer", "chart", "followups"}`); `_clean_chart` drops charts the frontend
-  cannot draw. `AnalysisStore` keeps the loaded records grouped per source
+  (`{"answer", "chart", "followups", "cannot_answer"}`); `_clean_chart` drops
+  charts the frontend cannot draw, and `cannot_answer` (a short Swedish note,
+  else null) is surfaced as a warning when the question needs detail the digest
+  does not carry. `render_digest_text` also ends with a "VAD SAMMANSTÄLLNINGEN
+  INTE INNEHÅLLER" section listing what the digest omits (raw rolls, per-bid
+  detail, agent reasoning), so the model can tell a missing-detail question from
+  a thin-data one. `AnalysisStore` keeps the loaded records grouped per source
   file, so a single log can be dropped again when the user unchecks it. The
   chart types are `bar` (`labels`/`values`), `line` (`labels`/`series`) and
   `table` (`columns`/`rows`); the frontend renders them as plain SVG. Records
