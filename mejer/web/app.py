@@ -467,6 +467,7 @@ def analysis_data() -> dict:
     digest = _store.digest()
     return {
         **info,
+        "source_labels": [logrepo.series_label(s) for s in info["sources"]],
         "digest": digest,
         "digest_text": analysis.render_digest_text(digest),
     }

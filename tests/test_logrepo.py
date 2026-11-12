@@ -46,6 +46,19 @@ def test_series_filename_has_date_and_minute():
     assert name == "mejer-matcher-2026-11-12-0148.jsonl"
 
 
+def test_series_label_reads_date_and_time():
+    label = logrepo.series_label("mejer-matcher-2026-11-12-0148.jsonl")
+    assert label == "12 november 2026, 01:48"
+
+
+def test_series_label_falls_back_to_the_name():
+    assert logrepo.series_label("nagot-annat.jsonl") == "nagot-annat.jsonl"
+    assert logrepo.parse_series_time("mejer-matcher-2026-11-12-0148.jsonl") == datetime(
+        2026, 11, 12, 1, 48
+    )
+    assert logrepo.parse_series_time("trasig.jsonl") is None
+
+
 def test_commit_and_push_publishes_the_file(log_repo):
     repo, remote, work = log_repo
     path = work / "mejer-matcher-2026-11-12-0148.jsonl"

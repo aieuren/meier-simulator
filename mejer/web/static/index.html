@@ -9,7 +9,7 @@
 <body>
 <header>
   <h1>Mejer <span>– AI-spelaren</span></h1>
-  <p class="tagline">LLM-baserade agenter som spelar tärningsspelet Mejer.</p>
+  <p class="tagline">AI-assistenter som spelar tärningsspelet Mejer.</p>
 </header>
 
 <nav class="tabs" role="tablist" aria-label="Flikar">
@@ -178,19 +178,26 @@
   <!-- Flik 5: analys – ställ frågor mot insamlade matchprotokoll -->
   <div class="tab-panel" id="tab-analys" hidden>
     <section class="card">
-      <h2>1. Datakällor</h2>
+      <h2>1. Välj loggar</h2>
       <p class="hint">
-        Välj en eller flera loggar som checkats in i loggrepet. Markera flera
-        för att sammanställa dem tillsammans till en större datamängd.
+        Välj bland de loggar som checkats in i loggrepet. Markera en eller flera
+        och läs in dem. Flera loggar sammanställs tillsammans till en större
+        datamängd.
       </p>
       <div id="analysisLogList" class="analysis-log-list"></div>
       <div class="analysis-actions">
         <button id="analysisLoadBtn" class="primary">Läs in valda</button>
         <button id="analysisRefreshBtn">Uppdatera listan</button>
-        <button id="analysisClearBtn">Töm</button>
       </div>
+    </section>
+
+    <section class="card">
+      <h2>2. Inlästa loggar</h2>
       <div id="analysisDataStatus" class="session-status" hidden></div>
       <div id="analysisSources" class="analysis-sources"></div>
+      <div class="analysis-actions">
+        <button id="analysisClearBtn">Töm</button>
+      </div>
       <p class="match-download">
         <a id="analysisExportLink" href="/api/analysis/export" download hidden>
           Ladda ner allt inläst material (JSONL)
@@ -199,10 +206,10 @@
     </section>
 
     <section class="card">
-      <h2>2. Ställ en fråga</h2>
+      <h2>3. Ställ en fråga</h2>
       <p class="hint">
-        Frågan besvaras av en LLM utifrån en sammanställning av det inlästa
-        materialet. Du kan också be om ett diagram.
+        Frågan besvaras utifrån en sammanställning av det inlästa materialet.
+        Du kan också be om ett diagram.
       </p>
       <div class="analysis-ask">
         <textarea id="analysisQuestion" rows="3"
@@ -212,7 +219,7 @@
     </section>
 
     <section class="card" id="analysisResultCard" hidden>
-      <h2>3. Resultat</h2>
+      <h2>4. Resultat</h2>
       <div id="analysisAnswer" class="analysis-answer"></div>
       <div id="analysisChart" class="analysis-chart"></div>
       <div id="analysisFollowups" class="analysis-followups"></div>

@@ -141,6 +141,7 @@ def test_analysis_lists_logs_from_repo(monkeypatch, tmp_path):
     assert data["ready"] is True
     assert [e["name"] for e in data["logs"]] == [name]
     assert data["logs"][0]["games"] == 2
+    assert data["logs"][0]["label"] == "1 januari 2026, 12:00"
 
 
 def test_analysis_loads_selected_logs(monkeypatch, tmp_path):

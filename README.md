@@ -205,15 +205,18 @@ efter varje färdig match. Se avsnittet om loggrepet ovan.
 ## Analys
 
 Fliken **Analys** låter dig borra vidare i insamlat material. Under
-**Datakällor** väljer du en eller flera loggar som redan checkats in i loggrepet.
-De sammanställs tillsammans, så att du kan bygga en stor datamängd över tid, från
-flera körningar. Knappen **Uppdatera listan** hämtar nya loggar från fjärren.
+**1. Välj loggar** markerar du en eller flera loggar som redan checkats in i
+loggrepet. De visas med datum och tid samt antal matcher. Knappen
+**Uppdatera listan** hämtar nya loggar från fjärren. Under **2. Inlästa loggar**
+ser du vad som är inläst, och där kan du tömma materialet eller ladda ner det.
+Flera loggar sammanställs tillsammans, så att du kan bygga en stor datamängd över
+tid, från flera körningar.
 
-Därefter ställer du frågor i fritext. En LLM svarar utifrån en kompakt
-sammanställning av materialet – aggregerade mått per roll, fördelningar över bud
-och tärningsutfall, och en matchlista. Modellen kan också rita ett diagram:
-stapel, linje eller tabell. Diagrammen ritas som ren SVG i webbläsaren, utan
-externa bibliotek.
+Därefter ställer du frågor i fritext under **3. Ställ en fråga**. Svaret bygger
+på en kompakt sammanställning av materialet – aggregerade mått per roll,
+fördelningar över bud och tärningsutfall, och en matchlista. Du kan också be om
+ett diagram: stapel, linje eller tabell. Diagrammen ritas som ren SVG i
+webbläsaren, utan externa bibliotek. Resultatet visas under **4. Resultat**.
 
 Tre saker är värda att veta:
 

@@ -272,8 +272,10 @@ Long series used to be lost: the protocol was written to `/tmp/mejer_matches.jso
 which a container restart wipes. Now a series can be committed and pushed to a
 **separate** log repo after every finished match.
 
-- Module: `mejer/logrepo.py` (`LogRepo`, `series_filename`, `push_enabled`).
-  One file per series: `mejer-matcher-<YYYY-MM-DD-HHMM>.jsonl`.
+- Module: `mejer/logrepo.py` (`LogRepo`, `series_filename`, `series_label`,
+  `push_enabled`). One file per series: `mejer-matcher-<YYYY-MM-DD-HHMM>.jsonl`.
+  `series_label` turns the filename into a readable Swedish label
+  ("12 november 2026, 02:46") used by the analysis tab and `list_logs`.
 - Log repo: `aieuren/meier-simulator-logs` (private), clone at
   `/workspace/meier-logs` — deliberately **outside** the code repo, so the two
   are not nested git repos. `MEJER_LOGS_DIR` overrides the path.

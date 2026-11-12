@@ -844,19 +844,14 @@ function renderAnalysisLogs(data) {
     cb.value = log.name;
     const name = document.createElement("span");
     name.className = "analysis-log-name";
-    name.textContent = log.name;
+    name.textContent = log.label || log.name;
+    name.title = log.name;
     const meta = document.createElement("span");
     meta.className = "analysis-log-meta";
-    meta.textContent = `${log.games} matcher · ${formatBytes(log.size)}`;
+    meta.textContent = `${log.games} matcher`;
     label.append(cb, name, meta);
     box.appendChild(label);
   });
-}
-
-function formatBytes(n) {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} kB`;
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 async function refreshAnalysisData() {
@@ -884,10 +879,13 @@ function renderAnalysisData(data) {
 
   const src = $("analysisSources");
   src.innerHTML = "";
-  (data.sources || []).forEach((name) => {
+  const names = data.sources || [];
+  const labels = data.source_labels || names;
+  labels.forEach((label, i) => {
     const chip = document.createElement("span");
     chip.className = "analysis-source-chip";
-    chip.textContent = name;
+    chip.textContent = label;
+    chip.title = names[i] || label;
     src.appendChild(chip);
   });
 

@@ -68,6 +68,38 @@ def series_filename(now: datetime | None = None) -> str:
     return f"mejer-matcher-{stamp}.jsonl"
 
 
+_SERIES_STAMP = "%Y-%m-%d-%H%M"
+_SERIES_PREFIX = "mejer-matcher-"
+
+#: Svenska månadsnamn för läsbara etiketter.
+_MONTHS = (
+    "januari", "februari", "mars", "april", "maj", "juni",
+    "juli", "augusti", "september", "oktober", "november", "december",
+)
+
+
+def parse_series_time(name: str) -> datetime | None:
+    """Tidpunkten ur ett seriefilnamn, eller None om namnet inte matchar."""
+    if not name.startswith(_SERIES_PREFIX) or not name.endswith(".jsonl"):
+        return None
+    stamp = name[len(_SERIES_PREFIX):-len(".jsonl")]
+    try:
+        return datetime.strptime(stamp, _SERIES_STAMP)
+    except ValueError:
+        return None
+
+
+def series_label(name: str) -> str:
+    """Läsbar etikett ur filnamnet: "12 november 2026, 02:46".
+
+    Faller tillbaka på själva filnamnet om det inte går att tolka.
+    """
+    when = parse_series_time(name)
+    if when is None:
+        return name
+    return f"{when.day} {_MONTHS[when.month - 1]} {when.year}, {when:%H:%M}"
+
+
 class LogRepo:
     """Klonen av loggrepet: filnamn, commit och push."""
 
@@ -164,6 +196,7 @@ class LogRepo:
                 continue
             out.append({
                 "name": p.name,
+                "label": series_label(p.name),
                 "size": stat.st_size,
                 "modified": int(stat.st_mtime),
             })
