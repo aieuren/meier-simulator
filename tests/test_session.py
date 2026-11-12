@@ -1,5 +1,7 @@
 """Tester för den interaktiva sessionen (utan riktiga LLM-anrop)."""
 
+import random
+
 import pytest
 
 from meier import match, rules
@@ -526,6 +528,41 @@ def test_roll_is_within_dice_range():
     for _ in range(200):
         a, b = rules.roll()
         assert 1 <= a <= 6 and 1 <= b <= 6
+
+
+def test_roll_favours_the_long_faces():
+    # Avlång tärning: sidorna 3-6 (långytorna) ska komma oftare än 1 och 2.
+    rng = random.Random(1234)
+    counts = {n: 0 for n in range(1, 7)}
+    for _ in range(20000):
+        for d in rules.roll(rng):
+            counts[d] += 1
+    low = counts[1] + counts[2]
+    high = counts[3] + counts[4] + counts[5] + counts[6]
+    # Per sida väntas 1 / 1,3 = 0,769, alltså (low/2) / (high/4).
+    assert high > low
+    assert 0.73 < (low / 2) / (high / 4) < 0.81
+
+
+def test_roll_keeps_odd_and_even_equally_likely():
+    # 1 och 2 ligger på ändytorna (en udda, en jämn), 3-6 på långytorna
+    # (två udda, två jämna). Därför ska udda och jämn vara lika vanliga.
+    rng = random.Random(99)
+    odd = even = 0
+    for _ in range(20000):
+        for d in rules.roll(rng):
+            if d % 2:
+                odd += 1
+            else:
+                even += 1
+    assert abs(odd - even) / (odd + even) < 0.02
+
+
+def test_face_weights_sum_and_shape():
+    assert len(rules.FACE_WEIGHTS) == 6
+    assert rules.FACE_WEIGHTS[0] == rules.FACE_WEIGHTS[1]
+    assert rules.FACE_WEIGHTS[2] == rules.FACE_WEIGHTS[5]
+    assert rules.FACE_WEIGHTS[2] == rules.DIE_ELONGATION
 
 
 # -- Kontrakt mot frontend: fälten måste alltid finnas ----------------------

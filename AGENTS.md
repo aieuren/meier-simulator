@@ -12,7 +12,11 @@ lower bid). Multiple agents with distinct roles can also play full games.
 ## Layout
 
 - `meier/rules.py` – game rules. Single source of truth for the ranking order,
-  bid comparison, and call resolution. Change rules here only.
+  bid comparison, and call resolution. Change rules here only. The dice are
+  elongated (length/width = `DIE_ELONGATION` = 1.3), so `roll` draws with
+  `FACE_WEIGHTS`: faces 3-6 (the long sides) are 1.3x as likely as 1-2 (the
+  square end faces). This makes Meier and 11 rarer than on a cube; odd and even
+  stay equally likely, since 1/2 sit on the ends (one odd, one even).
 - `meier/llm.py` – LLM client. Prefers Anthropic (Claude) via
   `ANTHROPIC_API_KEY`; falls back to the OpenHands agent-server proxy.
   `LLMClient.last_usage` holds the token count from the last call.

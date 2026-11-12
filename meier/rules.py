@@ -41,10 +41,29 @@ _RANK_INDEX: dict[int, int] = {value: i for i, value in enumerate(RANKING)}
 MEIER = 21
 
 
+#: Tärningens längd delad med dess bredd. 1,0 vore en perfekt kub.
+DIE_ELONGATION = 1.3
+
+#: Vikter per tärningssida 1..6 för en avlång tärning.
+#:
+#: Ändytorna (1 och 2) är kvadratiska med arean w². Långytorna (3-6) har arean
+#: w·L, där L är längden. Vikten är ytans area, så en sida 3-6 är
+#: DIE_ELONGATION gånger så sannolik som en sida 1-2. En kub (1,0) ger
+#: likformig fördelning. Udda och jämn förblir alltid lika sannolika, eftersom
+#: 1 och 2 ligger på ändytorna (en udda, en jämn) och 3-6 på långytorna.
+FACE_WEIGHTS: tuple[float, ...] = (
+    1.0, 1.0, DIE_ELONGATION, DIE_ELONGATION, DIE_ELONGATION, DIE_ELONGATION,
+)
+
+
+_FACES: tuple[int, ...] = (1, 2, 3, 4, 5, 6)
+
+
 def roll(rng: random.Random | None = None) -> tuple[int, int]:
-    """Slå två tärningar slumpmässigt. Returnerar (tärning 1, tärning 2)."""
+    """Slå två avlånga tärningar. Returnerar (tärning 1, tärning 2)."""
     r = rng or random
-    return r.randint(1, 6), r.randint(1, 6)
+    a, b = r.choices(_FACES, weights=FACE_WEIGHTS, k=2)
+    return a, b
 
 
 def read_dice(a: int, b: int) -> int:

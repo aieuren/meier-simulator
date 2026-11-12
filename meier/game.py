@@ -73,7 +73,7 @@ class Game:
         return [p for p in self.players if not p.out]
 
     def roll(self) -> tuple[int, int]:
-        return self.rng.randint(1, 6), self.rng.randint(1, 6)
+        return rules.roll(self.rng)
 
     def play(self, *, max_rounds: int = 100) -> PlayerState:
         """Spela klart hela spelet och returnera vinnaren."""

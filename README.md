@@ -49,6 +49,17 @@ roller kan spela hela spel mot varandra.
 Poängordning (högst först):
 21, 11, 22, 33, 44, 55, 66, 65, 64, 63, 62, 61, 54, 53, 52, 51, 43, 42, 41, 32, 31.
 
+### Tärningens form
+
+Tärningarna är avlånga, inte kubiska. Ändytorna (1 och 2) är kvadratiska,
+långytorna (3–6) är längre. Vikten per sida följer ytans area, så en sida 3–6 är
+1,3 gånger så sannolik som en sida 1–2 (`rules.FACE_WEIGHTS`, `DIE_ELONGATION`).
+
+Det gör att **Meier (21) och 11 blir ovanligare** än vid en kub, medan utfall
+som 65, 64 och 43 blir vanligare. Udda och jämn förblir ändå lika sannolika,
+eftersom 1 och 2 ligger på ändytorna (en udda, en jämn) och 3–6 på långytorna
+(två udda, två jämna).
+
 ## Kom igång
 
 Enklast: kör startskriptet. Det installerar beroenden om de saknas och startar
