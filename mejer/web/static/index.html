@@ -151,9 +151,14 @@
         <label>Mejla resultatet till (valfritt)
           <input type="email" id="matchMailTo" placeholder="namn@exempel.se" />
         </label>
+        <label class="check">
+          <input type="checkbox" id="matchCheckIn" />
+          Checka in loggen till GitHub efter varje match
+        </label>
         <button id="matchRunBtn" class="primary">Spela serien</button>
       </div>
       <p class="hint" id="matchMailHint" hidden></p>
+      <p class="hint" id="matchLogRepoHint" hidden></p>
 
       <div id="matchStatus" class="session-status" hidden></div>
 

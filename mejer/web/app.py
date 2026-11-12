@@ -23,7 +23,7 @@ from ..llm import LLMClient, LLMError
 from ..agents.player import MejerPlayerAgent
 from ..match import GameRecord, read_jsonl, run_matches, summarize
 from ..session import Session
-from .. import analysis, notify
+from .. import analysis, logrepo, notify
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -36,7 +36,14 @@ _agents: dict[str, MejerPlayerAgent] = {}
 _session: Session | None = None
 
 # Senaste batchkörningen av matcher (för nedladdning och statistik).
-_MATCH_FILE = Path("/tmp/mejer_matches.jsonl")
+# Skrivs normalt i loggrepet; faller tillbaka på /tmp om loggrepet inte är
+# konfigurerat.
+_FALLBACK_MATCH_FILE = Path("/tmp/mejer_matches.jsonl")
+_current_match_file: Path = _FALLBACK_MATCH_FILE
+
+
+def _match_file() -> Path:
+    return _current_match_file
 
 
 def _get_agent(role_key: str) -> MejerPlayerAgent:
@@ -266,6 +273,10 @@ class MatchRequest(BaseModel):
         None,
         description="E-postmottagare för resultatfilen. Annars MEJER_MAIL_TO i miljön.",
     )
+    check_in: bool = Field(
+        False,
+        description="Checka in loggfilen till loggrepet på GitHub efter varje match.",
+    )
 
 
 class _MatchJob:
@@ -279,6 +290,7 @@ class _MatchJob:
         lives: int,
         workers: int = 1,
         mail_to: str | None = None,
+        check_in: bool = False,
     ):
         self.roles = roles
         self.count = count
@@ -286,19 +298,43 @@ class _MatchJob:
         self.lives = lives
         self.workers = workers
         self.mail_to = mail_to
+        self.check_in = check_in
         self.done = 0
         self.records: list[GameRecord] = []
         self.error: str | None = None
         self.mail_status: str | None = None
+        self.push_status: str | None = None
+        self.file: Path = _FALLBACK_MATCH_FILE
         self.running = True
         self.lock = threading.Lock()
         self.thread = threading.Thread(target=self._run, daemon=True)
 
+    def _open_log(self) -> tuple[Path, logrepo.LogRepo | None]:
+        """Välj fil för serien och en loggreps-klon om incheckning är på."""
+        global _current_match_file
+        repo: logrepo.LogRepo | None = None
+        if self.check_in:
+            repo = logrepo.LogRepo()
+            try:
+                repo.ensure_clone()
+                repo.sync()
+            except logrepo.LogRepoError as exc:
+                self.push_status = f"Incheckning avstängd: {exc}"
+                repo = None
+        if repo is not None:
+            path = repo.directory / logrepo.series_filename()
+        else:
+            path = _FALLBACK_MATCH_FILE
+        self.file = path
+        _current_match_file = path
+        return path, repo
+
     def _run(self) -> None:
         try:
+            path, repo = self._open_log()
             # Skriv protokollet radvis medan serien spelas, så att nedladdningen
             # fungerar även innan hela serien är klar.
-            with open(_MATCH_FILE, "w", encoding="utf-8") as fh:
+            with open(path, "w", encoding="utf-8") as fh:
                 for rec in run_matches(
                     self.roles,
                     self.count,
@@ -311,6 +347,8 @@ class _MatchJob:
                         self.done += 1
                     fh.write(json.dumps(rec.to_dict(), ensure_ascii=False) + "\n")
                     fh.flush()
+                    if repo is not None:
+                        self._check_in(repo, rec)
             self._maybe_mail()
         except LLMError as exc:
             self.error = f"LLM-fel: {exc}"
@@ -318,6 +356,14 @@ class _MatchJob:
             self.error = f"Oväntat fel: {exc}"
         finally:
             self.running = False
+
+    def _check_in(self, repo: logrepo.LogRepo, rec: GameRecord) -> None:
+        """Commit + push efter en färdig match. Får aldrig fälla körningen."""
+        winner = rec.winner_role or rec.winner
+        msg = f"Mejer: match {self.done}/{self.count} klar (seed {rec.seed}, vinnare {winner})"
+        status = repo.commit_and_push(self.file, msg)
+        with self.lock:
+            self.push_status = status
 
     def _maybe_mail(self) -> None:
         """Skicka resultatfilen när serien är klar, om e-post är påslagen."""
@@ -327,11 +373,11 @@ class _MatchJob:
             snapshot = [rec.to_dict() for rec in self.records]
         try:
             sent = notify.send_matches(
-                _MATCH_FILE,
+                self.file,
                 to=self.mail_to,
                 subject=f"Mejer: {self.done} matcher klara",
                 body=notify.summary_body(
-                    summarize(snapshot), count=self.count, file_name=_MATCH_FILE.name
+                    summarize(snapshot), count=self.count, file_name=self.file.name
                 ),
             )
             self.mail_status = f"Skickat till {', '.join(sent)}"
@@ -349,6 +395,8 @@ class _MatchJob:
             "count": self.count,
             "error": self.error,
             "mail_status": self.mail_status,
+            "push_status": self.push_status,
+            "file": self.file.name,
             "games": self.done,
             "records": snapshot,
             "summary": summary,
@@ -373,7 +421,8 @@ def matches_run(req: MatchRequest) -> dict:
         raise HTTPException(status_code=409, detail="En matchserie kör redan.")
 
     _match_job = _MatchJob(
-        roles, req.count, req.base_seed, req.lives, req.workers, mail_to=req.mail_to
+        roles, req.count, req.base_seed, req.lives, req.workers,
+        mail_to=req.mail_to, check_in=req.check_in,
     )
     _match_job.thread.start()
     return _match_job.status()
@@ -390,20 +439,22 @@ def matches_status() -> dict:
 @app.get("/api/matches/summary")
 def matches_summary() -> dict:
     """Sammanfatta den senaste batchkörningen."""
-    if not _MATCH_FILE.exists():
+    path = _match_file()
+    if not path.exists():
         raise HTTPException(status_code=404, detail="Ingen batchkörning gjord ännu.")
-    return summarize(read_jsonl(_MATCH_FILE))
+    return summarize(read_jsonl(path))
 
 
 @app.get("/api/matches/download")
 def matches_download() -> FileResponse:
     """Ladda ner protokollet från den senaste batchkörningen (JSONL)."""
-    if not _MATCH_FILE.exists():
+    path = _match_file()
+    if not path.exists():
         raise HTTPException(status_code=404, detail="Ingen batchkörning gjord ännu.")
     return FileResponse(
-        _MATCH_FILE,
+        path,
         media_type="application/x-ndjson",
-        filename="mejer-matcher.jsonl",
+        filename=path.name,
     )
 
 
@@ -413,6 +464,18 @@ def matches_mail() -> dict:
     return {
         "configured": notify.mail_configured(),
         "default_to": os.environ.get("MEJER_MAIL_TO", "").strip(),
+    }
+
+
+@app.get("/api/matches/logrepo")
+def matches_logrepo() -> dict:
+    """Om loggrepet är konfigurerat för automatisk incheckning."""
+    repo = logrepo.LogRepo()
+    return {
+        "ready": repo.ready(),
+        "push_enabled": logrepo.push_enabled(),
+        "dir": str(repo.directory),
+        "repo": logrepo.logs_repo(),
     }
 
 
@@ -476,9 +539,10 @@ async def analysis_upload(files: list[UploadFile]) -> dict:
 @app.post("/api/analysis/load-latest")
 def analysis_load_latest() -> dict:
     """Läs in protokollet från den senaste matchserien i servern."""
-    if not _MATCH_FILE.exists():
+    path = _match_file()
+    if not path.exists():
         raise HTTPException(status_code=404, detail="Ingen matchserie körd ännu.")
-    added = _store.add_file(_MATCH_FILE)
+    added = _store.add_file(path)
     return {**_store.info(), "added": added}
 
 

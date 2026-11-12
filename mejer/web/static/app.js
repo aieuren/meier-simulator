@@ -72,6 +72,7 @@ async function boot() {
   resumeMatchSeries();
 
   setupMatchMail();
+  setupLogRepo();
   setupAnalysis();
 }
 
@@ -680,6 +681,7 @@ async function runMatchSeries() {
   const seedRaw = $("matchSeed").value.trim();
   const baseSeed = seedRaw === "" ? null : parseInt(seedRaw, 10);
   const mailTo = ($("matchMailTo").value || "").trim() || null;
+  const checkIn = $("matchCheckIn").checked;
 
   btn.disabled = true;
   const status = $("matchStatus");
@@ -690,7 +692,7 @@ async function runMatchSeries() {
     const res = await fetch("/api/matches/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ count, lives, workers, base_seed: baseSeed, mail_to: mailTo }),
+      body: JSON.stringify({ count, lives, workers, base_seed: baseSeed, mail_to: mailTo, check_in: checkIn }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -762,12 +764,15 @@ async function pollMatchSeries() {
       return;
     }
     if (!data.running) {
-      status.textContent = `Klart: ${data.done} matcher spelade.`;
+      const name = data.file ? ` (${data.file})` : "";
+      status.textContent = `Klart: ${data.done} matcher spelade${name}.`;
       if (data.mail_status) status.textContent += ` ${data.mail_status}.`;
+      if (data.push_status) status.textContent += ` ${data.push_status}.`;
       btn.disabled = false;
       return;
     }
     status.textContent = matchProgressText(data);
+    if (data.push_status) status.textContent += ` ${data.push_status}.`;
   }
 }
 
@@ -788,6 +793,31 @@ async function setupMatchMail() {
     if (data.default_to && !field.value) field.placeholder = data.default_to;
   } catch (e) {
     /* tyst: e-post är valfritt */
+  }
+}
+
+// Visa om loggrepet är redo för automatisk incheckning.
+async function setupLogRepo() {
+  const hint = $("matchLogRepoHint");
+  const box = $("matchCheckIn");
+  if (!hint || !box) return;
+  try {
+    const res = await fetch("/api/matches/logrepo");
+    if (!res.ok) return;
+    const data = await res.json();
+    hint.hidden = false;
+    if (data.ready && data.push_enabled) {
+      hint.textContent = `Incheckning är redo mot ${data.repo}. Loggen sparas som en egen fil med datum och klockslag.`;
+      box.disabled = false;
+    } else {
+      box.disabled = true;
+      box.checked = false;
+      hint.textContent = data.ready
+        ? "Automatisk incheckning är avstängd på servern (MEJER_LOGS_PUSH=0)."
+        : "Incheckning är inte konfigurerad på servern. Loggen sparas lokalt tills vidare.";
+    }
+  } catch (e) {
+    /* tyst: incheckning är valfritt */
   }
 }
 

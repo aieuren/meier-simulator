@@ -270,3 +270,31 @@ python -m mejer.cli play rackar kalkyl trygg
   A secret added mid-conversation is not injected until it is attached this way.
   Names must be valid shell identifiers (letters, digits, underscore) — a hyphen
   makes the value unusable as an environment variable.
+
+## Match logs are checked into a separate GitHub repo
+
+Long series used to be lost: the protocol was written to `/tmp/mejer_matches.jsonl`,
+which a container restart wipes. Now a series can be committed and pushed to a
+**separate** log repo after every finished match.
+
+- Module: `mejer/logrepo.py` (`LogRepo`, `series_filename`, `push_enabled`).
+  One file per series: `mejer-matcher-<YYYY-MM-DD-HHMM>.jsonl`.
+- Log repo: `aieuren/meier-simulator-logs` (private), clone at
+  `/workspace/meier-logs` — deliberately **outside** the code repo, so the two
+  are not nested git repos. `MEJER_LOGS_DIR` overrides the path.
+- Token: `/workspace/mejer-secrets/logs.token` (mode 600), read by a git
+  credential-helper passed via `-c`, so the value never lands on the command
+  line (it would otherwise show up in `ps`). Fine-grained PAT with only
+  Contents: Read and write on the log repo. `MEJER_LOGS_PUSH=0` disables push.
+- Wire-up: `web/app.py` `_MatchJob(check_in=...)`. Each record is appended and
+  then `commit_and_push` runs; `push_status` is reported alongside `mail_status`.
+  A push failure is caught and returned as a string — it must never kill a run.
+  When no token/clone is available the log falls back to `/tmp/mejer_matches.jsonl`.
+- `_current_match_file` (module global) holds the file for the latest series;
+  `/api/matches/download|summary` and `/api/analysis/load-latest` read it.
+- Gotcha: `git -c key=value` must be passed as **two** argv items before the
+  subcommand. `["-c", "user.name=Mejer Bot"]` works; `["-cuser.name=Mejer Bot"]`
+  fails with "unknown option".
+- Tests use a local bare repo via `MEJER_LOGS_REMOTE_URL` — no network, no real
+  token. See `tests/test_logrepo.py` and the check-in tests in
+  `tests/test_web_matches.py`.

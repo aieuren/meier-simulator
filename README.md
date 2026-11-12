@@ -169,6 +169,33 @@ Med ett fast basfrö blir en serie reproducerbar. JSONL-formatet (en match per r
 gör att stora serier kan läsas och analyseras rad för rad utan att allt hålls i
 minnet.
 
+### Spara loggen automatiskt till GitHub
+
+En lång serie kan avbrytas om miljön startar om. Kryssa därför i **Checka in
+loggen till GitHub efter varje match** innan du startar serien. Då skrivs
+protokollet i en separat klon av ett loggrepo och checkas in (commit + push)
+efter varje färdig match. Filen heter `mejer-matcher-ÅÅÅÅ-MM-DD-TTMM.jsonl`, så
+varje serie blir en egen fil med datum och klockslag. Även om servern dör mitt i
+serien finns de färdiga matcherna kvar på GitHub.
+
+Ett push-fel stoppar aldrig körningen; felet rapporteras i statusfältet och
+nästa match försöker igen. Om ingen token finns sparas loggen lokalt i stället.
+
+Ställ in servern med:
+
+| Variabel | Betydelse | Standard |
+|---|---|---|
+| `MEJER_LOGS_DIR` | katalog för klonen av loggrepet | `/workspace/meier-logs` |
+| `MEJER_LOGS_REPO` | loggrepet på GitHub | `aieuren/meier-simulator-logs` |
+| `MEJER_LOGS_TOKEN_FILE` | fil med åtkomsttoken | `/workspace/mejer-secrets/logs.token` |
+| `MEJER_LOGS_PUSH` | `0` stänger av automatisk push | `1` |
+
+Använd en fine-grained token som bara har **Contents: Read and write** på
+loggrepet. Lägg den i en fil utanför kodrepet (t.ex.
+`/workspace/mejer-secrets/logs.token`, rättigheter `600`), så att den överlever
+omstarter. Loggrepet är avsiktligt skilt från kodrepet, så att en token som
+läcker via webbappen bara kan skriva loggar – aldrig kod.
+
 ### Få resultatet mejlat
 
 En lång serie tar tid. Fyll i en adress i fältet **Mejla resultatet till** innan
@@ -256,6 +283,7 @@ Tre saker är värda att veta:
 | GET | `/api/matches/summary` | Statistik för den senaste matchserien |
 | GET | `/api/matches/download` | Ladda ner protokollet (JSONL) |
 | GET | `/api/matches/mail` | Om e-post är påslagen och standardmottagare |
+| GET | `/api/matches/logrepo` | Om loggrepet är redo för automatisk incheckning |
 | GET | `/api/analysis/data` | Inläst material: antal matcher, källor och sammanställning |
 | POST | `/api/analysis/upload` | Ladda upp en eller flera JSONL-filer (multipart, fältet `files`) |
 | POST | `/api/analysis/load-latest` | Läs in protokollet från senaste matchserien |

@@ -428,6 +428,8 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
   width: 8rem;
 }
 .match-controls .primary { width: auto; margin-top: 0; }
+.match-controls label.check { flex-direction: row; align-items: center; gap: 0.45rem; max-width: 16rem; }
+.match-controls label.check input { width: auto; }
 
 .match-summary { margin-top: 1.2rem; }
 .stat-table { width: 100%; border-collapse: collapse; margin-top: 0.8rem; font-size: 0.9rem; }

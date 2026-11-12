@@ -6,7 +6,9 @@ kontrollerar sedan status, protokoll och nedladdning.
 
 from __future__ import annotations
 
+import subprocess
 import time
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
@@ -141,3 +143,51 @@ def test_mail_failure_does_not_break_series(monkeypatch):
     assert data["error"] is None
     assert data["done"] == 1
     assert "Kunde inte skicka" in (data["mail_status"] or "")
+
+
+def _git(*args, cwd: Path | None = None) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["git", *args], cwd=cwd, capture_output=True, text=True, check=True
+    )
+
+
+def test_check_in_writes_file_to_log_repo(monkeypatch, tmp_path):
+    """Med check_in skrivs loggen i loggrepet och checkas in där."""
+    remote = tmp_path / "remote.git"
+    _git("init", "--bare", "-q", str(remote))
+    token = tmp_path / "token"
+    token.write_text("dummy\n", encoding="utf-8")
+    monkeypatch.setenv("MEJER_LOGS_DIR", str(tmp_path / "clone"))
+    monkeypatch.setenv("MEJER_LOGS_REMOTE_URL", str(remote))
+    monkeypatch.setenv("MEJER_LOGS_TOKEN_FILE", str(token))
+
+    client = _client(monkeypatch)
+    client.post("/api/matches/run", json={"count": 2, "base_seed": 1, "check_in": True})
+    data = _wait_done(client)
+
+    assert data["error"] is None
+    assert data["done"] == 2
+    assert data["push_status"] and "pushat" in data["push_status"].lower()
+    # Filnamnet har datum och klockslag.
+    assert data["file"].startswith("mejer-matcher-") and data["file"].endswith(".jsonl")
+    # Filen finns i fjärren med båda matcherna.
+    names = _git("--git-dir", str(remote), "ls-tree", "-r", "--name-only", "HEAD").stdout
+    assert data["file"] in names
+    log = _git("--git-dir", str(remote), "log", "--oneline", "HEAD").stdout
+    assert log.count("Mejer: match") == 2
+
+
+def test_logrepo_endpoint_reports_ready(monkeypatch, tmp_path):
+    remote = tmp_path / "remote.git"
+    _git("init", "--bare", "-q", str(remote))
+    token = tmp_path / "token"
+    token.write_text("dummy\n", encoding="utf-8")
+    monkeypatch.setenv("MEJER_LOGS_DIR", str(tmp_path / "clone"))
+    monkeypatch.setenv("MEJER_LOGS_REMOTE_URL", str(remote))
+    monkeypatch.setenv("MEJER_LOGS_TOKEN_FILE", str(token))
+    client = _client(monkeypatch)
+    # Före första körningen är klonen inte gjord – inte redo.
+    assert client.get("/api/matches/logrepo").json()["ready"] is False
+    client.post("/api/matches/run", json={"count": 1, "check_in": True})
+    _wait_done(client)
+    assert client.get("/api/matches/logrepo").json()["ready"] is True
