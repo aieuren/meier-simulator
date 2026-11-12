@@ -92,12 +92,15 @@ lower bid). Multiple agents with distinct roles can also play full games.
   not. `render_digest_text` formats it for the prompt (and for the UI). `ask`
   sends a question with the digest and expects JSON
   (`{"answer", "chart", "followups"}`); `_clean_chart` drops charts the frontend
-  cannot draw. `AnalysisStore` accumulates loaded records across files. The
+  cannot draw. `AnalysisStore` keeps the loaded records grouped per source
+  file, so a single log can be dropped again when the user unchecks it. The
   chart types are `bar` (`labels`/`values`), `line` (`labels`/`series`) and
   `table` (`columns`/`rows`); the frontend renders them as plain SVG. Records
   are loaded from logs already checked into the log repo: `/api/analysis/logs`
-  lists them (`LogRepo.list_logs`) and `/api/analysis/load-logs` reads the
-  selected names (`LogRepo.log_path` rejects anything outside the clone).
+  lists them (`LogRepo.list_logs`, with `games` and `loaded`) and
+  `/api/analysis/select` sets the selection — chosen names are read in,
+  dropped names are removed (`LogRepo.log_path` rejects anything outside the
+  clone).
 - `tests/` – unit tests. No real LLM calls; `FakeLLM`/`ScriptedAgent` are used.
 
 ## Meier ranking is non-numeric (gotcha)

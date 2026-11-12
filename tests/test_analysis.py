@@ -42,7 +42,7 @@ def test_digest_text_mentions_roles():
     assert "PER ROLL" in text
 
 
-def test_store_accumulates_and_clears():
+def test_store_accumulates_and_removes():
     store = analysis.AnalysisStore()
     rec = json.dumps(_records(1)[0])
     assert store.add_text("a.jsonl", rec + "\n") == 1
@@ -50,6 +50,9 @@ def test_store_accumulates_and_clears():
     info = store.info()
     assert info["games"] == 2
     assert info["sources"] == ["a.jsonl", "b.jsonl"]
+    assert store.remove("a.jsonl") is True
+    assert store.remove("a.jsonl") is False
+    assert store.info()["sources"] == ["b.jsonl"]
     store.clear()
     assert store.info()["games"] == 0
 
@@ -142,34 +145,38 @@ def test_analysis_lists_logs_from_repo(monkeypatch, tmp_path):
     assert [e["name"] for e in data["logs"]] == [name]
     assert data["logs"][0]["games"] == 2
     assert data["logs"][0]["label"] == "1 januari 2026, 12:00"
+    assert data["logs"][0]["loaded"] is False
 
 
-def test_analysis_loads_selected_logs(monkeypatch, tmp_path):
+def test_analysis_select_loads_and_unloads(monkeypatch, tmp_path):
     name = _log_repo(monkeypatch, tmp_path, games=2)
     client = TestClient(web_app.app)
     web_app._store.clear()
 
-    res = client.post("/api/analysis/load-logs", json={"names": [name]})
+    res = client.post("/api/analysis/select", json={"names": [name]})
     assert res.status_code == 200
-    assert res.json()["added"] == 2
+    assert res.json()["games"] == 2
+
+    logs = client.get("/api/analysis/logs").json()["logs"]
+    assert logs[0]["loaded"] is True
 
     data = client.get("/api/analysis/data").json()
     assert data["games"] == 2
     assert name in data["sources"]
     assert data["digest_text"]
 
-    assert client.post("/api/analysis/clear").json()["games"] == 0
+    # Att avmarkera loggen tar bort den ur materialet igen.
+    assert client.post("/api/analysis/select", json={"names": []}).json()["games"] == 0
 
 
-def test_analysis_load_rejects_unknown_and_empty(monkeypatch, tmp_path):
+def test_analysis_select_rejects_unknown_name(monkeypatch, tmp_path):
     _log_repo(monkeypatch, tmp_path, games=1)
     client = TestClient(web_app.app)
     web_app._store.clear()
 
-    assert client.post("/api/analysis/load-logs", json={"names": []}).status_code == 400
-    bad = client.post("/api/analysis/load-logs", json={"names": ["../x.jsonl"]})
+    bad = client.post("/api/analysis/select", json={"names": ["../x.jsonl"]})
     assert bad.status_code == 404
-    missing = client.post("/api/analysis/load-logs", json={"names": ["saknas.jsonl"]})
+    missing = client.post("/api/analysis/select", json={"names": ["saknas.jsonl"]})
     assert missing.status_code == 404
 
 
@@ -199,18 +206,3 @@ def test_analysis_ask_uses_llm(monkeypatch):
     res = client.post("/api/analysis/ask", json={"question": "Vem vinner?"})
     assert res.status_code == 200
     assert res.json()["answer"] == "42"
-
-
-def test_analysis_export_roundtrip(monkeypatch, tmp_path):
-    name = _log_repo(monkeypatch, tmp_path, games=1)
-    client = TestClient(web_app.app)
-    web_app._store.clear()
-    client.post("/api/analysis/load-logs", json={"names": [name]})
-    export = client.get("/api/analysis/export")
-    assert export.status_code == 200
-    assert export.text.strip()
-    # Det exporterade materialet går att läsa in igen.
-    again = client.post("/api/analysis/load-logs", json={"names": [name]})
-    assert again.status_code == 200
-    assert client.get("/api/analysis/data").json()["games"] == 2
-    web_app._store.clear()

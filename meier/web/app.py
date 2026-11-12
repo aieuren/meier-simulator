@@ -13,7 +13,7 @@ import threading
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -483,56 +483,35 @@ def analysis_logs() -> dict:
         logs = repo.list_logs()
     except logrepo.LogRepoError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    loaded = set(_store.sources())
     for entry in logs:
         entry["games"] = _count_lines(repo.directory / entry["name"])
+        entry["loaded"] = entry["name"] in loaded
     return {"ready": True, "logs": logs}
 
 
-class _LoadLogsRequest(BaseModel):
-    names: list[str] = Field(default_factory=list, description="Loggfilnamn att läsa in")
+class _SelectLogsRequest(BaseModel):
+    names: list[str] = Field(default_factory=list, description="Valda loggfilnamn")
 
 
-@app.post("/api/analysis/load-logs")
-def analysis_load_logs(req: _LoadLogsRequest) -> dict:
-    """Läs in valda loggar från loggrepet i analysmaterialet."""
-    if not req.names:
-        raise HTTPException(status_code=400, detail="Välj minst en logg.")
+@app.post("/api/analysis/select")
+def analysis_select(req: _SelectLogsRequest) -> dict:
+    """Sätt vilka loggar som är inlästa. Valda läses in, övriga tas bort."""
     repo = logrepo.LogRepo()
-    added = 0
-    files: list[dict] = []
-    for name in req.names:
+    wanted = list(dict.fromkeys(req.names))
+    loaded = set(_store.sources())
+    for name in wanted:
+        if name in loaded:
+            continue
         try:
             path = repo.log_path(name)
         except logrepo.LogRepoError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
-        n = _store.add_file(path)
-        added += n
-        files.append({"name": name, "games": n})
-    if added == 0:
-        raise HTTPException(
-            status_code=400,
-            detail="Inga giltiga matchprotokoll hittades i loggarna.",
-        )
-    return {**_store.info(), "added": added, "files": files}
-
-
-@app.post("/api/analysis/clear")
-def analysis_clear() -> dict:
-    """Töm allt inläst analysmaterial."""
-    _store.clear()
+        _store.add_file(path)
+    for name in loaded:
+        if name not in wanted:
+            _store.remove(name)
     return _store.info()
-
-
-@app.get("/api/analysis/export")
-def analysis_export() -> PlainTextResponse:
-    """Ladda ner allt inläst material som en JSONL-fil igen."""
-    if not _store.snapshot():
-        raise HTTPException(status_code=404, detail="Inget material inläst.")
-    return PlainTextResponse(
-        _store.to_jsonl() + "\n",
-        media_type="application/x-ndjson",
-        headers={"Content-Disposition": 'attachment; filename="meier-analys.jsonl"'},
-    )
 
 
 class AnalysisAskRequest(BaseModel):

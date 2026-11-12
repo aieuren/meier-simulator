@@ -178,35 +178,20 @@
   <!-- Flik 5: analys – ställ frågor mot insamlade matchprotokoll -->
   <div class="tab-panel" id="tab-analys" hidden>
     <section class="card">
-      <h2>1. Välj loggar</h2>
+      <h2>Data källor (match-data)</h2>
       <p class="hint">
-        Välj bland de loggar som checkats in i loggrepet. Markera en eller flera
-        och läs in dem. Flera loggar sammanställs tillsammans till en större
-        datamängd.
+        Markera de loggar du vill fråga om. En vald logg läses in direkt, och
+        avmarkerar du den tas den bort. Flera loggar sammanställs tillsammans
+        till en större datamängd.
       </p>
       <div id="analysisLogList" class="analysis-log-list"></div>
       <div class="analysis-actions">
-        <button id="analysisLoadBtn" class="primary">Läs in valda</button>
         <button id="analysisRefreshBtn">Uppdatera listan</button>
       </div>
     </section>
 
     <section class="card">
-      <h2>2. Inlästa loggar</h2>
-      <div id="analysisDataStatus" class="session-status" hidden></div>
-      <div id="analysisSources" class="analysis-sources"></div>
-      <div class="analysis-actions">
-        <button id="analysisClearBtn">Töm</button>
-      </div>
-      <p class="match-download">
-        <a id="analysisExportLink" href="/api/analysis/export" download hidden>
-          Ladda ner allt inläst material (JSONL)
-        </a>
-      </p>
-    </section>
-
-    <section class="card">
-      <h2>3. Ställ en fråga</h2>
+      <h2>Ställ frågor om matchdatat</h2>
       <p class="hint">
         Frågan besvaras utifrån en sammanställning av det inlästa materialet.
         Du kan också be om ett diagram.
@@ -219,7 +204,7 @@
     </section>
 
     <section class="card" id="analysisResultCard" hidden>
-      <h2>4. Resultat</h2>
+      <h2>Resultat</h2>
       <div id="analysisAnswer" class="analysis-answer"></div>
       <div id="analysisChart" class="analysis-chart"></div>
       <div id="analysisFollowups" class="analysis-followups"></div>

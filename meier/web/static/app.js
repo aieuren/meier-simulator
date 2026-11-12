@@ -800,11 +800,9 @@ async function setupLogRepo() {
 // -- Flik 5: analys mot insamlade matchprotokoll ---------------------------
 
 function setupAnalysis() {
-  const load = $("analysisLoadBtn");
-  if (!load) return;
-  load.onclick = loadSelectedLogs;
-  $("analysisRefreshBtn").onclick = refreshAnalysisLogs;
-  $("analysisClearBtn").onclick = clearAnalysis;
+  const refresh = $("analysisRefreshBtn");
+  if (!refresh) return;
+  refresh.onclick = refreshAnalysisLogs;
   $("analysisAskBtn").onclick = askAnalysis;
   refreshAnalysisLogs();
   refreshAnalysisData();
@@ -842,6 +840,8 @@ function renderAnalysisLogs(data) {
     const cb = document.createElement("input");
     cb.type = "checkbox";
     cb.value = log.name;
+    cb.checked = !!log.loaded;
+    cb.onchange = syncSelectedLogs;
     const name = document.createElement("span");
     name.className = "analysis-log-name";
     name.textContent = log.label || log.name;
@@ -854,6 +854,26 @@ function renderAnalysisLogs(data) {
   });
 }
 
+// Markerade loggar läses in, avmarkerade tas bort. Sker direkt, utan feedback.
+async function syncSelectedLogs() {
+  const names = Array.from(
+    $("analysisLogList").querySelectorAll("input[type=checkbox]:checked")
+  ).map((cb) => cb.value);
+  try {
+    const res = await fetch("/api/analysis/select", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ names }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Fel");
+    await refreshAnalysisData();
+  } catch (e) {
+    $("analysisLogList").innerHTML =
+      `<p class="error">Kunde inte läsa in: ${e.message}</p>`;
+  }
+}
+
 async function refreshAnalysisData() {
   let data;
   try {
@@ -861,91 +881,9 @@ async function refreshAnalysisData() {
     data = await res.json();
     if (!res.ok) throw new Error(data.detail || "Fel");
   } catch (e) {
-    showAnalysisStatus(`Kunde inte hämta analysdata: ${e.message}`, true);
     return;
   }
-  renderAnalysisData(data);
-}
-
-function renderAnalysisData(data) {
-  const status = $("analysisDataStatus");
-  status.hidden = false;
-  if (!data.games) {
-    status.textContent = "Ingen data inläst än.";
-  } else {
-    const skipped = data.skipped ? ` (${data.skipped} rader överhoppade)` : "";
-    status.textContent = `${data.games} matcher inlästa från ${data.sources.length} fil(er)${skipped}.`;
-  }
-
-  const src = $("analysisSources");
-  src.innerHTML = "";
-  const names = data.sources || [];
-  const labels = data.source_labels || names;
-  labels.forEach((label, i) => {
-    const chip = document.createElement("span");
-    chip.className = "analysis-source-chip";
-    chip.textContent = label;
-    chip.title = names[i] || label;
-    src.appendChild(chip);
-  });
-
-  $("analysisExportLink").hidden = !data.games;
   $("analysisDigest").textContent = data.digest_text || "";
-}
-
-function showAnalysisStatus(text, isError) {
-  const status = $("analysisDataStatus");
-  status.hidden = false;
-  status.textContent = text;
-  status.classList.toggle("error", !!isError);
-}
-
-async function loadSelectedLogs() {
-  const btn = $("analysisLoadBtn");
-  const names = Array.from(
-    $("analysisLogList").querySelectorAll("input[type=checkbox]:checked")
-  ).map((cb) => cb.value);
-  if (!names.length) {
-    showAnalysisStatus("Markera minst en logg först.", true);
-    return;
-  }
-  btn.disabled = true;
-  btn.textContent = "Läser in…";
-  try {
-    const res = await fetch("/api/analysis/load-logs", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ names }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "Fel");
-    showAnalysisStatus(`Lade till ${data.added} matcher.`, false);
-    await refreshAnalysisData();
-  } catch (e) {
-    showAnalysisStatus(`Fel: ${e.message}`, true);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "Läs in valda";
-  }
-}
-
-async function clearAnalysis() {
-  const btn = $("analysisClearBtn");
-  btn.disabled = true;
-  try {
-    const res = await fetch("/api/analysis/clear", { method: "POST" });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.detail || "Fel");
-    }
-    $("analysisResultCard").hidden = true;
-    showAnalysisStatus("Materialet är tömt.", false);
-    await refreshAnalysisData();
-  } catch (e) {
-    showAnalysisStatus(`Fel: ${e.message}`, true);
-  } finally {
-    btn.disabled = false;
-  }
 }
 
 async function askAnalysis() {

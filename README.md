@@ -205,18 +205,17 @@ efter varje färdig match. Se avsnittet om loggrepet ovan.
 ## Analys
 
 Fliken **Analys** låter dig borra vidare i insamlat material. Under
-**1. Välj loggar** markerar du en eller flera loggar som redan checkats in i
-loggrepet. De visas med datum och tid samt antal matcher. Knappen
-**Uppdatera listan** hämtar nya loggar från fjärren. Under **2. Inlästa loggar**
-ser du vad som är inläst, och där kan du tömma materialet eller ladda ner det.
-Flera loggar sammanställs tillsammans, så att du kan bygga en stor datamängd över
-tid, från flera körningar.
+**Data källor (match-data)** markerar du de loggar som redan checkats in i
+loggrepet. En markerad logg läses in direkt, och avmarkerar du den tas den bort
+igen. Varje rad visar datum och tid samt antal matcher. Knappen **Uppdatera
+listan** hämtar nya loggar från fjärren. Flera loggar sammanställs tillsammans,
+så att du kan bygga en stor datamängd över tid, från flera körningar.
 
-Därefter ställer du frågor i fritext under **3. Ställ en fråga**. Svaret bygger
-på en kompakt sammanställning av materialet – aggregerade mått per roll,
+Därefter ställer du frågor i fritext under **Ställ frågor om matchdatat**. Svaret
+bygger på en kompakt sammanställning av materialet – aggregerade mått per roll,
 fördelningar över bud och tärningsutfall, och en matchlista. Du kan också be om
 ett diagram: stapel, linje eller tabell. Diagrammen ritas som ren SVG i
-webbläsaren, utan externa bibliotek. Resultatet visas under **4. Resultat**.
+webbläsaren, utan externa bibliotek. Resultatet visas under **Resultat**.
 
 Tre saker är värda att veta:
 
@@ -250,11 +249,9 @@ Tre saker är värda att veta:
 | GET | `/api/matches/download` | Ladda ner protokollet (JSONL) |
 | GET | `/api/matches/logrepo` | Om loggrepet är redo för automatisk incheckning |
 | GET | `/api/analysis/data` | Inläst material: antal matcher, källor och sammanställning |
-| GET | `/api/analysis/logs` | Lista loggar som finns incheckade i loggrepet |
-| POST | `/api/analysis/load-logs` | Läs in valda loggar från loggrepet (fältet `names`) |
+| GET | `/api/analysis/logs` | Lista loggar i loggrepet (med `games` och `loaded`) |
+| POST | `/api/analysis/select` | Sätt inlästa loggar: valda läses in, övriga tas bort (`names`) |
 | POST | `/api/analysis/ask` | Ställ en fråga mot materialet (svar + ev. diagram) |
-| GET | `/api/analysis/export` | Ladda ner allt inläst material som JSONL |
-| POST | `/api/analysis/clear` | Töm allt inläst analysmaterial |
 
 En match är hundratals LLM-anrop och tar minuter, så en serie körs i en
 bakgrundstråd. `POST /api/matches/run` svarar direkt, och klienten följer

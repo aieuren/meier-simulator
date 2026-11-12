@@ -247,36 +247,47 @@ def ask(
 
 
 class AnalysisStore:
-    """Håller de uppladdade matchprotokollen och deras sammanställning."""
+    """Håller de inlästa matchprotokollen och deras sammanställning.
+
+    Protokollen grupperas per källfil, så att en enskild fil kan tas bort
+    igen när användaren avmarkerar den.
+    """
 
     def __init__(self) -> None:
-        self.records: list[dict[str, Any]] = []
-        self.sources: list[str] = []
-        self.skipped = 0
+        self._sources: dict[str, list[dict[str, Any]]] = {}
+        self._skipped: dict[str, int] = {}
         self.lock = threading.Lock()
 
     def add_text(self, name: str, text: str) -> int:
-        """Lägg till protokollen i en JSONL-text. Returnerar antalet tillagda."""
+        """Läs in protokollen i en JSONL-text under ``name``. Returnerar antalet."""
         records, skipped = parse_jsonl_text(text)
         with self.lock:
-            self.records.extend(records)
-            self.sources.append(name)
-            self.skipped += skipped
+            self._sources[name] = records
+            self._skipped[name] = skipped
         return len(records)
 
     def add_file(self, path: str | Path) -> int:
         p = Path(path)
         return self.add_text(p.name, p.read_text(encoding="utf-8"))
 
+    def remove(self, name: str) -> bool:
+        """Ta bort en inläst källa. Returnerar True om den fanns."""
+        with self.lock:
+            self._skipped.pop(name, None)
+            return self._sources.pop(name, None) is not None
+
+    def sources(self) -> list[str]:
+        with self.lock:
+            return list(self._sources)
+
     def clear(self) -> None:
         with self.lock:
-            self.records = []
-            self.sources = []
-            self.skipped = 0
+            self._sources = {}
+            self._skipped = {}
 
     def snapshot(self) -> list[dict[str, Any]]:
         with self.lock:
-            return list(self.records)
+            return [rec for records in self._sources.values() for rec in records]
 
     def digest(self) -> dict[str, Any]:
         return build_digest(self.snapshot())
@@ -284,12 +295,7 @@ class AnalysisStore:
     def info(self) -> dict[str, Any]:
         with self.lock:
             return {
-                "games": len(self.records),
-                "sources": list(self.sources),
-                "skipped": self.skipped,
+                "games": sum(len(v) for v in self._sources.values()),
+                "sources": list(self._sources),
+                "skipped": sum(self._skipped.values()),
             }
-
-    def to_jsonl(self) -> str:
-        return "\n".join(
-            json.dumps(rec, ensure_ascii=False) for rec in self.snapshot()
-        )
