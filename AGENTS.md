@@ -17,8 +17,11 @@ lower bid). Multiple agents with distinct roles can also play full games.
   `FACE_WEIGHTS`: faces 3-6 (the long sides) are 1.3x as likely as 1-2 (the
   square end faces). This makes Meier and 11 rarer than on a cube; odd and even
   stay equally likely, since 1/2 sit on the ends (one odd, one even).
-- `meier/llm.py` – LLM client. Prefers Anthropic (Claude) via
-  `ANTHROPIC_API_KEY`; falls back to the OpenHands agent-server proxy.
+- `meier/llm.py` – LLM client. Provider priority: Anthropic (Claude) via
+  `ANTHROPIC_API_KEY`, then Google Gemini via `GEMINI_API_KEY`/`GOOGLE_API_KEY`,
+  then the OpenHands agent-server proxy. Gemini uses the OpenAI-compatible
+  endpoint `https://generativelanguage.googleapis.com/v1beta/openai`, so it
+  shares the `openhands` code path — only the key and base URL differ.
   `LLMClient.last_usage` holds the token count from the last call.
   Self-heals the agent-server LLM profile (see gotcha below).
 - `meier/game.py` – multi-agent game engine. Keeps each agent isolated; no agent
@@ -252,6 +255,14 @@ python -m meier.cli play rackar kalkyl trygg
   agent-server at `http://127.0.0.1:60000`, model `openhands_Default`, with the
   session key in `X-Session-API-Key`. Claude models are not reachable through the
   managed proxy key; set `ANTHROPIC_API_KEY` to use a real Claude account.
+- **Gemini free tier** (verified 2026-11-15): the free tier allows ~10k
+  requests/day, which covers ~94 matches (a match is ~106 calls / ~80k tokens).
+  Model `gemini-2.5-flash` is closed to new users; use `gemini-3.1-flash-lite`
+  (fast, generous quota, good enough for this decision problem) or
+  `gemini-3.8-flash` (heavier, sometimes 503 under load). Set the key in
+  `GEMINI_API_KEY` to activate. Free-tier prompts may be used by Google to
+  improve their models — fine for a dice game, but not for anything sensitive.
+  The key lives outside the repo at `~/.gemini_key` (mode 600); never commit it.
 - Never print the session API key. Read it from the process env if needed.
 - The web app is served on port 12000 in this environment.
 - **Long runs / sandbox lifetime**: the runtime pauses an idle environment

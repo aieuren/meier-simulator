@@ -71,7 +71,8 @@ class LLMConfig:
 
         Prioritet:
         1. Anthropic (Claude-kontot) via ``ANTHROPIC_API_KEY``.
-        2. OpenHands agent-server-proxy (Agent Canvas).
+        2. Google Gemini via ``GEMINI_API_KEY`` eller ``GOOGLE_API_KEY``.
+        3. OpenHands agent-server-proxy (Agent Canvas).
         """
         anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
         if anthropic_key:
@@ -80,6 +81,23 @@ class LLMConfig:
                 model=os.environ.get("MEIER_MODEL", "claude-sonnet-4-5"),
                 api_key=anthropic_key,
                 base_url=os.environ.get("ANTHROPIC_BASE_URL", ""),
+            )
+
+        # Gemini talar OpenAI-format på /v1beta/openai, så samma kodväg som
+        # agent-server-proxyn används – bara en riktig nyckel och annan bas-URL.
+        gemini_key = (
+            os.environ.get("GEMINI_API_KEY", "").strip()
+            or os.environ.get("GOOGLE_API_KEY", "").strip()
+        )
+        if gemini_key:
+            return cls(
+                provider="gemini",
+                model=os.environ.get("MEIER_MODEL", "gemini-3.1-flash-lite"),
+                api_key=gemini_key,
+                base_url=os.environ.get(
+                    "MEIER_BASE_URL",
+                    "https://generativelanguage.googleapis.com/v1beta/openai",
+                ),
             )
 
         # Agent-servern på localhost proxar den hanterade nyckeln och kräver
