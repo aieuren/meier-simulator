@@ -284,6 +284,16 @@ python -m meier.cli play rackar kalkyl trygg
   `$GITHUB_PUSH_TOKEN` (not stored on disk), since `$GITHUB_TOKEN` lacks write
   access to this repo. The variable is only exported when its name appears in
   the command, so run `GITHUB_PUSH_TOKEN="$GITHUB_PUSH_TOKEN" git push …`.
+  **Gotcha (2026-11-15):** a *global* helper (`credential.https://github.com.helper`
+  → `~/.openhands/git-credential-helper`) is also configured and returns a
+  different 40-char token with no write access. Git tries both in order, so the
+  wrong one can win and the push fails with `403 Write access to repository not
+  granted` even though `$GITHUB_PUSH_TOKEN` has `push`. The repo-local config now
+  clears the list first (`credential.helper ""` then the push-token helper), so
+  plain `git push origin main` works. If the 403 returns, run
+  `git config --local --unset-all credential.helper` and re-add
+  `""` + the `!f() { echo username=x-access-token; echo password=$GITHUB_PUSH_TOKEN; }; f`
+  entry.
 - The user has delegated version control: from now on, commit and push to
   `main` yourself when the work is green and complete — no need to ask first.
 - Secrets for this conversation live in the agent-server, not the shell:
