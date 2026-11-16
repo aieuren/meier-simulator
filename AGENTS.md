@@ -262,7 +262,9 @@ python -m meier.cli play rackar kalkyl trygg
   `gemini-3.8-flash` (heavier, sometimes 503 under load). Set the key in
   `GEMINI_API_KEY` to activate. Free-tier prompts may be used by Google to
   improve their models — fine for a dice game, but not for anything sensitive.
-  The key lives outside the repo at `~/.gemini_key` (mode 600); never commit it.
+  The key lives outside the repo at `/workspace/meier-secrets/gemini.key`
+  (mode 600), which `run.sh` reads. `/workspace` is a persistent volume;
+  `/home` and `/tmp` are wiped on restart.
 - Never print the session API key. Read it from the process env if needed.
 - The web app is served on port 12000 in this environment.
 - **Long runs / sandbox lifetime**: the runtime pauses an idle environment
@@ -302,6 +304,28 @@ python -m meier.cli play rackar kalkyl trygg
   A secret added mid-conversation is not injected until it is attached this way.
   Names must be valid shell identifiers (letters, digits, underscore) — a hyphen
   makes the value unusable as an environment variable.
+
+## Startpanelen i Agent Canvas (self-service)
+
+The user wanted a way to start the web app without asking the agent. The answer
+is a Canvas app at `canvas-app/`: a page in the Canvas UI with Start/Stop/Refresh
+buttons. It calls the agent-server bash endpoint through
+`host.agentServer.request`, so Canvas handles auth and **no secret lives in the
+app code**. No own server is needed.
+
+- Install/update: `./canvas-app/install.sh` (uses `SESSION_API_KEY` from
+  `/proc/1/environ`). Install leaves the app disabled; the script enables it too.
+- The panel lives in the agent-server home (`~/.openhands/canvas-extensions/`),
+  which is **not** a persistent volume. Re-run `install.sh` after a restart.
+- `session_start` hooks **do** run — but only when passed explicitly in
+  `StartConversationRequest.hook_config`. A project-local
+  `.openhands/hooks.json` is **not** picked up automatically on a plain
+  conversation create (verified 2026-11-16). So a hook is not a self-service
+  path here; the Canvas panel is.
+- The bash endpoint's shell **does** have `RUNTIME_URL`, so the panel can show
+  the public web address.
+- Gotcha: `pkill -f 'uvicorn …'` kills its own shell because the pattern matches
+  the command line. Use the bracket trick `pkill -f '[u]vicorn meier.web.app'`.
 
 ## Match logs are checked into a separate GitHub repo
 

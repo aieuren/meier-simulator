@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "name": "meier-startpanel",
+  "display_name": "Meier – startpanel",
+  "version": "0.1.0",
+  "description": "Starta, stoppa och kontrollera Meier-webbappen.",
+  "entrypoint": "extension.js",
+  "contributes": {
+    "pages": [
+      {
+        "id": "meier-start",
+        "title": "Meier – startpanel",
+        "path": "/meier-start",
+        "nav_label": "Meier",
+        "description": "Starta och stoppa Meier-webbappen."
+      }
+    ]
+  }
+}

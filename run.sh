@@ -24,6 +24,14 @@ MEIER_LOG="${MEIER_LOG:-/tmp/meier_web.log}"
 # som inte alltid ligger på PATH.
 export PATH="$HOME/.local/bin:$PATH"
 
+# Plocka upp Gemini-nyckeln från en beständig fil om den inte redan är satt.
+# /home nollställs vid omstart; /workspace ligger kvar. Se MEIER_SECRETS_DIR.
+MEIER_SECRETS_DIR="${MEIER_SECRETS_DIR:-/workspace/meier-secrets}"
+if [ -z "${GEMINI_API_KEY:-}" ] && [ -r "$MEIER_SECRETS_DIR/gemini.key" ]; then
+  GEMINI_API_KEY="$(cat "$MEIER_SECRETS_DIR/gemini.key")"
+  export GEMINI_API_KEY
+fi
+
 MODE="foreground"
 case "${1:-}" in
   --background|-b) MODE="background" ;;
