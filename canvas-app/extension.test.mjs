@@ -58,6 +58,19 @@ test("activate kastar vid fel host-version", async () => {
   assert.throws(() => activate({ apiVersion: "2" }), /host API 1/);
 });
 
+test("activate startar appen direkt, utan att röra en som redan svarar", async () => {
+  const { activate } = await loadExtension();
+  const { host, calls } = makeHost();
+  activate(host);
+  await new Promise((r) => setTimeout(r, 20));
+
+  const boot = calls.find((c) => /run\.sh --background/.test(c.body.command));
+  assert.ok(boot, "activate startade inte appen");
+  // Kommandot måste först fråga health-endpointen och avbryta om den svarar,
+  // så en pågående match inte dödas av en onödig omstart.
+  assert.match(boot.body.command, /api\/health[^\n]*&& exit 0/);
+});
+
 test("mount renderar panelen och frågar status via rätt endpoint", async () => {
   const { activate } = await loadExtension();
   const { host, pages, calls, dom } = makeHost();
@@ -73,9 +86,10 @@ test("mount renderar panelen och frågar status via rätt endpoint", async () =>
   // checkStatus() anropas direkt vid mount – vänta in det.
   await new Promise((r) => setTimeout(r, 20));
   assert.ok(calls.length >= 1, "förväntade minst ett agentServer-anrop");
-  assert.equal(calls[0].method, "POST");
-  assert.equal(calls[0].path, "/api/bash/execute_bash_command");
-  assert.match(calls[0].body.command, /RUNTIME_URL/);
+  const statusCall = calls.find((c) => /RUNTIME_URL/.test(c.body.command));
+  assert.ok(statusCall, "förväntade ett statusanrop");
+  assert.equal(statusCall.method, "POST");
+  assert.equal(statusCall.path, "/api/bash/execute_bash_command");
 
   unmount();
   assert.equal(container.textContent, "");

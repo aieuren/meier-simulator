@@ -24,6 +24,11 @@ const CMD_START =
   `./run.sh --background`;
 // Skriver ut RUNTIME_URL först, sedan antingen health-JSON eller MEIER_DOWN.
 const CMD_STATUS = `echo "URL=$RUNTIME_URL"; curl -sf -m 3 http://127.0.0.1:${PORT}/api/health || echo MEIER_DOWN`;
+// Startar bara om appen inte svarar. Används när Canvas laddar panelen, så att
+// en pågående match inte dödas av en onödig omstart.
+const CMD_ENSURE_START =
+  `curl -sf -m 3 http://127.0.0.1:${PORT}/api/health >/dev/null 2>&1 && exit 0; ` +
+  CMD_START;
 
 const STYLE_ID = "meier-startpanel-style";
 const CSS = `
@@ -158,6 +163,21 @@ export function activate(host) {
 
   ensureStyle();
 
+  // Efter en vila är appen nere. Starta den när Canvas laddar panelen, så att
+  // användaren inte behöver navigera hit. Idempotent: rör en app som redan
+  // svarar (CMD_ENSURE_START startar bara om health-kollen misslyckas).
+  (async () => {
+    try {
+      await host.agentServer.request({
+        method: "POST",
+        path: "/api/bash/execute_bash_command",
+        body: { command: CMD_ENSURE_START },
+      });
+    } catch {
+      // Panelens sida visar status och fel; här tiger vi.
+    }
+  })();
+
   const registered = host.registerPage("meier-start", ({ container }) => {
     const root = el("div", "meier-root");
     container.append(root);
@@ -267,22 +287,24 @@ export function activate(host) {
     }
 
     async function checkStatus() {
-      if (disposed) return;
+      if (disposed) return false;
       dot.dataset.state = "busy";
       statusTitle.textContent = "Kontrollerar …";
       statusDetail.textContent = "";
       try {
         const res = await runBash(CMD_STATUS);
-        if (disposed) return;
+        if (disposed) return false;
         const { url, body } = splitStatusOutput(res && res.stdout);
         if (url) setUrl(url);
         const up = !body.includes("MEIER_DOWN");
         renderStatus(up, up ? body : "Inget svar på port " + PORT + ".");
+        return up;
       } catch (err) {
-        if (disposed) return;
+        if (disposed) return false;
         dot.dataset.state = "down";
         statusTitle.textContent = "Kunde inte nå agent-servern";
         statusDetail.textContent = String((err && err.message) || err);
+        return false;
       }
     }
 
@@ -327,7 +349,12 @@ export function activate(host) {
     stopBtn.addEventListener("click", () => perform("stop"));
     refreshBtn.addEventListener("click", () => checkStatus());
 
-    checkStatus();
+    // Öppnar man panelen för att starta appen är det irriterande att behöva
+    // trycka en gång till. Är appen redan uppe händer inget; annars startar vi.
+    (async () => {
+      const up = await checkStatus();
+      if (!up && !disposed) await perform("start");
+    })();
 
     return () => {
       disposed = true;

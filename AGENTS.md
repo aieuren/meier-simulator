@@ -345,6 +345,40 @@ konversation skapad med `hook_config` → panel återinstallerad (`enabled=true`
 och app uppe (`HTTP 200`), `HookExecutionEvent` i loggen. Kroken körs också vid
 återupptagning av en befintlig konversation (`POST /api/conversations/{id}/run`).
 
+### Vad som INTE startar appen (utrett 2026-11-17)
+
+Allt nedan är testat och fungerar **inte** som autostart vid containerstart.
+Listan finns för att slippa upprepa felsökningen.
+
+- **SessionStart-kroken kör inte vid kallstart.** Den kräver att en konversation
+  skapas *med* `hook_config`. Att bara öppna en konversation (`GET
+  /api/conversations/{id}`, som Canvas gör) kör den inte — testat: appen förblev
+  `HTTP 000`.
+- **Ingen startkrok i agent-servern.** `openhands-agent-server --help` visar
+  bara `--host/--port/--reload/--import-modules/--extra-python-path`. Inga
+  träffar på `OH_STARTUP`, `startup_command`, `runtime_services`, `prestart`,
+  `boot_command` i binären.
+- **`POST …/runtime/reprovision`** svarar `200 {"runtime_status":"available"}`
+  men startar inte appen.
+- **`.openhands/setup.sh` körs inte** — varken vid kallstart eller reprovision.
+- **App-backend (`backend` i manifestet) är fel verktyg.** Servern har
+  `canvas_app_backend_enable_lifecycle_v1` och endpoints
+  `/api/canvas-extensions/installed/{name}/backend/{prepare,start,stop,logs}`,
+  och docsen säger "Agent Canvas starts the app through the server lifecycle
+  automatically". Men en backend är en **nedladdad binär** (`.tar.gz` med
+  `sha256`, `argv`), avsedd för appar som *äger* sin tjänst. Meier är redan en
+  Python-app som körs via `run.sh`; att paketera om den som binär artifact vore
+  ett stort ingrepp för samma resultat som panelens auto-start ger.
+- **Idle-timern ska inte manipuleras.** `GET /server_info` visar `idle_time`, och
+  det är "the exact signal runtime-api polls to decide when a sandbox is idle
+  enough to pause/reap" (officiell cookbook). Ett bash-anrop via API:et
+  nollställer timern — men att polla för att hålla sandlådan vaken kringgår
+  plattformens design och görs **inte**.
+
+**Det som faktiskt löser användarens önskan:** panelens auto-start (se
+"Startpanelen i Agent Canvas" ovan). Laddar Canvas den aktiverade panelen kör
+`activate()` en health-koll och startar appen om den är nere.
+
 ## Startpanelen i Agent Canvas (self-service)
 
 The user wanted a way to start the web app without asking the agent. The answer
@@ -355,6 +389,13 @@ app code**. No own server is needed.
 
 - Install/update: `./canvas-app/install.sh` (uses `SESSION_API_KEY` from
   `/proc/1/environ`). Install leaves the app disabled; the script enables it too.
+- **The panel self-starts on activate.** Canvas calls `activate(host)` whenever it
+  loads the enabled app, and the panel then runs `CMD_ENSURE_START`: a health
+  probe that exits early when the app answers and otherwise runs the full
+  `CMD_START`. So after a container wake, simply loading Canvas brings the app
+  back without opening the panel or pressing anything. The health-first check is
+  what keeps it safe — a plain `CMD_START` would kill and restart a live match on
+  every page load.
 - The panel lives in the agent-server home (`~/.openhands/canvas-extensions/`),
   which is **not** a persistent volume. Re-run `install.sh` after a restart.
 - The bash endpoint's shell **does** have `RUNTIME_URL`, so the panel can show
