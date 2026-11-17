@@ -198,6 +198,27 @@ Consequences to keep in mind:
 `LLMClient.last_usage` still reports the real token count per call, and
 `total_usage` sums a client's calls.
 
+## Cleaning up conversations: two stores, not one (2026-11-17)
+
+The fallback left conversations in **two** places, and the Agent Canvas sidebar
+lists the **cloud** one:
+
+1. **Local agent-server** – `/var/openhands/conversations/<hex32>/`. The
+   agent-server builds an in-memory registry from this directory at start, so
+   deleting a directory by hand does not lower `/api/conversations/count` until
+   the next restart. Delete through the API to keep the registry in sync:
+   `DELETE http://127.0.0.1:60000/api/conversations/<uuid>` with header
+   `X-Session-API-Key: $SESSION_API_KEY` (the key is in pid 1's environ).
+2. **OpenHands Cloud** – the sidebar's list. These are real cloud objects, so
+   they survive any local cleanup. Use the cloud API:
+   `GET /api/v1/app-conversations/search?limit=100` (max 100 per page, follow
+   `next_page_id`) and `DELETE /api/v1/app-conversations/<id>`, both with
+   `Authorization: Bearer $OPENHANDS_API_KEY`. `.../count` gives the total.
+
+Deleting a local directory by hand only removes disk usage; the cloud entry and
+the in-memory registry stay. Do both stores. `OH_CONVERSATIONS_PATH` points at
+the local one; the cloud base is `https://app.all-hands.dev`.
+
 ## Token accounting and Gemini rate limits (measured 2026-11-17)
 
 - Each `LLMClient` keeps `total_usage` (accumulated) and `calls`. A match has
