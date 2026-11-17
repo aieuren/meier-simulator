@@ -221,6 +221,56 @@ the model thinks longer). `LLMClient.last_usage` reports the real count.
 - The path `…/v1beta/openai/v1/chat/completions` (a doubled `/v1`) still
   answers 200; the base URL is not the problem when a call fails.
 
+## Why every LLM call spawned a full OpenHands conversation (fixed 2026-11-17)
+
+The agent-server's `/v1/chat/completions` is an OpenAI-compatible **shim**: it
+starts a whole OpenHands conversation per request (model
+`openhands/deepseek-v4.1-flash`, 500 iterations, terminal/editor/browser), with
+the Meier prompt as `initial_message`. One call = one conversation. A match
+made ~100 calls, so a single run created dozens of conversations (34 in
+`/var/openhands/conversations`, clustered 16:18–16:26 UTC).
+
+Root cause: `LLMConfig._from_provider_env()` read the Gemini key **only from
+the environment**. `run.sh` exports `GEMINI_API_KEY` from
+`/workspace/meier-secrets/gemini.key`, but any run started another way (the
+CLI, a test, a hook) had no key in its environment. It then fell through to
+the `openhands` provider, whose base URL is the local agent-server shim — and
+every call became a conversation.
+
+Fix: `_read_secret()` now also reads the persistent key file
+(`MEIER_SECRETS_DIR`, default `/workspace/meier-secrets`) for both
+`gemini.key` and `anthropic.key`. Provider selection is therefore the same no
+matter how the process starts. Verified: a decision made with no key in the
+environment now goes to Gemini and creates **zero** new conversations.
+
+Note this is about *where* calls go, not the agent-server itself. The shim is
+still the last-resort fallback when no key exists anywhere.
+
+## Quota strategy (free tier)
+
+Measured limits for `gemini-3.1-flash-lite` on the free tier (a 429 response
+states the exact value):
+
+- **RPM = 15** (`GenerateRequestsPerMinutePerProjectPerModel-FreeTier`). Quotas
+  are **per project, not per API key**, so every client shares one budget.
+- RPD and TPM are not shown without signing in to AI Studio. The free tier
+  typically allows ~1 000 requests/day, which is ~10 matches at ~100 calls
+  each.
+
+We stay under the limit instead of only reacting to 429s:
+
+- A shared `_RateLimiter` spaces calls to `60 / max_rpm × margin` seconds
+  apart (`margin = 1.15`), so we target ~13 calls/min, not 15. The margin
+  absorbs the sliding window; sitting exactly on the limit still trips a 429.
+- `MEIER_MAX_RPM` sets the ceiling (default 15 for Gemini; `0` disables it).
+- The limiter is keyed on `(max_rpm, margin)` and shared process-wide, so all
+  agents in a match share one pacer.
+- A 429 still raises `_RateLimited` and waits `rate_limit_backoff` (20 s), so
+  an unexpected limit degrades gracefully rather than aborting the match.
+
+A match of ~100 calls at ~13/min takes ~8 minutes of pacing, plus the model's
+own latency. Lower `MEIER_MAX_RPM` if other projects share the same key.
+
 ## Environment restarts wipe global packages
 
 Dependencies are installed globally (no venv). After a container restart,

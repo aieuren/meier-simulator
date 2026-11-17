@@ -13,8 +13,11 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
+from collections import deque
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -58,6 +61,75 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+def _read_secret(filename: str, env_names: tuple[str, ...]) -> str:
+    """Läs en nyckel från miljön, annars från den beständiga nyckelfilen.
+
+    ``/home`` nollställs vid en containeromstart, men ``/workspace`` ligger kvar.
+    Nyckeln bor därför i ``MEIER_SECRETS_DIR`` (standard ``/workspace/meier-secrets``).
+    Utan denna fallback saknar en körning som startas utanför ``run.sh``
+    nyckeln och faller tillbaka på agent-serverns proxy – som skapar en full
+    konversation per anrop i stället för att bara svara.
+    """
+    for env_name in env_names:
+        value = os.environ.get(env_name, "").strip()
+        if value:
+            return value
+    secrets_dir = os.environ.get("MEIER_SECRETS_DIR", "/workspace/meier-secrets")
+    try:
+        return (Path(secrets_dir) / filename).read_text().strip()
+    except OSError:
+        return ""
+
+
+class _RateLimiter:
+    """Delad taktbegränsare som håller anropen under kvottaket.
+
+    Kvoten gäller per projekt, inte per klient, så alla klienter delar en
+    instans (se ``_limiter_for``). Anropen jämnas ut i stället för att komma i
+    skurar, och en marginal gör att vi aldrig ligger exakt på taket – annars
+    räcker det att fönstret glider lite för att en 429:a ska slå till.
+    """
+
+    def __init__(self, max_rpm: float, margin: float = 1.15) -> None:
+        self.max_rpm = max_rpm
+        self.margin = margin
+        self._lock = threading.Lock()
+        self._next_allowed = 0.0
+
+    @property
+    def interval(self) -> float:
+        """Minsta tid mellan två anrop, med marginal."""
+        return 60.0 / self.max_rpm * self.margin
+
+    def acquire(self) -> None:
+        """Blockera tills nästa anrop får göras."""
+        if self.max_rpm <= 0:
+            return
+        interval = self.interval
+        with self._lock:
+            now = time.monotonic()
+            wait = self._next_allowed - now
+            if wait > 0:
+                time.sleep(wait)
+                now = time.monotonic()
+            self._next_allowed = now + interval
+
+
+_limiters: dict[tuple[float, float], _RateLimiter] = {}
+_limiters_lock = threading.Lock()
+
+
+def _limiter_for(max_rpm: float, margin: float) -> _RateLimiter:
+    """Hämta den delade taktbegränsaren för en given kvot."""
+    key = (max_rpm, margin)
+    with _limiters_lock:
+        limiter = _limiters.get(key)
+        if limiter is None:
+            limiter = _RateLimiter(max_rpm, margin)
+            _limiters[key] = limiter
+        return limiter
+
+
 def _is_transient_exc(exc: Exception) -> bool:
     """Avgör om ett SDK-undantag är tillfälligt (timeout, anslutning, 429, 5xx)."""
     name = type(exc).__name__.lower()
@@ -86,6 +158,11 @@ class LLMConfig:
     #: Väntetid vid kvottak (429). Kvotfönstret är en minut, så väntan måste
     #: vara längre än vid ett vanligt tidsavbrott.
     rate_limit_backoff: float = 20.0
+    #: Tak för anrop per minut (0 = ingen begränsning). Håller oss under
+    #: leverantörens kvot så att en match inte stoppas av 429:or.
+    max_rpm: float = 0.0
+    #: Marginal över kvottaket: vi siktar på 1/marginal av tillåten takt.
+    rate_limit_margin: float = 1.15
 
     @property
     def profile_name(self) -> str:
@@ -109,11 +186,16 @@ class LLMConfig:
         # beslut. MEIER_TIMEOUT och MEIER_RETRIES styr detta per körning.
         cfg.timeout = _env_float("MEIER_TIMEOUT", cfg.timeout)
         cfg.max_retries = _env_int("MEIER_RETRIES", cfg.max_retries)
+        # Håll anropen under leverantörens kvot. MEIER_MAX_RPM=0 stänger av.
+        if cfg.provider == "gemini":
+            cfg.max_rpm = _env_float("MEIER_MAX_RPM", cfg.max_rpm or 15.0)
+        else:
+            cfg.max_rpm = _env_float("MEIER_MAX_RPM", cfg.max_rpm)
         return cfg
 
     @classmethod
     def _from_provider_env(cls) -> "LLMConfig":
-        anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+        anthropic_key = _read_secret("anthropic.key", ("ANTHROPIC_API_KEY",))
         if anthropic_key:
             return cls(
                 provider="anthropic",
@@ -124,10 +206,7 @@ class LLMConfig:
 
         # Gemini talar OpenAI-format på /v1beta/openai, så samma kodväg som
         # agent-server-proxyn används – bara en riktig nyckel och annan bas-URL.
-        gemini_key = (
-            os.environ.get("GEMINI_API_KEY", "").strip()
-            or os.environ.get("GOOGLE_API_KEY", "").strip()
-        )
+        gemini_key = _read_secret("gemini.key", ("GEMINI_API_KEY", "GOOGLE_API_KEY"))
         if gemini_key:
             return cls(
                 provider="gemini",
@@ -207,8 +286,15 @@ class LLMClient:
         snabbare vid 429.
         """
         attempts = max(1, self.config.max_retries)
+        limiter = (
+            _limiter_for(self.config.max_rpm, self.config.rate_limit_margin)
+            if self.config.max_rpm > 0
+            else None
+        )
         last: Exception | None = None
         for attempt in range(attempts):
+            if limiter is not None:
+                limiter.acquire()
             try:
                 return call()
             except (_Transient, httpx.HTTPError) as exc:

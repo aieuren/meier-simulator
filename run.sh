@@ -12,6 +12,8 @@
 #   HOST        adress att binda (standard 0.0.0.0)
 #   PYTHON      python-binär (standard python3)
 #   MEIER_LOG   loggfil i bakgrundsläget (standard /tmp/meier_web.log)
+#   MEIER_TIMEOUT/MEIER_RETRIES  timeout (s) och antal försök per LLM-anrop
+#   MEIER_MAX_RPM  tak för LLM-anrop per minut (0 = av)
 
 cd "$(dirname "$0")" || exit 1
 
@@ -37,6 +39,9 @@ fi
 # om utan att blockera hela matchen. Kort timeout + fler försök med kvotvila.
 export MEIER_TIMEOUT="${MEIER_TIMEOUT:-30}"
 export MEIER_RETRIES="${MEIER_RETRIES:-6}"
+# Håll anropen under kvottaket (anrop/minut). Standard 15 för Gemini; sätt 0
+# för att stänga av. Marginalen (1.15) gör att vi ligger strax under taket.
+export MEIER_MAX_RPM="${MEIER_MAX_RPM:-15}"
 
 MODE="foreground"
 case "${1:-}" in
