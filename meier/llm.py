@@ -32,6 +32,32 @@ class _Transient(LLMError):
     """Tillfälligt fel som är värt att försöka igen (timeout, 429, 5xx)."""
 
 
+class _RateLimited(_Transient):
+    """Kvottak (429). Kräver längre väntan än ett vanligt tillfälligt fel."""
+
+
+def _env_float(name: str, default: float) -> float:
+    """Läs en miljövariabel som flyttal, annars standardvärdet."""
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
+def _env_int(name: str, default: int) -> int:
+    """Läs en miljövariabel som heltal, annars standardvärdet."""
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
 def _is_transient_exc(exc: Exception) -> bool:
     """Avgör om ett SDK-undantag är tillfälligt (timeout, anslutning, 429, 5xx)."""
     name = type(exc).__name__.lower()
@@ -54,9 +80,12 @@ class LLMConfig:
     base_url: str = ""
     max_tokens: int = 1024
     temperature: float = 0.7
-    timeout: float = 180.0
+    timeout: float = 60.0
     max_retries: int = 3
     retry_backoff: float = 1.5
+    #: Väntetid vid kvottak (429). Kvotfönstret är en minut, så väntan måste
+    #: vara längre än vid ett vanligt tidsavbrott.
+    rate_limit_backoff: float = 20.0
 
     @property
     def profile_name(self) -> str:
@@ -74,6 +103,16 @@ class LLMConfig:
         2. Google Gemini via ``GEMINI_API_KEY`` eller ``GOOGLE_API_KEY``.
         3. OpenHands agent-server-proxy (Agent Canvas).
         """
+        cfg = cls._from_provider_env()
+        # Gemini-endpointen hänger ibland i flera minuter. En kort timeout gör
+        # att ett sådant anrop snabbt görs om i stället för att blockera ett helt
+        # beslut. MEIER_TIMEOUT och MEIER_RETRIES styr detta per körning.
+        cfg.timeout = _env_float("MEIER_TIMEOUT", cfg.timeout)
+        cfg.max_retries = _env_int("MEIER_RETRIES", cfg.max_retries)
+        return cfg
+
+    @classmethod
+    def _from_provider_env(cls) -> "LLMConfig":
         anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
         if anthropic_key:
             return cls(
@@ -132,6 +171,27 @@ class LLMClient:
     #: Tokenräkning från det senaste anropet (prompt/completion/total).
     last_usage: dict[str, int] = field(default_factory=dict, init=False)
 
+    #: Summan av alla anrop klienten gjort (prompt/completion/total).
+    total_usage: dict[str, int] = field(
+        default_factory=lambda: {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+        init=False,
+    )
+    #: Antal anrop som gjorts.
+    calls: int = field(default=0, init=False)
+
+    def _record_usage(self, usage: dict[str, Any]) -> None:
+        """Spara senaste anropets räkning och lägg den till summan."""
+        self.last_usage = {
+            k: int(v) for k, v in usage.items() if isinstance(v, (int, float))
+        }
+        if "total_tokens" not in self.last_usage:
+            self.last_usage["total_tokens"] = self.last_usage.get(
+                "prompt_tokens", 0
+            ) + self.last_usage.get("completion_tokens", 0)
+        self.calls += 1
+        for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
+            self.total_usage[key] += self.last_usage.get(key, 0)
+
     def complete(self, system: str, user: str, *, json_mode: bool = False) -> str:
         return self._with_retries(
             lambda: self._complete_anthropic(system, user)
@@ -140,7 +200,12 @@ class LLMClient:
         )
 
     def _with_retries(self, call):
-        """Kör ett LLM-anrop och gör om det vid tillfälliga fel."""
+        """Kör ett LLM-anrop och gör om det vid tillfälliga fel.
+
+        Ett kvottak (429) behöver längre väntan än ett vanligt tidsavbrott,
+        eftersom fönstret är en minut. ``retry_backoff`` trappas därför upp
+        snabbare vid 429.
+        """
         attempts = max(1, self.config.max_retries)
         last: Exception | None = None
         for attempt in range(attempts):
@@ -150,7 +215,10 @@ class LLMClient:
                 last = exc
                 if attempt + 1 >= attempts:
                     break
-                time.sleep(self.config.retry_backoff * (attempt + 1))
+                delay = self.config.retry_backoff * (attempt + 1)
+                if isinstance(exc, _RateLimited):
+                    delay = max(delay, self.config.rate_limit_backoff * (attempt + 1))
+                time.sleep(delay)
         raise LLMError(f"Kunde inte nå LLM efter {attempts} försök: {last}") from last
 
     # -- Anthropic (Claude-kontot) ------------------------------------------
@@ -181,12 +249,11 @@ class LLMClient:
         parts = [block.text for block in resp.content if getattr(block, "type", "") == "text"]
         usage = getattr(resp, "usage", None)
         if usage is not None:
-            self.last_usage = {
-                "prompt_tokens": getattr(usage, "input_tokens", 0) or 0,
-                "completion_tokens": getattr(usage, "output_tokens", 0) or 0,
-            }
-            self.last_usage["total_tokens"] = (
-                self.last_usage["prompt_tokens"] + self.last_usage["completion_tokens"]
+            self._record_usage(
+                {
+                    "prompt_tokens": getattr(usage, "input_tokens", 0) or 0,
+                    "completion_tokens": getattr(usage, "output_tokens", 0) or 0,
+                }
             )
         return "".join(parts).strip()
 
@@ -225,11 +292,7 @@ class LLMClient:
                 raise LLMError(str(exc)) from exc
 
         data = resp.json()
-        self.last_usage = {
-            k: int(v)
-            for k, v in (data.get("usage") or {}).items()
-            if isinstance(v, (int, float))
-        }
+        self._record_usage(data.get("usage") or {})
         try:
             return data["choices"][0]["message"]["content"].strip()
         except (KeyError, IndexError, TypeError) as exc:
@@ -252,9 +315,10 @@ class LLMClient:
                         f"LLM-profilen '{self.config.profile_name}' saknas i agent-servern"
                     ) from exc
             if status == 429 or status >= 500:
-                raise _Transient(
-                    f"LLM-anropet avvisades tillfälligt ({status}): {exc.response.text[:200]}"
-                ) from exc
+                message = f"LLM-anropet avvisades tillfälligt ({status}): {exc.response.text[:200]}"
+                if status == 429:
+                    raise _RateLimited(message) from exc
+                raise _Transient(message) from exc
             raise LLMError(
                 f"LLM-anrop misslyckades ({status}): {exc.response.text[:300]}"
             ) from exc

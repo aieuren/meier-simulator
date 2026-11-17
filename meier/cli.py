@@ -173,6 +173,16 @@ def _cmd_match(args: argparse.Namespace) -> int:
             f"syn {b['call_rate'] * 100:4.1f}% (lyckas {b['call_success_rate'] * 100:4.1f}%)"
         )
 
+    tok = stats["tokens"]
+    print(f"\nTokenförbrukning (provider {records[0].provider}, modell {records[0].model}):")
+    print(
+        f"  per match: {tok['per_game']['total_tokens']:.0f} tokens "
+        f"({tok['per_game']['prompt_tokens']:.0f} in, "
+        f"{tok['per_game']['completion_tokens']:.0f} ut), "
+        f"{tok['calls_per_game']:.0f} LLM-anrop"
+    )
+    print(f"  hela serien: {tok['total']['total_tokens']} tokens, {tok['calls']} anrop")
+
     return 0
 
 

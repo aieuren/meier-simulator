@@ -655,11 +655,22 @@ function renderMatchSummary(summary) {
       );
     })
     .join("");
+  const tok = summary.tokens;
+  const tokenLine = tok
+    ? `<p class="hint">
+         LLM-förbrukning: i snitt ${Math.round(tok.per_game.total_tokens).toLocaleString("sv-SE")} tokens
+         per match (${Math.round(tok.per_game.prompt_tokens).toLocaleString("sv-SE")} in,
+         ${Math.round(tok.per_game.completion_tokens).toLocaleString("sv-SE")} ut),
+         ${Math.round(tok.calls_per_game)} anrop per match.
+         Hela serien: ${tok.total.total_tokens.toLocaleString("sv-SE")} tokens, ${tok.calls} anrop.
+       </p>`
+    : "";
   box.innerHTML = `
     <p class="hint">
       ${summary.games} matcher, i snitt ${summary.avg_rounds} rundor per match.
       Startspelaren vinner ${pct(summary.starter_win_rate)} av matcherna.
     </p>
+    ${tokenLine}
     <table class="stat-table">
       <thead>
         <tr>

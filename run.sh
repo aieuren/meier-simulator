@@ -32,6 +32,12 @@ if [ -z "${GEMINI_API_KEY:-}" ] && [ -r "$MEIER_SECRETS_DIR/gemini.key" ]; then
   export GEMINI_API_KEY
 fi
 
+# Gemini-endpointen hänger ibland i minuter och har ett kvottak på fri nivå
+# (15 anrop/minut). En match gör ~100-200 anrop, så ett anrop måste kunna göras
+# om utan att blockera hela matchen. Kort timeout + fler försök med kvotvila.
+export MEIER_TIMEOUT="${MEIER_TIMEOUT:-30}"
+export MEIER_RETRIES="${MEIER_RETRIES:-6}"
+
 MODE="foreground"
 case "${1:-}" in
   --background|-b) MODE="background" ;;

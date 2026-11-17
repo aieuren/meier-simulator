@@ -118,6 +118,7 @@ class GameRecord:
     elimination_order: list[str]
     events: list[dict[str, Any]]
     player_stats: dict[str, dict[str, Any]]
+    usage: dict[str, Any] = field(default_factory=dict)
     started_at: float = field(default_factory=time.time)
 
     def to_dict(self) -> dict[str, Any]:
@@ -136,6 +137,7 @@ class GameRecord:
             "lives": self.lives,
             "elimination_order": self.elimination_order,
             "player_stats": self.player_stats,
+            "usage": self.usage,
             "events": self.events,
         }
 
@@ -179,7 +181,30 @@ def play_match(
         elimination_order=_elimination_order(session.log),
         events=[e.to_dict() for e in session.log],
         player_stats=_player_stats(session.log, names),
+        usage=_match_usage(agents),
     )
+
+
+def _match_usage(agents: list[MeierPlayerAgent]) -> dict[str, Any]:
+    """Summera LLM-förbrukningen för alla agenter i en match.
+
+    Varje agent har sin egen klient, så en matchs total är summan över dem.
+    ``by_role`` visar hur mycket varje roll drog, vilket avslöjar om en
+    personlighet (t.ex. en som resonerar mer) är dyrare än de andra.
+    """
+    total = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    calls = 0
+    by_role: dict[str, dict[str, int]] = {}
+    for agent in agents:
+        usage = getattr(agent.llm, "total_usage", None) or {}
+        calls += getattr(agent.llm, "calls", 0)
+        for key in total:
+            total[key] += int(usage.get(key, 0))
+        by_role[agent.role.key] = {
+            "calls": getattr(agent.llm, "calls", 0),
+            **{k: int(usage.get(k, 0)) for k in total},
+        }
+    return {"total": total, "calls": calls, "by_role": by_role}
 
 
 def run_matches(
@@ -257,12 +282,19 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
     winner_counts: dict[str, int] = {}
     starter_wins = 0
     call_outcomes = {"caller_wins": 0, "caller_loses": 0}
+    token_totals = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    token_calls = 0
 
     for rec in records:
         total_rounds += rec.get("rounds", 0)
         winner_counts[rec["winner_role"]] = winner_counts.get(rec["winner_role"], 0) + 1
         if rec.get("starter") == rec.get("winner"):
             starter_wins += 1
+
+        usage = rec.get("usage") or {}
+        for key in token_totals:
+            token_totals[key] += int((usage.get("total") or {}).get(key, 0))
+        token_calls += int(usage.get("calls", 0))
 
         for p in rec["players"]:
             bucket = per_role.setdefault(
@@ -333,4 +365,13 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
         "starter_win_rate": _rate(starter_wins, total_games),
         "call_outcomes": call_outcomes,
         "roles": per_role,
+        "tokens": {
+            "total": token_totals,
+            "calls": token_calls,
+            "per_game": {
+                key: round(value / total_games, 1) if total_games else 0.0
+                for key, value in token_totals.items()
+            },
+            "calls_per_game": round(token_calls / total_games, 1) if total_games else 0.0,
+        },
     }
