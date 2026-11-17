@@ -18,12 +18,13 @@ lower bid). Multiple agents with distinct roles can also play full games.
   square end faces). This makes Meier and 11 rarer than on a cube; odd and even
   stay equally likely, since 1/2 sit on the ends (one odd, one even).
 - `meier/llm.py` – LLM client. Provider priority: Anthropic (Claude) via
-  `ANTHROPIC_API_KEY`, then Google Gemini via `GEMINI_API_KEY`/`GOOGLE_API_KEY`,
-  then the OpenHands agent-server proxy. Gemini uses the OpenAI-compatible
-  endpoint `https://generativelanguage.googleapis.com/v1beta/openai`, so it
-  shares the `openhands` code path — only the key and base URL differ.
-  `LLMClient.last_usage` holds the token count from the last call.
-  Self-heals the agent-server LLM profile (see gotcha below).
+  `ANTHROPIC_API_KEY`, then Google Gemini via `GEMINI_API_KEY`/`GOOGLE_API_KEY`
+  (or the key files under `MEIER_SECRETS_DIR`). Both are real endpoints; there
+  is **no** fallback to the OpenHands agent-server. Gemini uses the
+  OpenAI-compatible endpoint
+  `https://generativelanguage.googleapis.com/v1beta/openai`.
+  `LLMClient.last_usage` holds the token count from the last call. Without a
+  key, `LLMConfig.from_env()` raises `LLMError`.
 - `meier/game.py` – multi-agent game engine. Keeps each agent isolated; no agent
   sees another's secret dice.
 - `meier/session.py` – interactive session: full flow to a call (roll → raise
@@ -174,29 +175,28 @@ double raise. A property check over 500 random matches (200 for `bid >=
 accepted`, 300 for the `slå → höja` pattern) found 0 violations, and every `slå`
 is `blind=True`.
 
-## Agent Canvas: LLM profiles vanish on container restart (gotcha)
+## The OpenHands agent-server proxy is gone (removed 2026-11-17)
 
-The app talks to the LLM through the local agent-server proxy
-(`http://127.0.0.1:60000/v1/chat/completions`) with the model name
-`openhands_<profile>`. The agent server keeps its LLM profiles **in memory**, so
-a container restart wipes them. Then every call fails with
-`404 {"detail":"Profile '<name>' not found"}`, and the web app looks dead.
+Earlier the app could fall back to the local agent-server proxy
+(`http://127.0.0.1:60000/v1/chat/completions`, model `openhands_<profile>`).
+**That path is deleted.** Every request there started a whole OpenHands
+conversation, so a match filled `/var/openhands/conversations` with hundreds of
+conversations. `LLMConfig._from_provider_env()` now accepts only `anthropic` or
+`gemini` and raises `LLMError` when no key exists.
 
-`LLMClient` self-heals: on that 404 it recreates the profile and retries once.
-The profile points at a concrete model (`MEIER_PROFILE_MODEL`, default
-`openhands/deepseek-v4.1-flash`). Note the model-name forms:
+Consequences to keep in mind:
 
-- `openhands_Default` – a *profile* name; must exist in the agent server.
-- `openhands/deepseek-v4.1-flash` – the concrete model the profile targets.
+- There is no proxy fallback. Without `ANTHROPIC_API_KEY` / `GEMINI_API_KEY`
+  (or the key files) the app fails fast with a clear message instead of quietly
+  spending a conversation per call.
+- The self-healing profile logic (`_MissingProfile`, `_ensure_profile`,
+  `profile_name`) and the session-key helper are removed. Do not reintroduce
+  them; the agent-server proxy is not a supported backend for this app.
+- The old proxy added a large fixed prompt overhead (~17.4k tokens) per call.
+  That cost is gone with the proxy.
 
-Useful endpoints (header `X-Session-API-Key: $SESSION_API_KEY`):
-`GET /api/settings`, `GET /api/llm/models/verified`, `GET /api/profiles`,
-`POST /api/profiles/<name>`, `POST /api/profiles/<name>/activate`.
-
-Token cost (measured): the proxy adds a large fixed prompt overhead (~17.4k
-tokens) to every call, independent of our own prompt length. Asking the model
-for a `reasoning` field costs extra output tokens (roughly +200–600, more when
-the model thinks longer). `LLMClient.last_usage` reports the real count.
+`LLMClient.last_usage` still reports the real token count per call, and
+`total_usage` sums a client's calls.
 
 ## Token accounting and Gemini rate limits (measured 2026-11-17)
 
@@ -237,14 +237,16 @@ CLI, a test, a hook) had no key in its environment. It then fell through to
 the `openhands` provider, whose base URL is the local agent-server shim — and
 every call became a conversation.
 
-Fix: `_read_secret()` now also reads the persistent key file
+Fix (two steps): `_read_secret()` now reads the persistent key file
 (`MEIER_SECRETS_DIR`, default `/workspace/meier-secrets`) for both
-`gemini.key` and `anthropic.key`. Provider selection is therefore the same no
-matter how the process starts. Verified: a decision made with no key in the
-environment now goes to Gemini and creates **zero** new conversations.
+`gemini.key` and `anthropic.key`, so provider selection is the same no matter
+how the process starts. Then the `openhands` fallback was **deleted
+entirely**: without a key the client raises `LLMError` instead of starting a
+conversation. Verified: a decision made with no key in the environment creates
+**zero** new conversations, and the app reports `provider: gemini`.
 
-Note this is about *where* calls go, not the agent-server itself. The shim is
-still the last-resort fallback when no key exists anywhere.
+The agent-server itself is still running — this change is about the app no
+longer using it as an LLM backend.
 
 ## Quota strategy (free tier)
 
@@ -324,10 +326,12 @@ python -m meier.cli play rackar kalkyl trygg
 
 ## Environment notes
 
-- In the Agent Canvas runtime, the working LLM endpoint is the local
-  agent-server at `http://127.0.0.1:60000`, model `openhands_Default`, with the
-  session key in `X-Session-API-Key`. Claude models are not reachable through the
-  managed proxy key; set `ANTHROPIC_API_KEY` to use a real Claude account.
+- In the Agent Canvas runtime the app talks straight to Gemini (or Anthropic),
+  **not** to the local agent-server. The old proxy path
+  (`http://127.0.0.1:60000`, model `openhands_Default`, header
+  `X-Session-API-Key`) is removed: every request there started an OpenHands
+  conversation. Claude models are not reachable through the managed proxy key;
+  set `ANTHROPIC_API_KEY` to use a real Claude account.
 - **Gemini free tier** (verified 2026-11-15): the free tier allows ~10k
   requests/day, which covers ~94 matches (a match is ~106 calls / ~80k tokens).
   Model `gemini-2.5-flash` is closed to new users; use `gemini-3.1-flash-lite`

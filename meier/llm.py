@@ -1,9 +1,14 @@
 """LLM-klient för Meier-agenterna.
 
-Klienten föredrar ett riktigt Anthropic-konto (Claude) via ``ANTHROPIC_API_KEY``.
-Saknas den faller den tillbaka på OpenHands agent-server-proxyn, som finns i
-Agent Canvas-miljön. Båda talar OpenAI-liknande ``/v1/chat/completions``, men
-Anthropic används via sin egen SDK när nyckeln finns.
+Klienten använder ett riktigt Anthropic-konto (Claude) via ``ANTHROPIC_API_KEY``
+eller Google Gemini via ``GEMINI_API_KEY``. Båda talar OpenAI-liknande
+``/v1/chat/completions``, men Anthropic används via sin egen SDK när nyckeln
+finns.
+
+Det finns **ingen** återfallsväg till OpenHands agent-server. Den proxyn är en
+shim som startar en hel OpenHands-konversation per anrop, vilket fyllde
+``/var/openhands/conversations`` med hundratals konversationer under en match.
+Saknas nyckel avbryts anropet i stället, med ett tydligt fel.
 
 Anropen görs om några gånger vid tillfälliga fel (timeout, nätverksfel, 429 och
 5xx), eftersom en lång matchserie annars avbryts av ett enstaka tidsavbrott.
@@ -15,7 +20,6 @@ import json
 import os
 import threading
 import time
-from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -25,10 +29,6 @@ import httpx
 
 class LLMError(RuntimeError):
     """Fel vid anrop mot språkmodellen."""
-
-
-class _MissingProfile(LLMError):
-    """Agent-servern saknar LLM-profilen som modellnamnet pekar på."""
 
 
 class _Transient(LLMError):
@@ -146,7 +146,7 @@ def _is_transient_exc(exc: Exception) -> bool:
 class LLMConfig:
     """Konfiguration för en LLM-anslutning."""
 
-    provider: str  # "anthropic" eller "openhands"
+    provider: str  # "anthropic" eller "gemini"
     model: str
     api_key: str = ""
     base_url: str = ""
@@ -164,13 +164,6 @@ class LLMConfig:
     #: Marginal över kvottaket: vi siktar på 1/marginal av tillåten takt.
     rate_limit_margin: float = 1.15
 
-    @property
-    def profile_name(self) -> str:
-        """Profilnamn i agent-servern för ett ``openhands_<namn>``-modellnamn."""
-        prefix = "openhands_"
-        return self.model[len(prefix):] if self.model.startswith(prefix) else ""
-
-
     @classmethod
     def from_env(cls) -> "LLMConfig":
         """Välj anslutning utifrån miljövariabler.
@@ -178,7 +171,10 @@ class LLMConfig:
         Prioritet:
         1. Anthropic (Claude-kontot) via ``ANTHROPIC_API_KEY``.
         2. Google Gemini via ``GEMINI_API_KEY`` eller ``GOOGLE_API_KEY``.
-        3. OpenHands agent-server-proxy (Agent Canvas).
+
+        Saknas båda nycklarna höjs ett fel. Det finns ingen återfallsväg till
+        OpenHands agent-server, eftersom varje anrop där startar en egen
+        konversation.
         """
         cfg = cls._from_provider_env()
         # Gemini-endpointen hänger ibland i flera minuter. En kort timeout gör
@@ -205,7 +201,7 @@ class LLMConfig:
             )
 
         # Gemini talar OpenAI-format på /v1beta/openai, så samma kodväg som
-        # agent-server-proxyn används – bara en riktig nyckel och annan bas-URL.
+        # Anthropic använder via HTTP.
         gemini_key = _read_secret("gemini.key", ("GEMINI_API_KEY", "GOOGLE_API_KEY"))
         if gemini_key:
             return cls(
@@ -218,27 +214,13 @@ class LLMConfig:
                 ),
             )
 
-        # Agent-servern på localhost proxar den hanterade nyckeln och kräver
-        # endast sessionsnyckeln i X-Session-API-Key.
-        base_url = os.environ.get("MEIER_BASE_URL", "http://127.0.0.1:60000")
-        model = os.environ.get("MEIER_MODEL", "openhands_Default")
-        return cls(provider="openhands", model=model, base_url=base_url)
-
-
-def _session_api_key() -> str:
-    """Hämta Agent Canvas sessionsnyckel utan att skriva ut den."""
-    key = os.environ.get("SESSION_API_KEY", "")
-    if key:
-        return key
-    for path in ("/proc/1/environ", "/proc/self/environ"):
-        try:
-            with open(path, "rb") as fh:
-                for entry in fh.read().split(b"\0"):
-                    if entry.startswith(b"SESSION_API_KEY="):
-                        return entry.split(b"=", 1)[1].decode()
-        except OSError:
-            continue
-    return ""
+        raise LLMError(
+            "Ingen LLM-nyckel hittades. Sätt ANTHROPIC_API_KEY eller "
+            "GEMINI_API_KEY, eller lägg nyckeln i "
+            f"{os.environ.get('MEIER_SECRETS_DIR', '/workspace/meier-secrets')}"
+            "/{anthropic,gemini}.key. Anrop mot OpenHands agent-server används "
+            "medvetet inte: varje anrop där startar en egen konversation."
+        )
 
 
 @dataclass
@@ -275,7 +257,7 @@ class LLMClient:
         return self._with_retries(
             lambda: self._complete_anthropic(system, user)
             if self.config.provider == "anthropic"
-            else self._complete_openhands(system, user, json_mode=json_mode)
+            else self._complete_http(system, user, json_mode=json_mode)
         )
 
     def _with_retries(self, call):
@@ -343,8 +325,8 @@ class LLMClient:
             )
         return "".join(parts).strip()
 
-    # -- OpenHands agent-server-proxy ---------------------------------------
-    def _complete_openhands(self, system: str, user: str, *, json_mode: bool) -> str:
+    # -- Gemini via OpenAI-kompatibelt HTTP --------------------------------
+    def _complete_http(self, system: str, user: str, *, json_mode: bool) -> str:
         base = self.config.base_url.rstrip("/")
         if base.endswith("/v1"):
             url = f"{base}/chat/completions"
@@ -361,22 +343,10 @@ class LLMClient:
             ],
         }
         headers = {"Content-Type": "application/json"}
-        if self.config.provider == "openhands":
-            headers["X-Session-API-Key"] = _session_api_key()
         if self.config.api_key:
             headers["Authorization"] = f"Bearer {self.config.api_key}"
 
-        try:
-            resp = self._post(url, payload, headers)
-        except _MissingProfile:
-            # Agent-servern tappar sina LLM-profiler vid omstart. Skapa profilen
-            # på nytt och gör om anropet en gång.
-            self._ensure_profile(base)
-            try:
-                resp = self._post(url, payload, headers)
-            except _MissingProfile as exc:
-                raise LLMError(str(exc)) from exc
-
+        resp = self._post(url, payload, headers)
         data = resp.json()
         self._record_usage(data.get("usage") or {})
         try:
@@ -391,15 +361,6 @@ class LLMClient:
             return resp
         except httpx.HTTPStatusError as exc:
             status = exc.response.status_code
-            if status == 404 and self.config.profile_name:
-                try:
-                    detail = exc.response.json().get("detail", "")
-                except ValueError:
-                    detail = ""
-                if "not found" in str(detail):
-                    raise _MissingProfile(
-                        f"LLM-profilen '{self.config.profile_name}' saknas i agent-servern"
-                    ) from exc
             if status == 429 or status >= 500:
                 message = f"LLM-anropet avvisades tillfälligt ({status}): {exc.response.text[:200]}"
                 if status == 429:
@@ -412,25 +373,6 @@ class LLMClient:
             raise _Transient(f"Kunde inte nå LLM: {exc}") from exc
         except httpx.HTTPError as exc:
             raise LLMError(f"Kunde inte nå LLM: {exc}") from exc
-
-    def _ensure_profile(self, base: str) -> None:
-        """Skapa och aktivera LLM-profilen som modellnamnet pekar på.
-
-        Agent-serverns profiler ligger i minnet och försvinner när containern
-        startas om. Profilen pekar i sin tur på en konkret modell
-        (``MEIER_PROFILE_MODEL``, standard ``openhands/deepseek-v4.1-flash``).
-        """
-        name = self.config.profile_name
-        if not name:
-            return
-        target = os.environ.get("MEIER_PROFILE_MODEL", "openhands/deepseek-v4.1-flash")
-        headers = {"Content-Type": "application/json", "X-Session-API-Key": _session_api_key()}
-        body = {"llm": {"model": target}, "include_secrets": True}
-        try:
-            httpx.post(f"{base}/api/profiles/{name}", json=body, headers=headers, timeout=30)
-            httpx.post(f"{base}/api/profiles/{name}/activate", json={}, headers=headers, timeout=30)
-        except httpx.HTTPError as exc:
-            raise LLMError(f"Kunde inte återskapa LLM-profilen '{name}': {exc}") from exc
 
 
 def parse_json_object(text: str) -> dict[str, Any]:

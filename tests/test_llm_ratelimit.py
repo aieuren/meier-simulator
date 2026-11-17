@@ -34,6 +34,32 @@ def test_read_secret_empty_when_missing(tmp_path, monkeypatch):
     assert _read_secret("gemini.key", ("GEMINI_API_KEY",)) == ""
 
 
+def test_from_env_raises_without_any_key(tmp_path, monkeypatch):
+    """Utan nyckel ska anropet avbrytas – aldrig falla tillbaka på OpenHands."""
+    import pytest
+
+    from meier.llm import LLMError
+
+    monkeypatch.setenv("MEIER_SECRETS_DIR", str(tmp_path))
+    for name in ("GEMINI_API_KEY", "GOOGLE_API_KEY", "ANTHROPIC_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    with pytest.raises(LLMError) as exc:
+        LLMConfig.from_env()
+    assert "Ingen LLM-nyckel" in str(exc.value)
+
+
+def test_no_openhands_provider_remains():
+    """OpenHands-proxyn ska vara helt borta ur kodvägen."""
+    import meier.llm as llm_mod
+
+    assert not hasattr(llm_mod, "_session_api_key")
+    assert not hasattr(llm_mod, "_MissingProfile")
+    assert not hasattr(llm_mod.LLMClient, "_complete_openhands")
+    assert not hasattr(llm_mod.LLMClient, "_ensure_profile")
+    assert not hasattr(llm_mod.LLMConfig, "profile_name")
+    assert "127.0.0.1:60000" not in open(llm_mod.__file__, encoding="utf-8").read()
+
+
 def test_from_env_reads_gemini_key_from_file(tmp_path, monkeypatch):
     """Utan nyckel i miljön ska nyckelfilen ge gemini-providern."""
     (tmp_path / "gemini.key").write_text("filnyckel")
@@ -103,8 +129,8 @@ def test_client_paces_retries(monkeypatch):
     from meier.llm import LLMClient, _Transient
 
     cfg = LLMConfig(
-        provider="openhands",
-        model="openhands_Default",
+        provider="gemini",
+        model="gemini-3.1-flash-lite",
         max_retries=3,
         retry_backoff=0.0,
         max_rpm=212.0,  # 0.3 s mellanrum

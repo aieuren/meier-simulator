@@ -10,8 +10,8 @@ from meier.llm import LLMClient, LLMConfig, LLMError, _RateLimited, _Transient
 
 def _client(max_retries=3, backoff=0.0, rate_backoff=0.0) -> LLMClient:
     cfg = LLMConfig(
-        provider="openhands",
-        model="openhands_Default",
+        provider="gemini",
+        model="gemini-3.1-flash-lite",
         max_retries=max_retries,
         retry_backoff=backoff,
         rate_limit_backoff=rate_backoff,
