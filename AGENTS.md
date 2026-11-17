@@ -334,6 +334,15 @@ app code**. No own server is needed.
   source without credentials, so a private repo fails with "Failed to fetch
   extension from github:…". Install is pinned to the commit it resolved; push a
   fix, then reinstall to move the pin.
+- Gotcha: **Agent Canvas is a separate frontend mounted at `/canvas`.** The root
+  app (`app.all-hands.dev/`) has no `/extensions/…` route and no sidebar entry
+  for App pages, so a page URL without the prefix looks like a 404 even though
+  the install is fine. Both are SPAs that answer 200 for any path, so a 200
+  proves nothing — check the route manifest instead. Correct URLs:
+  - Panel: `/canvas/extensions/meier-startpanel/meier-start`
+  - Apps manager: `/canvas/customize` → Apps (also `/canvas/apps`)
+- `nav_label` in the page manifest is dropped by the agent server; the sidebar
+  falls back to the page `title`. Setting `nav_label` has no effect.
 
 ## Match logs are checked into a separate GitHub repo
 
