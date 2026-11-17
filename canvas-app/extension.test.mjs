@@ -103,3 +103,33 @@ test("host.agentServer fel visas som feltext, inte krasch", async () => {
   await new Promise((r) => setTimeout(r, 20));
   assert.match(container.textContent, /Kunde inte nå agent-servern/);
 });
+
+test("Starta städar upp en döende process innan run.sh körs", async () => {
+  // Regression: utan väntan kunde en döende server svara på run.sh:s
+  // health-koll, som då hoppade över starten – och inget kördes.
+  const { activate } = await loadExtension();
+  const { host, pages, calls, dom } = makeHost();
+  activate(host);
+  const container = dom.window.document.createElement("section");
+  pages.get("meier-start")({ container, path: "", navigate() {} });
+  await new Promise((r) => setTimeout(r, 20));
+
+  const before = calls.length;
+  const startBtn = [...container.querySelectorAll("button")].find(
+    (b) => b.textContent.trim() === "Starta",
+  );
+  assert.ok(startBtn, "hittade ingen Starta-knapp");
+  startBtn.dispatchEvent(new dom.window.Event("click"));
+  await new Promise((r) => setTimeout(r, 30));
+
+  const startCall = calls.slice(before).find((c) =>
+    /run\.sh --background/.test(c.body.command),
+  );
+  assert.ok(startCall, "Starta anropade inte run.sh");
+  const cmd = startCall.body.command;
+  const iKill = cmd.indexOf("pkill");
+  const iWait = cmd.indexOf("seq 1 40");
+  const iRun = cmd.indexOf("./run.sh --background");
+  assert.ok(iKill >= 0 && iWait > iKill && iRun > iWait,
+    "Starta måste stoppa, vänta på ledig port och först därefter starta");
+});

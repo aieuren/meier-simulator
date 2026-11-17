@@ -9,9 +9,19 @@
 const PROJECT_DIR = "/workspace/project";
 const PORT = 12000;
 
-const CMD_START = `cd ${PROJECT_DIR} && ./run.sh --background`;
 // Klammertricket hindrar pkill från att matcha sin egen kommandorad.
 const CMD_STOP = `pkill -f '[u]vicorn meier.web.app' || true`;
+// Starta = stoppa, vänta tills porten är ledig, starta sedan. Utan väntan kan
+// en döende process svara på run.sh:s health-koll, som då tror att servern kör
+// och hoppar över starten – resultatet blir att inget körs.
+const CMD_START =
+  `cd ${PROJECT_DIR} && ` +
+  `{ pkill -f '[u]vicorn meier.web.app' || true; ` +
+  `for i in $(seq 1 40); do ` +
+  `curl -sf -m 1 http://127.0.0.1:${PORT}/api/health >/dev/null 2>&1 || break; ` +
+  `sleep 0.25; ` +
+  `done; } ; ` +
+  `./run.sh --background`;
 // Skriver ut RUNTIME_URL först, sedan antingen health-JSON eller MEIER_DOWN.
 const CMD_STATUS = `echo "URL=$RUNTIME_URL"; curl -sf -m 3 http://127.0.0.1:${PORT}/api/health || echo MEIER_DOWN`;
 

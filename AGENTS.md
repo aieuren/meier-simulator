@@ -326,6 +326,14 @@ app code**. No own server is needed.
   the public web address.
 - Gotcha: `pkill -f 'uvicorn …'` kills its own shell because the pattern matches
   the command line. Use the bracket trick `pkill -f '[u]vicorn meier.web.app'`.
+- Gotcha: `pkill` returns at once, but the dying server still answers health
+  checks for about a second. Pressing Stop then Start therefore made `run.sh`
+  see a live port, skip the start, and leave nothing running. The panel's Start
+  now stops, waits for the port to go quiet, and only then calls `run.sh`.
+- Install from Git works only for a **public** repo. The server fetches the
+  source without credentials, so a private repo fails with "Failed to fetch
+  extension from github:…". Install is pinned to the commit it resolved; push a
+  fix, then reinstall to move the pin.
 
 ## Match logs are checked into a separate GitHub repo
 
