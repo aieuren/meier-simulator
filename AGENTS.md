@@ -198,6 +198,29 @@ tokens) to every call, independent of our own prompt length. Asking the model
 for a `reasoning` field costs extra output tokens (roughly +200–600, more when
 the model thinks longer). `LLMClient.last_usage` reports the real count.
 
+## Token accounting and Gemini rate limits (measured 2026-11-17)
+
+- Each `LLMClient` keeps `total_usage` (accumulated) and `calls`. A match has
+  one client per agent, so `_match_usage()` sums them into `GameRecord.usage`
+  (`total`, `calls`, `by_role`). `summarize()` aggregates this as `tokens`
+  (`total`, `per_game`, `calls_per_game`), shown in the CLI and the web summary.
+- Real match via the web app (Gemini `gemini-3.1-flash-lite`, seed 11, 8
+  rounds): **62 018 tokens over 82 calls** (~756 tokens/call). Earlier log
+  files show 94–197 calls per match (8–13 rounds), so budget ~60–120k tokens
+  and ~100–200 calls per match. Roles that reason more (e.g. `kalkyl`) are
+  the costliest.
+- **Gemini free tier is 15 requests/minute** (per-minute, not just per-day).
+  A match needs far more, so a naive run hits HTTP 429. Retries handle it:
+  429 raises `_RateLimited`, which waits `rate_limit_backoff` (default 20 s,
+  ×attempt) instead of the short `retry_backoff`.
+- The Gemini endpoint also **hangs on some requests** (stuck in an SSL read,
+  ~12% in a 25-request probe). With the old 180 s timeout × 3 tries, one
+  decision could block for 9 minutes. Default timeout is now 60 s, and
+  `MEIER_TIMEOUT` / `MEIER_RETRIES` (set to 30 / 6 in `run.sh`) trade a shorter
+  wait for more attempts. A match then finishes in ~11 min on the free tier.
+- The path `…/v1beta/openai/v1/chat/completions` (a doubled `/v1`) still
+  answers 200; the base URL is not the problem when a call fails.
+
 ## Environment restarts wipe global packages
 
 Dependencies are installed globally (no venv). After a container restart,
