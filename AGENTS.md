@@ -365,10 +365,15 @@ python -m meier.cli play rackar kalkyl trygg
   wrong one can win and the push fails with `403 Write access to repository not
   granted` even though `$GITHUB_PUSH_TOKEN` has `push`. The repo-local config now
   clears the list first (`credential.helper ""` then the push-token helper), so
-  plain `git push origin main` works. If the 403 returns, run
+  `GITHUB_PUSH_TOKEN="$GITHUB_PUSH_TOKEN" git push origin main` works. **The
+  variable name must appear in the command** — otherwise the secret is not
+  exported and the helper sends an empty password, which fails with
+  `Invalid username or token`. If the 403 returns, run
   `git config --local --unset-all credential.helper` and re-add
   `""` + the `!f() { echo username=x-access-token; echo password=$GITHUB_PUSH_TOKEN; }; f`
-  entry.
+  entry. As a fallback, `git push
+  "https://x-access-token:${GITHUB_PUSH_TOKEN}@github.com/aieuren/meier-simulator.git" main`
+  bypasses the helper entirely.
 - The user has delegated version control: from now on, commit and push to
   `main` yourself when the work is green and complete — no need to ask first.
 - Secrets for this conversation live in the agent-server, not the shell:
