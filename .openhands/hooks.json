@@ -1,0 +1,14 @@
+{
+  "session_start": [
+    {
+      "matcher": "*",
+      "hooks": [
+        {
+          "type": "command",
+          "command": ".openhands/hooks/start_meier.sh",
+          "timeout": 90
+        }
+      ]
+    }
+  ]
+}

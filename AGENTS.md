@@ -305,6 +305,46 @@ python -m meier.cli play rackar kalkyl trygg
   Names must be valid shell identifiers (letters, digits, underscore) — a hyphen
   makes the value unusable as an environment variable.
 
+## Autostart efter container-vila (self-service)
+
+Sandlådan stängs av efter 20 minuters inaktivitet
+(`OH_RUNTIME_IDLE_TIMEOUT_SECONDS=1200`). Vid nästa besök startar containern om,
+men webbappen gör det inte — och den installeras under `~/.openhands`, som
+ligger på overlay-filsystemet och nollställs. Bara `/workspace` är beständigt
+(ext4).
+
+Lösningen är en **SessionStart-krok** i repot: `.openhands/hooks.json` +
+`.openhands/hooks/start_meier.sh`. Den gör två saker: installerar om
+Canvas-panelen och startar webbappen om den inte kör. Båda behövs, eftersom
+både panelregistret och appen bor i miljöer som nollställs.
+
+Varför just den här vägen fungerar (verifierat 2026-11-17):
+
+- Agent-servern stödjer hook-typerna `pre_tool_use`, `post_tool_use`,
+  `user_prompt_submit`, `session_start`, `session_end`, `stop`
+  (`HookConfig` i `/openapi.json`).
+- En projekt-lokal `.openhands/hooks.json` läses **inte** automatiskt när en
+  konversation skapas direkt mot API:t (testat: `hook_config: null`, ingen
+  `HookExecutionEvent`).
+- Men **Agent Canvas läser den**: `hooks-service` i Canvas-frontenden anropar
+  `POST /api/hooks` med arbetsmappen och skickar svaret vidare som
+  `hook_config` i `StartConversationRequest` (`agent-server-adapter`:
+  `o.hook_config ? s.hook_config = o.hook_config : e.workspaceHookConfig && …`).
+  Kedjan är alltså: `.openhands/hooks.json` → Canvas → `hook_config` → körs.
+- Fälten `load_project_hooks` och `load_user_hooks` finns på `/api/hooks` men
+  defaultar bara till sant för den *explicita* hämtningen; en ren
+  `POST /api/conversations` utan `hook_config` kör inga krokar.
+
+Kroken är idempotent: den kollar `/api/health` först och gör inget om appen
+redan svarar. Den återanvänder `run.sh --background`, som redan löser
+Gemini-nyckeln från `/workspace/meier-secrets/gemini.key` och installerar
+saknade paket. Logg: `/workspace/meier-logs/start-hook.log`.
+
+Fullt verifierat skarpt: panel avinstallerad + app nere (`HTTP 000`) →
+konversation skapad med `hook_config` → panel återinstallerad (`enabled=true`)
+och app uppe (`HTTP 200`), `HookExecutionEvent` i loggen. Kroken körs också vid
+återupptagning av en befintlig konversation (`POST /api/conversations/{id}/run`).
+
 ## Startpanelen i Agent Canvas (self-service)
 
 The user wanted a way to start the web app without asking the agent. The answer
@@ -317,11 +357,6 @@ app code**. No own server is needed.
   `/proc/1/environ`). Install leaves the app disabled; the script enables it too.
 - The panel lives in the agent-server home (`~/.openhands/canvas-extensions/`),
   which is **not** a persistent volume. Re-run `install.sh` after a restart.
-- `session_start` hooks **do** run — but only when passed explicitly in
-  `StartConversationRequest.hook_config`. A project-local
-  `.openhands/hooks.json` is **not** picked up automatically on a plain
-  conversation create (verified 2026-11-16). So a hook is not a self-service
-  path here; the Canvas panel is.
 - The bash endpoint's shell **does** have `RUNTIME_URL`, so the panel can show
   the public web address.
 - Gotcha: `pkill -f 'uvicorn …'` kills its own shell because the pattern matches
@@ -343,6 +378,25 @@ app code**. No own server is needed.
   - Apps manager: `/canvas/customize` → Apps (also `/canvas/apps`)
 - `nav_label` in the page manifest is dropped by the agent server; the sidebar
   falls back to the page `title`. Setting `nav_label` has no effect.
+- Gotcha (the real reason the panel "disappears"): the installed-app registry
+  lives in the agent-server home (`~/.openhands/canvas-extensions/`), which is on
+  the **ephemeral overlay** filesystem, not on the persistent `/workspace` ext4
+  volume. A container restart wipes it, so `GET /api/canvas-extensions/installed`
+  returns `[]` and the Canvas sidebar entry is gone. The SessionStart hook above
+  reinstalls the panel on every new session, so this now heals itself; to do it
+  by hand, run `./canvas-app/install.sh`.
+- The Canvas UI is **hard-locked to OpenHands Cloud**: its HTML sets
+  `window.__AGENT_CANVAS_LOCK_TO_CLOUD__="https://app.all-hands.dev"` and
+  `__AGENT_CANVAS_BASE_PATH__="/canvas"`. Apps are only available with a
+  **local** backend — the official docs state "Apps … are currently available
+  with supported local backends. They are not available when an OpenHands Cloud
+  backend is active." So the sidebar entry depends on the active backend being
+  this sandbox's agent server, and on the panel being installed there.
+- The user-visible error "Not available / This app is disabled, missing, or does
+  not provide this page" means the backend has no such app installed. It is
+  **not** the same as the plain 502 "Bad Gateway" you get from the public web
+  URL when the Meier app itself is down — that is a separate, expected condition
+  the SessionStart hook fixes.
 
 ## Match logs are checked into a separate GitHub repo
 
