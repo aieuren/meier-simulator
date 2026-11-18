@@ -18,19 +18,19 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .. import rules
-from ..agents.player import ROLES, get_role
+from ..agents.roster import ROSTER, make_player, make_players, role_keys
 from ..llm import LLMClient, LLMError
-from ..agents.player import MeierPlayerAgent
 from ..match import GameRecord, read_jsonl, run_matches, summarize
+from ..opponents import OpponentTracker
 from ..session import Session
 from .. import analysis, logrepo
 
 STATIC_DIR = Path(__file__).parent / "static"
 
-app = FastAPI(title="Meier-agenten", version="1.2.0")
+app = FastAPI(title="Meier-agenten", version="2.0.0")
 
 # En agent per roll, skapade på begäran så att LLM-klienten återanvänds.
-_agents: dict[str, MeierPlayerAgent] = {}
+_agents: dict[str, object] = {}
 
 # Den aktiva interaktiva sessionen (en åt gången).
 _session: Session | None = None
@@ -46,9 +46,9 @@ def _match_file() -> Path:
     return _current_match_file
 
 
-def _get_agent(role_key: str) -> MeierPlayerAgent:
+def _get_agent(role_key: str):
     if role_key not in _agents:
-        _agents[role_key] = MeierPlayerAgent(role=get_role(role_key), llm=LLMClient())
+        _agents[role_key] = make_player(role_key, llm=LLMClient())
     return _agents[role_key]
 
 
@@ -89,8 +89,18 @@ class NoCacheStaticFiles(StaticFiles):
 def list_roles() -> dict:
     return {
         "roles": [
-            {"key": r.key, "name": r.name, "description": r.description, "style": r.style}
-            for r in ROLES.values()
+            {
+                "key": p.key,
+                "name": p.name,
+                "description": p.description,
+                "uses_llm": p.uses_llm,
+                "params": {
+                    "risk": p.params.risk,
+                    "press": p.params.press,
+                    "reading": p.params.reading,
+                },
+            }
+            for p in ROSTER.values()
         ],
         "ranking": [{"value": v, "name": rules.name(v)} for v in rules.RANKING],
     }
@@ -99,7 +109,7 @@ def list_roles() -> dict:
 @app.post("/api/announce")
 def announce(req: AnnounceRequest) -> dict:
     """Givet ett tärningsutfall: hur svarar spelaren?"""
-    if req.role not in ROLES:
+    if req.role not in ROSTER:
         raise HTTPException(status_code=400, detail=f"Okänd roll: {req.role}")
     try:
         shown = rules.read_dice(req.die1, req.die2)
@@ -126,7 +136,7 @@ def announce(req: AnnounceRequest) -> dict:
 @app.post("/api/decide")
 def decide(req: DecideRequest) -> dict:
     """Givet en motståndares bud: slår, synar eller skickar spelaren vidare?"""
-    if req.role not in ROLES:
+    if req.role not in ROSTER:
         raise HTTPException(status_code=400, detail=f"Okänd roll: {req.role}")
     if not rules.is_valid_value(req.bid):
         raise HTTPException(status_code=400, detail=f"Ogiltigt bud: {req.bid}")
@@ -158,7 +168,7 @@ def health() -> dict:
 
 class NewSessionRequest(BaseModel):
     roles: list[str] = Field(
-        default_factory=lambda: list(ROLES),
+        default_factory=role_keys,
         description="Roller som spelar. Standard: alla fyra.",
     )
     seed: int | None = Field(None, description="Slumpfrö för reproducerbarhet")
@@ -174,15 +184,20 @@ def _require_session() -> Session:
 def session_new(req: NewSessionRequest) -> dict:
     """Skapa en ny session: slumpad ordning och första tärningsslag."""
     global _session
-    roles = req.roles or list(ROLES)
+    roles = req.roles or role_keys()
     for key in roles:
-        if key not in ROLES:
+        if key not in ROSTER:
             raise HTTPException(status_code=400, detail=f"Okänd roll: {key}")
     if len(roles) < 2:
         raise HTTPException(status_code=400, detail="Minst två roller krävs")
 
     players = [_get_agent(key) for key in roles]
+    tracker = OpponentTracker()
+    for p in players:
+        if getattr(p, "params", None) is not None and p.params.reading > 0.0:
+            p.tracker = tracker
     _session = Session.new(players, seed=req.seed)
+    _session.tracker = tracker
     return _session.to_dict()
 
 
@@ -260,7 +275,7 @@ def session_stop() -> dict:
 
 class MatchRequest(BaseModel):
     roles: list[str] = Field(
-        default_factory=lambda: list(ROLES),
+        default_factory=role_keys,
         description="Roller som spelar. Standard: alla fyra.",
     )
     count: int = Field(5, ge=1, le=200, description="Antal matcher")
@@ -382,9 +397,9 @@ _match_job: _MatchJob | None = None
 def matches_run(req: MatchRequest) -> dict:
     """Starta en serie matcher i bakgrunden. Följ den med /api/matches/status."""
     global _match_job
-    roles = req.roles or list(ROLES)
+    roles = req.roles or role_keys()
     for key in roles:
-        if key not in ROLES:
+        if key not in ROSTER:
             raise HTTPException(status_code=400, detail=f"Okänd roll: {key}")
     if len(roles) < 2:
         raise HTTPException(status_code=400, detail="Minst två roller krävs")

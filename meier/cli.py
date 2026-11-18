@@ -14,16 +14,16 @@ import json
 import sys
 
 from . import rules
-from .agents.player import ROLES, get_role, MeierPlayerAgent
+from .agents.roster import ROSTER, get_profile, make_player, make_players, role_keys
 from .game import Game
 from .match import read_jsonl, run_matches, summarize, write_jsonl
 from .session import Session
 
 
 def _cmd_announce(args: argparse.Namespace) -> int:
-    agent = MeierPlayerAgent(role=get_role(args.role))
+    agent = make_player(args.role)
     ann = agent.announce((args.die1, args.die2), previous_bid=args.previous_bid)
-    print(f"Roll:        {agent.name}")
+    print(f"Spelare:     {agent.name}")
     print(f"Tärningarna: {rules.read_dice(args.die1, args.die2)} ({args.die1} och {args.die2})")
     if args.previous_bid is not None:
         print(f"Före bud:    {rules.name(args.previous_bid)}")
@@ -37,9 +37,9 @@ def _cmd_announce(args: argparse.Namespace) -> int:
 
 
 def _cmd_decide(args: argparse.Namespace) -> int:
-    agent = MeierPlayerAgent(role=get_role(args.role))
+    agent = make_player(args.role)
     decision = agent.decide(args.bid, lives=args.lives)
-    print(f"Roll:      {agent.name}")
+    print(f"Spelare:   {agent.name}")
     print(f"Motståndarens bud: {rules.name(args.bid)}")
     print(f"Spelaren väljer:   {decision.action}")
     if decision.bid is not None:
@@ -52,7 +52,7 @@ def _cmd_decide(args: argparse.Namespace) -> int:
 
 
 def _cmd_play(args: argparse.Namespace) -> int:
-    agents = [MeierPlayerAgent(role=get_role(key)) for key in args.roles]
+    agents, _tracker = make_players(args.roles)
     game = Game.new(agents, seed=args.seed)
     game.on_log = lambda line: print(line, flush=True)
     winner = game.play()
@@ -95,9 +95,10 @@ def _print_entry(entry) -> None:
 
 
 def _cmd_session(args: argparse.Namespace) -> int:
-    roles = args.roles or list(ROLES)
-    players = [MeierPlayerAgent(role=get_role(key)) for key in roles]
+    roles = args.roles or role_keys()
+    players, tracker = make_players(roles)
     session = Session.new(players, seed=args.seed)
+    session.tracker = tracker
 
     print("Spelordning: " + " → ".join(players[i].name for i in session.order))
     print("Tryck Enter (Ett drag) för nästa steg.")
@@ -145,7 +146,7 @@ def _cmd_session(args: argparse.Namespace) -> int:
 
 
 def _cmd_match(args: argparse.Namespace) -> int:
-    roles = args.roles or list(ROLES)
+    roles = args.roles or role_keys()
     out = args.out or "matches.jsonl"
 
     def progress(done: int, total: int) -> None:
@@ -158,6 +159,7 @@ def _cmd_match(args: argparse.Namespace) -> int:
             base_seed=args.seed,
             lives=args.lives,
             workers=args.workers,
+            with_llm=not args.no_llm,
             progress=progress if args.verbose else None,
         )
     )
@@ -168,20 +170,23 @@ def _cmd_match(args: argparse.Namespace) -> int:
     print(f"\nVinnare per roll (av {stats['games']} matcher):")
     for role, b in stats["roles"].items():
         print(
-            f"  {b['name']:22} vinst {b['wins']:3}/{b['games']:<3} "
+            f"  {b['name']:12} vinst {b['wins']:3}/{b['games']:<3} "
             f"({b['win_rate'] * 100:4.1f}%)  bluff {b['bluff_rate'] * 100:4.1f}%  "
             f"syn {b['call_rate'] * 100:4.1f}% (lyckas {b['call_success_rate'] * 100:4.1f}%)"
         )
 
-    tok = stats["tokens"]
-    print(f"\nTokenförbrukning (provider {records[0].provider}, modell {records[0].model}):")
-    print(
-        f"  per match: {tok['per_game']['total_tokens']:.0f} tokens "
-        f"({tok['per_game']['prompt_tokens']:.0f} in, "
-        f"{tok['per_game']['completion_tokens']:.0f} ut), "
-        f"{tok['calls_per_game']:.0f} LLM-anrop"
-    )
-    print(f"  hela serien: {tok['total']['total_tokens']} tokens, {tok['calls']} anrop")
+    if args.no_llm:
+        print("\n(utan LLM-anrop: bara mekaniska repliker, inga tokens förbrukade)")
+    else:
+        tok = stats["tokens"]
+        print(f"\nTokenförbrukning (provider {records[0].provider}, modell {records[0].model}):")
+        print(
+            f"  per match: {tok['per_game']['total_tokens']:.0f} tokens "
+            f"({tok['per_game']['prompt_tokens']:.0f} in, "
+            f"{tok['per_game']['completion_tokens']:.0f} ut), "
+            f"{tok['calls_per_game']:.0f} LLM-anrop"
+        )
+        print(f"  hela serien: {tok['total']['total_tokens']} tokens, {tok['calls']} anrop")
 
     return 0
 
@@ -199,38 +204,43 @@ def build_parser() -> argparse.ArgumentParser:
     p_ann = sub.add_parser("announce", help="Givet ett tärningsslag: spelarens svar")
     p_ann.add_argument("die1", type=int, choices=range(1, 7))
     p_ann.add_argument("die2", type=int, choices=range(1, 7))
-    p_ann.add_argument("--role", default="kalkyl", choices=list(ROLES))
+    p_ann.add_argument("--role", default="cecilia", choices=role_keys())
     p_ann.add_argument("--previous-bid", type=int, default=None)
     p_ann.set_defaults(func=_cmd_announce)
 
     p_dec = sub.add_parser("decide", help="Spelaren möter ett bud")
     p_dec.add_argument("bid", type=int)
-    p_dec.add_argument("--role", default="kalkyl", choices=list(ROLES))
+    p_dec.add_argument("--role", default="cecilia", choices=role_keys())
     p_dec.add_argument("--lives", type=int, default=3)
     p_dec.set_defaults(func=_cmd_decide)
 
     p_play = sub.add_parser("play", help="Spela ett helt spel med flera agenter")
-    p_play.add_argument("roles", nargs="+", choices=list(ROLES))
+    p_play.add_argument("roles", nargs="+", choices=role_keys())
     p_play.add_argument("--seed", type=int, default=None)
     p_play.set_defaults(func=_cmd_play)
 
     p_sess = sub.add_parser(
         "session", help="Interaktiv session: OK-grind på tärningsslaget och logg"
     )
-    p_sess.add_argument("roles", nargs="*", choices=list(ROLES))
+    p_sess.add_argument("roles", nargs="*", choices=role_keys())
     p_sess.add_argument("--seed", type=int, default=None)
     p_sess.set_defaults(func=_cmd_session)
 
     p_match = sub.add_parser(
         "match", help="Spela många matcher och skriv ett JSONL-protokoll för analys"
     )
-    p_match.add_argument("roles", nargs="*", choices=list(ROLES))
+    p_match.add_argument("roles", nargs="*", choices=role_keys())
     p_match.add_argument("--count", type=int, default=10, help="Antal matcher")
     p_match.add_argument("--out", default="matches.jsonl", help="Utfil (JSONL)")
     p_match.add_argument("--seed", type=int, default=None, help="Basfrö")
     p_match.add_argument("--lives", type=int, default=3)
     p_match.add_argument(
         "--workers", type=int, default=1, help="Antal matcher som spelas samtidigt"
+    )
+    p_match.add_argument(
+        "--no-llm",
+        action="store_true",
+        help="Stäng av LLM-anrop (bara mekaniska repliker). Snabb utvärdering.",
     )
     p_match.add_argument("--verbose", action="store_true")
     p_match.set_defaults(func=_cmd_match)

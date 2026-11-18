@@ -1,6 +1,6 @@
 const $ = (id) => document.getElementById(id);
 
-let state = { role: "kalkyl", ranking: [] };
+let state = { role: "cecilia", ranking: [] };
 
 async function boot() {
   setupTabs();
@@ -97,10 +97,17 @@ function setupTabs() {
 function playerCard(r) {
   const div = document.createElement("div");
   div.className = "player-card";
+  const p = r.params || {};
+  const tags = [
+    `risk ${Math.round((p.risk ?? 0) * 100)} %`,
+    `press ${Math.round((p.press ?? 0) * 100)} %`,
+    `läsning ${Math.round((p.reading ?? 0) * 100)} %`,
+  ].join(" · ");
+  const kind = r.uses_llm ? "LLM" : "basmodell (ingen LLM)";
   div.innerHTML = `
     <div class="player-name">${r.name}</div>
     <div class="player-desc">${r.description}</div>
-    <p class="player-style">${r.style || ""}</p>
+    <p class="player-style">${kind} — ${tags}</p>
   `;
   return div;
 }
@@ -232,7 +239,7 @@ async function newSession() {
     const res = await fetch("/api/session/new", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ roles: ["arling", "rackar", "kalkyl", "trygg"] }),
+      body: JSON.stringify({ roles: ["axel", "berit", "cecilia", "david"] }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || "Fel");

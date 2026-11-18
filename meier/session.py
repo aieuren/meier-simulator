@@ -30,6 +30,7 @@ from dataclasses import dataclass, field, replace
 
 from . import rules
 from .agents.player import MeierPlayerAgent
+from .opponents import OpponentTracker
 
 
 @dataclass
@@ -161,6 +162,10 @@ class Session:
     rng: random.Random = field(default_factory=random.Random)
     finished: bool = False
     result: CallResult | None = None
+    #: Valfri motståndarmodell. Motorn matar den med varje händelse i takt med
+    #: att den blir offentlig, så en läsande agent bara ser det en riktig spelare
+    #: skulle se. ``None`` = ingen spårning.
+    tracker: OpponentTracker | None = None
 
     # -- Steg som väntar på bekräftelse ------------------------------------
     step_kind: str = ""  # "roll", "action" eller "raise"
@@ -169,6 +174,15 @@ class Session:
     bidder: int = 0  # spelarindex för den som satte budet
     holder: int = 0  # spelarindex för den som ansvarar för budet (kan ha skickat vidare)
     actor: int = 0  # spelarindex som ska agera
+    #: Spelarindex för den som senast *annonserade* ett bud (bud/höja/slå). Det är
+    #: den spelaren ett avslöjande attribueras till. Ett blint bud är ett svagare
+    #: löfte, så ``bid_was_blind`` styr hur tungt avslöjandet väger.
+    last_announcer: int = 0
+    bid_was_blind: bool = False
+    #: Sant om det stående budet kom från en **tvingad** höjning (bägaren har gått
+    #: ett helt varv). En sådan är mekanisk — budgivaren måste höja vad tärningarna
+    #: än visar — och får aldrig räknas in i motståndarprofilen.
+    bid_was_forced: bool = False
 
     @classmethod
     def new(
@@ -263,6 +277,38 @@ class Session:
 
     def _active_indices(self) -> list[int]:
         return [i for i in self.order if self.lives[i] > 0]
+
+    # -- Motståndarmodell: mata spåraren när något blir offentligt ----------
+    def _notify_bid(self, player_name: str, *, blind: bool, forced: bool = False) -> None:
+        if self.tracker is not None:
+            self.tracker.observe_bid(player_name, blind=blind, forced=forced)
+
+    def _notify_decision(self, player_name: str, action: str) -> None:
+        if self.tracker is not None:
+            self.tracker.observe_decision(player_name, action)
+
+    def _notify_reveal(
+        self, announcer_idx: int, *, blind: bool, forced: bool, was_bluff: bool
+    ) -> None:
+        """Facit efter en syn. Tvingade höjningar är mekaniska och hoppas över —
+        de säger inget om spelarens benägenhet (se :class:`OpponentTracker`)."""
+        if self.tracker is not None:
+            self.tracker.reveal(
+                self.name_of(announcer_idx),
+                was_bluff=was_bluff,
+                blind=blind,
+                forced=forced,
+            )
+
+    def _ask_decide(self, player, bid: int):
+        """Fråga spelaren om ett bud och skicka med vem som håller det.
+
+        Den som överväger att syna får veta *vem* den möter, så en läsande agent
+        kan använda motståndarens profil. Icke-läsande agenter ignorerar det.
+        """
+        return player.decide(
+            bid, lives=self.lives[self.actor], opponent=self.name_of(self.holder)
+        )
 
     def _log_game_over(self) -> LogEntry | None:
         """Logga en egen rad när matchen är slut och en vinnare står kvar."""
@@ -381,12 +427,16 @@ class Session:
         assert dice is not None
         player = self.players[self.actor]
         ann = player.announce(dice)
+        self._notify_bid(player.name, blind=False)
         entry = self._log_entry(
             player, dice, ann, action="bud", previous_bid=None, blind=False, actor_idx=self.actor
         )
         self.pending_bid = ann.bid
         self.bidder = self.actor
         self.holder = self.actor
+        self.last_announcer = self.actor
+        self.bid_was_blind = False
+        self.bid_was_forced = False
         self._prepare_action(actor=self._next_actor(self.actor))
         return entry
 
@@ -395,17 +445,20 @@ class Session:
         bid = self.pending_bid
         assert bid is not None
         player = self.players[self.actor]
-        decision = player.decide(bid, lives=self.lives[self.actor])
+        decision = self._ask_decide(player, bid)
 
         if decision.action == "syna":
+            self._notify_decision(player.name, "syna")
             return self._resolve_call(player, decision)
 
         if decision.action == "slå":
+            self._notify_decision(player.name, "slå")
             # Spelaren skakar bägaren på nytt: ett färskt slag, och locket lyfts inte.
             dice = rules.roll(self.rng)
             self._log_roll(player=player.name, dice=dice, shown=rules.read_dice(*dice))
             ann = player.announce_blind(dice, previous_bid=bid)
             ann = self._enforce_bid(ann, previous_bid=bid)
+            self._notify_bid(player.name, blind=True)
             entry = self._log_entry(
                 player,
                 dice,
@@ -420,10 +473,14 @@ class Session:
             self.pending_bid = ann.bid
             self.bidder = self.actor
             self.holder = self.actor
+            self.last_announcer = self.actor
+            self.bid_was_blind = True
+            self.bid_was_forced = False
             self._after_bid(actor=self.actor)
             return entry
 
         # Skicka vidare: samma bud går vidare. Spelaren tar över ansvaret för budet.
+        self._notify_decision(player.name, "skicka")
         entry = LogEntry(
             kind="action",
             round=self.round,
@@ -457,6 +514,8 @@ class Session:
         self._log_roll(player=player.name, dice=dice, shown=rules.read_dice(*dice))
         ann = player.announce_forced(dice, previous_bid=bid)
         ann = self._enforce_bid(ann, previous_bid=bid)
+        # Tvingad höjning: mekanisk, räknas separat i motståndarprofilen.
+        self._notify_bid(player.name, blind=ann.blind, forced=True)
         entry = self._log_entry(
             player,
             dice,
@@ -471,6 +530,9 @@ class Session:
         self.pending_dice = dice
         self.pending_bid = ann.bid
         self.holder = self.bidder
+        self.last_announcer = self.bidder
+        self.bid_was_blind = ann.blind
+        self.bid_was_forced = True
         self._after_bid(actor=self.bidder)
         return entry
 
@@ -556,6 +618,20 @@ class Session:
             reasoning=getattr(decision, "reasoning", "") or "",
             line=getattr(decision, "line", "") or "",
         )
+
+        # Facit är nu offentligt — tärningarna ligger på bordet. Först nu får
+        # motståndarmodellen veta om det senaste budet var en bluff. Ett blint bud
+        # är inget löfte och avslöjas aldrig (se ``_notify_reveal``).
+        self._notify_reveal(
+            self.last_announcer,
+            blind=self.bid_was_blind,
+            forced=self.bid_was_forced,
+            was_bluff=(bid != shown),
+        )
+        if self.tracker is not None:
+            self.tracker.record_call_outcome(
+                self.name_of(caller_idx), won=not result.caller_loses
+            )
 
         if len(self._active_indices()) <= 1:
             self._finish()

@@ -67,7 +67,7 @@ Agent = basstrategi × (risk, press, reading) × motståndarhistorik
 
 Parametrarna påverkar **hur agenten värderar och väljer mellan tillåtna drag**,
 aldrig vilka drag som är tillåtna. Legaliteten bor kvar i motorn
-(`MeierPlayerAgent._coerce_bid`, `Session._enforce_bid`) och rörs inte.
+(`StrategicAgent._coerce_higher`, `Session._enforce_bid`) och rörs inte.
 
 ### Ansvarsfördelning (lager)
 
@@ -75,11 +75,19 @@ aldrig vilka drag som är tillåtna. Legaliteten bor kvar i motorn
 |---|---|---|
 | **Policy-kärna** (`meier/policy.py`) | Räknar fram draget ur tillstånd + parametrar | **Ja** |
 | **Motståndarmodell** (`meier/opponents.py`) | Bygger profiler ur offentlig historik | **Ja** |
-| **LLM-lager** | Persona, replik, kvalitativ `reasoning` | Nej (påverkar ej draget) |
+| **LLM-lager** (`meier/agents/strategic.py`) | Replik och persona | Nej (påverkar ej draget) |
 
-LLM:en får **föreslå** ett drag. Policyn validerar förslaget och **överrider**
-det om förslaget strider mot profilens parametrar. Draget som spelar är alltid
-policyns. Detta bevarar LLM:ens roll utan att göra resultatet omätbart.
+Draget ägs helt av policyn. LLM:en formulerar **bara repliken** — den kan inte
+föreslå, ändra eller överrida ett drag. Skälet är mätbarhet: om LLM:en fick
+påverka draget skulle en profil kunna vinna på sin formulering i stället för på
+sina parametrar, och då går det inte att avgöra vilket som avgjorde. Motiveringen
+som sparas är därför alltid policyns maskinella skäl (t.ex. `"EV=-0.386 liv"`),
+aldrig en LLM-text.
+
+Konsekvensen är också praktisk: en match kan köras **utan LLM** (`--no-llm`) och
+ger exakt samma utfall, men på millisekunder i stället för minuter. Det är läget
+för utvärdering och statistik. LLM:en slås på när replikerna ska läsas av en
+människa.
 
 ---
 
@@ -450,9 +458,9 @@ konkret exempel på varför frysning + färsk kalibrering är ett krav.
 
 ## 8. Fallback och felvägar
 
-- **Ogiltigt bud från modellen:** motorn korrigerar (`_coerce_bid`,
-  `_enforce_bid`). Policyn räknar alltid fram ett lagligt bud, så LLM-förslag
-  som är olagliga kan aldrig nå bordet.
+- **Ogiltigt bud från modellen:** motorn korrigerar (`_coerce_higher`,
+  `_enforce_bid`). Policyn räknar alltid fram ett lagligt bud, så inget olagligt
+  bud kan nå bordet.
 - **Ingen höjning finns (budet är Meier):** `slå` är omöjligt. Policyn väljer
   `syna` eller `skicka` — och synar alltid (avsnitt 5.2).
 - **Saknad motståndardata:** med för få observationer faller den läsande agenten
@@ -485,43 +493,46 @@ låser den.
 
 ### 8.3 Fall: kvarglömd absolut läsning
 
-Symptom: `kalkyl` och `rackar` (hög `risk` + läsning) förlorade nästan alltid
-(14 % respektive 1 %). Orsak: samma absoluta läsning som 8.2 gjorde att de synade
-**låga** bud, där `CALL_PRIOR ≈ 0,05` och en syn nästan alltid förlorar.
+Symptom: `cecilia` och `david` (hög `risk` + läsning) förlorade nästan alltid.
+Orsak: samma absoluta läsning som 8.2 gjorde att de synade **låga** bud, där
+`CALL_PRIOR ≈ 0,05` och en syn nästan alltid förlorar.
 
-Åtgärd: samma som 8.2. Efter fixen ligger rollerna balanserat: `trygg` 31 %,
-`kalkyl` 28 %, `arling` 26 %, `rackar` 16 %.
+Åtgärd: samma som 8.2 (relativ justering). Efter fixen ligger spelarna
+balanserat i självspelning: se tabellen i avsnitt 9.
 
 ---
 
-## 9. AI-profiler
+## 9. Spelarna i registret
 
-Neutrala ID:n (`A1`–`A4`) i stället för beskrivande namn: namn fungerar som
-associationsledtrådar och kan påverka hur en LLM tolkar en persona. Beteendet
-styrs av explicita parametrar, inte av namn. Prompten får det neutrala ID:t; UI:t
-får en beskrivning.
+Spelarna bor i `meier/agents/roster.py`. Namnen är **neutrala** med flit. En
+värderande etikett som "Rackar-Rakel" säger åt modellen vem den *ska vara*, och
+då spelar den en karikatyr i stället för att spela spelet — och det går inte att
+veta om profilen vinner på sin taktik eller på sin etikett. Beteendet styrs av
+explicita parametrar, aldrig av namnet.
 
-| ID | Risk | Press | Läsning | Kort beskrivning |
-|---|---:|---:|---:|---|
-| `A1` | 0,2 | 0,2 | 0,0 | Försiktig och förutsägbar |
-| `A2` | 0,9 | 0,9 | 0,1 | Riskbenägen och pressande |
-| `A3` | 0,5 | 0,3 | 0,8 | Statistiskt orienterad och anpassningsbar |
-| `A4` | 0,5 | 0,6 | 0,8 | Balanserad; kombinerar risk, press och läsning |
+| Namn | Roll | Risk | Press | Läsning | LLM | Kort beskrivning |
+|---|---|---:|---:|---:|---|---|
+| Axel | `axel` | 0,50 | 0,50 | 0,00 | nej | Basmodellen; fast mätsticka |
+| Berit | `berit` | 0,25 | 0,25 | 0,15 | ja | Försiktig; bjuder nära sanningen |
+| Cecilia | `cecilia` | 0,50 | 0,45 | 0,50 | ja | Kalkylerande; läser motståndaren |
+| David | `david` | 0,65 | 0,60 | 0,35 | ja | Djärv; pressar budet högre |
 
-De fyra **befintliga rollerna** blir **presets** ovanpå samma modell
-(bakåtkompatibilitet med UI, tester och loggar):
+**Axel** är basmodellen (BASE): deterministisk, icke-läsande, utan LLM. Han är
+den fasta mätstickan — de andra jämförs mot honom, och han får förlora ofta. Han
+är avsiktligt "good enough", inte optimerad.
 
-| Preset | Risk | Press | Läsning |
-|---|---:|---:|---:|
-| `arling` (Ärlig-Adolf) | 0,15 | 0,15 | 0,0 |
-| `trygg` (Trygge-Tor) | 0,10 | 0,10 | 0,0 |
-| `kalkyl` (Kalkylerande-Karin) | 0,50 | 0,30 | 0,5 |
-| `rackar` (Rackar-Rakel) | 0,85 | 0,90 | 0,2 |
+De tre LLM-spelarna är samma policykärna med **milda** personligheter ovanpå.
+Ingen av dem är så extrem som de gamla rollerna var. De historiska loggarna
+visade att en extremt pressande profil (`press` ≈ 0,9) förlorade nästan varje
+match, eftersom hög press bluffar in i synar. Personligheterna grundas i
+logganalysen (avsnitt 8): vinnaren skickar vidare oftare och synar sällan men
+träffsäkert — därför ligger `press` lågt och `reading` högt hos de som ska läsa
+spelet.
 
-Värdena är startpunkter. Efter fas 1 ligger rollerna balanserat i självspelning:
-`trygg` 31 %, `kalkyl` 28 %, `arling` 26 %, `rackar` 16 % (fyra spelare, 400
-matcher, baslinje 25 %). `rackar` är svagast eftersom hög `press` gör att den
-bluffar in i synar — vilket är en meningsfull upptäckt att gå vidare med i fas 5.
+Värdena är **startpunkter**. De kalibreras när vi utvärderar tillsammans. En
+självspelning utan LLM (200 matcher, fyra spelare, baslinje 25 %) gav:
+Berit 28 %, Cecilia 29,5 %, Axel 23,5 %, David 19 %. Balansen är god nog för att
+gå vidare — David är svagast, vilket är väntat med högst press.
 
 ---
 

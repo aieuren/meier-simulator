@@ -18,59 +18,6 @@ from .. import rules
 from ..llm import LLMClient
 from .base import Agent, Role
 
-# Färdiga roller. Fler kan läggas till utan att övrig kod ändras.
-ROLES: dict[str, Role] = {
-    "arling": Role(
-        key="arling",
-        name="Ärlig-Adolf",
-        description="Spelar rakt och ärligt och ljuger ogärna.",
-        style=(
-            "Du är en försiktig och ärlig spelare. Du föredrar att säga sanningen om "
-            "tärningarna. Du ljuger bara om det är uppenbart nödvändigt, och då helst "
-            "så lite som möjligt. Du undviker onödiga risker."
-        ),
-    ),
-    "rackar": Role(
-        key="rackar",
-        name="Rackar-Rakel",
-        description="Bluffar gärna högt och tar stora risker.",
-        style=(
-            "Du är en fräck och utstuderad bluffare. Du njuter av att höja budet och "
-            "sätta press på motståndarna. Du tar gärna risker och ljuger ofta, särskilt "
-            "när tärningarna är svaga. Du vill helst inte bli synad med ett lågt bud."
-        ),
-    ),
-    "kalkyl": Role(
-        key="kalkyl",
-        name="Kalkylerande-Karin",
-        description="Spelar matematiskt och balanserar risk mot belöning.",
-        style=(
-            "Du är en kall och beräknande spelare. Du väger sannolikheter mot risker och "
-            "väljer det bud som maximerar din förväntade vinst. Du bluffar bara när "
-            "sannolikheten talar för det, och du håller koll på att Meier kostar dubbelt."
-        ),
-    ),
-    "trygg": Role(
-        key="trygg",
-        name="Trygge-Tor",
-        description="Feg och defensiv, vill aldrig förlora liv.",
-        style=(
-            "Du är en mycket försiktig spelare som helst undviker att förlora liv. Du "
-            "säger hellre sanningen eller ett försiktigt lågt bud än att riskera en syn. "
-            "Du undviker Meier och höga bud."
-        ),
-    ),
-}
-
-
-def get_role(key: str) -> Role:
-    try:
-        return ROLES[key]
-    except KeyError:
-        raise ValueError(
-            f"Okänd roll '{key}'. Välj bland: {', '.join(ROLES)}"
-        ) from None
-
 
 @dataclass
 class Announcement:
@@ -417,10 +364,13 @@ class MeierPlayerAgent(Agent):
         return f"Jag säger {rules.name(bid)}."
 
     # -- Beslut mot ett bud: Slå, Syna eller Skicka vidare ------------------
-    def decide(self, bid: int, *, lives: int = 3) -> ActionDecision:
+    def decide(self, bid: int, *, lives: int = 3, opponent: str | None = None) -> ActionDecision:
         """Välj handling när en annan spelare har sagt ``bid``.
 
         Spelaren kan **Slå** (höja), **Syna** eller **Skicka vidare**.
+        ``opponent`` är namnet på den som håller budet. Den här LLM-agenten
+        använder det inte, men tar emot det så att motorn kan behandla alla
+        agenttyper lika (den strategiska agenten läser det).
         """
         if not rules.is_valid_value(bid):
             raise ValueError(f"{bid} är inte ett giltigt bud")

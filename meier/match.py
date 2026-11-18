@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .agents.player import MeierPlayerAgent, get_role
+from .agents.roster import make_players
 from .llm import LLMClient
 from .session import LogEntry, Session
 
@@ -29,8 +29,36 @@ BID_ACTIONS = ("bud", "slå", "höja")
 DECISION_ACTIONS = ("slå", "skicka", "syna")
 
 
-def _new_agents(role_keys: Iterable[str]) -> list[MeierPlayerAgent]:
-    return [MeierPlayerAgent(role=get_role(key), llm=LLMClient()) for key in role_keys]
+def _new_agents(role_keys: Iterable[str]):
+    """Bygg spelarna för en match, med LLM-klienter för replikerna.
+
+    Varje LLM-spelare får sin egen klient så att tokenräkningen hålls åtskild.
+    Axel får ingen klient — han är den deterministiska referensen.
+    """
+    players, _tracker = make_players(role_keys, llm_factory=LLMClient)
+    return players
+
+
+def _new_agents_no_llm(role_keys: Iterable[str]):
+    """Samma spelare men utan LLM-klienter: bara mekaniska repliker.
+
+    Draget ägs ändå av policyn, så resultatet blir detsamma — men matchen går
+    på millisekunder i stället för minuter. Det är läget för utvärdering.
+    """
+    players, _tracker = make_players(role_keys)
+    return players
+
+
+def _attach_tracker(agents: list) -> "OpponentTracker":
+    """Ge varje läsande spelare samma motståndarmodell. Returnera den."""
+    from .opponents import OpponentTracker
+
+    tracker = OpponentTracker()
+    for agent in agents:
+        params = getattr(agent, "params", None)
+        if params is not None and params.reading > 0.0:
+            agent.tracker = tracker
+    return tracker
 
 
 def _elimination_order(log: list[LogEntry]) -> list[str]:
@@ -148,10 +176,19 @@ def play_match(
     game: int = 1,
     seed: int | None = None,
     lives: int = 3,
+    with_llm: bool = True,
 ) -> GameRecord:
-    """Spela en hel match mellan rollerna och returnera protokollet."""
-    agents = _new_agents(role_keys)
+    """Spela en hel match mellan rollerna och returnera protokollet.
+
+    ``with_llm`` styr om spelarna får en LLM-klient för replikerna. Draget ägs
+    ändå av policyn, så med ``with_llm=False`` blir matchen helt deterministisk
+    och går på millisekunder — det är läget för utvärdering och statistik.
+    """
+    build = _new_agents if with_llm else _new_agents_no_llm
+    agents = build(role_keys)
+    tracker = _attach_tracker(agents)
     session = Session.new(agents, seed=seed, lives=lives)
+    session.tracker = tracker
     session.play_to_end()
 
     names = [a.name for a in agents]
@@ -160,9 +197,13 @@ def play_match(
     winner = alive[0] if len(alive) == 1 else max(names, key=lambda n: remaining[n])
     winner_role = next(a.role.key for a in agents if a.name == winner)
 
-    cfg = getattr(agents[0].llm, "config", None)
-    provider = getattr(cfg, "provider", "unknown")
-    model = getattr(cfg, "model", "unknown")
+    # Första spelaren med en LLM-klient anger provider/model (Axel har ingen).
+    cfg = next(
+        (getattr(a.llm, "config", None) for a in agents if getattr(a, "llm", None) is not None),
+        None,
+    )
+    provider = getattr(cfg, "provider", "none")
+    model = getattr(cfg, "model", "none")
     return GameRecord(
         game=game,
         seed=seed,
@@ -185,23 +226,25 @@ def play_match(
     )
 
 
-def _match_usage(agents: list[MeierPlayerAgent]) -> dict[str, Any]:
+def _match_usage(agents: list) -> dict[str, Any]:
     """Summera LLM-förbrukningen för alla agenter i en match.
 
-    Varje agent har sin egen klient, så en matchs total är summan över dem.
+    Varje LLM-spelare har sin egen klient, så en matchs total är summan över dem.
     ``by_role`` visar hur mycket varje roll drog, vilket avslöjar om en
-    personlighet (t.ex. en som resonerar mer) är dyrare än de andra.
+    personlighet (t.ex. en som resonerar mer) är dyrare än de andra. Axel saknar
+    klient och bidrar med noll.
     """
     total = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
     calls = 0
     by_role: dict[str, dict[str, int]] = {}
     for agent in agents:
-        usage = getattr(agent.llm, "total_usage", None) or {}
-        calls += getattr(agent.llm, "calls", 0)
+        client = getattr(agent, "llm", None)
+        usage = getattr(client, "total_usage", None) or {}
+        calls += getattr(client, "calls", 0)
         for key in total:
             total[key] += int(usage.get(key, 0))
         by_role[agent.role.key] = {
-            "calls": getattr(agent.llm, "calls", 0),
+            "calls": getattr(client, "calls", 0),
             **{k: int(usage.get(k, 0)) for k in total},
         }
     return {"total": total, "calls": calls, "by_role": by_role}
@@ -214,6 +257,7 @@ def run_matches(
     base_seed: int | None = None,
     lives: int = 3,
     workers: int = 1,
+    with_llm: bool = True,
     progress: "callable[[int, int], None] | None" = None,
 ) -> Iterator[GameRecord]:
     """Spela ``count`` matcher och ge protokollen efter hand.
@@ -221,20 +265,28 @@ def run_matches(
     Med ``workers`` > 1 spelas flera matcher samtidigt i trådar. Varje match har
     sina egna agenter och sin egen LLM-klient, så trådarna delar ingen status.
     Protokollen ges i den ordning matcherna blir klara.
+
+    ``with_llm=False`` stänger av LLM-anropen helt (bara mekaniska repliker).
+    Draget ägs ändå av policyn, så resultatet blir detsamma — men en serie går
+    från minuter till millisekunder. Det är läget för utvärdering.
     """
     if workers <= 1:
         for i in range(count):
             seed = None if base_seed is None else base_seed + i
             if progress is not None:
                 progress(i + 1, count)
-            yield play_match(role_keys, game=i + 1, seed=seed, lives=lives)
+            yield play_match(
+                role_keys, game=i + 1, seed=seed, lives=lives, with_llm=with_llm
+            )
         return
 
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     def _one(i: int) -> GameRecord:
         seed = None if base_seed is None else base_seed + i
-        return play_match(role_keys, game=i + 1, seed=seed, lives=lives)
+        return play_match(
+            role_keys, game=i + 1, seed=seed, lives=lives, with_llm=with_llm
+        )
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {pool.submit(_one, i): i for i in range(count)}

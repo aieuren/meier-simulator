@@ -577,3 +577,49 @@ which a container restart wipes. Now a series can be committed and pushed to a
 - Tests use a local bare repo via `MEIER_LOGS_REMOTE_URL` — no network, no real
   token. See `tests/test_logrepo.py` and the check-in tests in
   `tests/test_web_matches.py`.
+
+## The machine: four players, one policy core (roster)
+
+The roster was rebuilt. The old roles (`arling`/`trygg`/`kalkyl`/`rackar`) are
+**gone** — replaced by four neutral-named players in `meier/agents/roster.py`:
+
+| Key | Name | Risk | Press | Reading | LLM |
+|---|---|---:|---:|---:|---|
+| `axel` | Axel | 0.50 | 0.50 | 0.00 | no (BASE) |
+| `berit` | Berit | 0.25 | 0.25 | 0.15 | yes |
+| `cecilia` | Cecilia | 0.50 | 0.45 | 0.50 | yes |
+| `david` | David | 0.65 | 0.60 | 0.35 | yes |
+
+- **Names are neutral on purpose.** A value-laden label ("Rackar-Rakel") tells
+  the model who to *be*, so it plays a caricature and you cannot tell whether a
+  profile wins on its tactics or its label. Personality lives in the params.
+- **Axel is BASE** — deterministic, non-reading, **no LLM**. He is the fixed
+  measuring stick the others are compared against. He is allowed to lose often.
+- **The policy owns the move.** `StrategicAgent` (`meier/agents/strategic.py`)
+  computes the move with `BasePolicy`; the LLM only phrases the line. It can
+  never propose, change, or override a move. The stored `reasoning` is always the
+  policy's machine reason (e.g. `"EV=-0.386 liv"`), never LLM text. This is what
+  makes winners measurable.
+- **Evaluation runs without LLM.** `play_match(..., with_llm=False)` and
+  `cli match --no-llm` give the *same* outcome but in milliseconds instead of
+  minutes (~100+ LLM calls per match at 15 rpm ≈ 7 min/match). Use `--no-llm` for
+  statistics; turn LLM on when a human will read the lines.
+- **The opponent model is now wired into the engine.** `Session.tracker` feeds
+  the shared `OpponentTracker` as events become public; `make_players()` gives
+  every reading player the same tracker (one shared view of the table).
+- **Monkeypatch seam:** `play_match` builds agents through `match._new_agents`
+  (LLM on) or `match._new_agents_no_llm` (LLM off). Tests patch `_new_agents`.
+- **Provider:** Anthropic Claude if `ANTHROPIC_API_KEY` is set, otherwise Gemini
+  via `GEMINI_API_KEY`. In this sandbox only the Gemini key is present, so the
+  fallback is what runs. `LLMConfig.from_env()` reports which is active.
+
+### Running an evaluation
+
+```bash
+# Fast, deterministic self-play (no LLM) — the default for measurement
+python3 -m meier.cli match axel berit cecilia david --count 200 --seed 1000 \
+    --workers 4 --no-llm --out /tmp/meier_eval.jsonl
+```
+
+Baseline (200 matches, four players, chance 25 %): Berit 28 %, Cecilia 29.5 %,
+Axel 23.5 %, David 19 %. David is weakest, as expected with the highest `press`.

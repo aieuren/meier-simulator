@@ -6,7 +6,11 @@ anropa en riktig modell.
 
 import json
 
-from meier.agents.player import ROLES, MeierPlayerAgent, get_role
+import pytest
+
+from meier.agents.base import Role
+from meier.agents.player import MeierPlayerAgent
+from meier.agents.roster import ROSTER, get_profile
 from meier.llm import LLMClient
 
 
@@ -24,8 +28,12 @@ class FakeLLM(LLMClient):
         return json.dumps(self.payload) if not isinstance(self.payload, str) else self.payload
 
 
+def _role(key="kalkyl"):
+    return Role(key=key, name=key, description="test", style="spela")
+
+
 def make_agent(payload, role="kalkyl"):
-    return MeierPlayerAgent(role=get_role(role), llm=FakeLLM(payload))
+    return MeierPlayerAgent(role=_role(role), llm=FakeLLM(payload))
 
 
 def test_announce_parses_valid_bid():
@@ -116,14 +124,18 @@ def test_decide_cannot_raise_over_meier():
     assert decision.bid is None
 
 
-def test_roles_are_distinct():
-    assert set(ROLES) == {"arling", "rackar", "kalkyl", "trygg"}
-    names = {r.name for r in ROLES.values()}
-    assert len(names) == len(ROLES)
+def test_roster_has_the_four_players():
+    assert set(ROSTER) == {"axel", "berit", "cecilia", "david"}
+    names = {p.name for p in ROSTER.values()}
+    assert len(names) == len(ROSTER)
 
 
-def test_get_role_unknown_raises():
-    import pytest
+def test_axel_is_the_llm_free_base_model():
+    axel = ROSTER["axel"]
+    assert axel.uses_llm is False
+    assert axel.params.reading == 0.0
 
+
+def test_get_profile_unknown_raises():
     with pytest.raises(ValueError):
-        get_role("finns-inte")
+        get_profile("finns-inte")
