@@ -76,6 +76,92 @@ class OpponentProfile:
             "source": self.source,
         }
 
+    def describe(self) -> str:
+        """Motståndarbilden i klartext, med siffrorna i parentes.
+
+        Tanken är att en människa ska kunna läsa vad agenten *tror* om en
+        motståndare utan att tolka råa tal. Siffrorna står kvar i parentesen så
+        att beskrivningen går att kontrollera.
+        """
+        if self.source == "population":
+            return (
+                "Ingen bild än — spelaren har inte sett tillräckligt av den här "
+                "motståndaren."
+            )
+        return (
+            f"{self.kind.capitalize()}: {_press_words(self.press)}, "
+            f"{_risk_words(self.risk)} och {_predict_words(self.predictability)} "
+            f"(risk {pct(self.risk)}, press {pct(self.press)}, "
+            f"förutsägbarhet {pct(self.predictability)}; "
+            f"{_confidence_words(self.confidence)})."
+        )
+
+
+def pct(value: float) -> str:
+    """Ett tal 0–1 som procenttext, för läsbara beskrivningar."""
+    return f"{round(value * 100)} %"
+
+
+def describe_params(risk: float, press: float, reading: float) -> str:
+    """En spelares **egen** karaktär i klartext, med siffrorna i parentes.
+
+    Används i spelarlistan. Detta är spelarens kända inställning, till skillnad
+    från :meth:`OpponentProfile.describe`, som är en *gissning* om någon annan.
+    """
+    if reading <= 0.0:
+        reading_words = "läser ingen motståndare"
+    elif reading < 0.35:
+        reading_words = "läser motståndarna lite"
+    elif reading < 0.6:
+        reading_words = "läser motståndarna"
+    else:
+        reading_words = "läser motståndarna noga"
+    return (
+        f"{_risk_words(risk).capitalize()}, {_press_words(press)} och "
+        f"{reading_words} "
+        f"(risk {pct(risk)}, press {pct(press)}, läsning {pct(reading)})."
+    )
+
+
+def _risk_words(risk: float) -> str:
+    if risk < 0.25:
+        return "synar nästan aldrig"
+    if risk < 0.45:
+        return "synar sällan"
+    if risk < 0.6:
+        return "synar ibland"
+    if risk < 0.75:
+        return "synar ofta"
+    return "synar nästan alltid"
+
+
+def _press_words(press: float) -> str:
+    if press < 0.25:
+        return "bluffar nästan aldrig"
+    if press < 0.45:
+        return "bluffar sällan"
+    if press < 0.6:
+        return "bluffar lagom mycket"
+    if press < 0.75:
+        return "bluffar ofta"
+    return "bluffar nästan jämt"
+
+
+def _predict_words(predictability: float) -> str:
+    if predictability < 0.35:
+        return "är svår att läsa"
+    if predictability < 0.65:
+        return "är ganska förutsägbar"
+    return "är mycket förutsägbar"
+
+
+def _confidence_words(confidence: float) -> str:
+    if confidence < 0.25:
+        return "litet underlag"
+    if confidence < 0.6:
+        return "måttligt underlag"
+    return "gott underlag"
+
 
 def _clamp01(value: float) -> float:
     """Klämm ett tal till [0, 1]; tål skräp från en LLM."""

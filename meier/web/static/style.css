@@ -405,6 +405,21 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 .order-lives { color: var(--muted); font-size: 0.78rem; }
 .order-arrow { color: var(--muted); }
 .order-start { margin-top: 0.6rem; font-size: 0.9rem; color: var(--text); }
+
+.views-box { margin-top: 1.2rem; }
+.views-list { display: grid; gap: 0.8rem; }
+.view-card {
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: 11px;
+  background: var(--panel-2);
+}
+.view-agent { font-weight: 600; margin-bottom: 0.4rem; }
+.view-items { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; }
+.view-item { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: baseline; font-size: 0.9rem; }
+.view-opp { font-weight: 600; color: var(--text); min-width: 4.5rem; }
+.view-text { color: var(--muted); }
 .log-row.is-call { border-color: var(--line); }
 .log-row.is-call .log-head { color: var(--text); }
 

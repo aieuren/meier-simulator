@@ -615,6 +615,14 @@ The roster was rebuilt. The old roles (`arling`/`trygg`/`kalkyl`/`rackar`) are
   `confidence`, `source`. `source` is `"llm"`, `"statistik"` (fallback without
   LLM) or `"population"` (no data). Values are clamped to 0–1 so a garbled LLM
   reply cannot leak junk into decisions.
+- **Plain-language view.** `OpponentProfile.describe()` renders the numbers as a
+  sentence with the percentages in parentheses (e.g. *"Försiktig: bluffar nästan
+  aldrig, synar sällan och är mycket förutsägbar (risk 20 %, press 10 %,
+  förutsägbarhet 90 %; gott underlag)."*). `describe_params()` does the same for a
+  player's own known character in the roster list. Presentation only — never an
+  input to a decision. The web app shows each agent's picture of the others in
+  the game tab, fed by `Session._views()` (which drops `source == "population"`
+  entries so only pictures with evidence are shown).
 - **The profile is cached per opponent** and recomputed only when new evidence
   becomes public (a reveal). So a match makes a handful of reader calls per
   opponent, not one per decision.

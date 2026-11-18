@@ -21,7 +21,7 @@ from .. import rules
 from ..agents.roster import ROSTER, make_player, make_players, role_keys
 from ..llm import LLMClient, LLMError
 from ..match import GameRecord, read_jsonl, run_matches, summarize
-from ..opponents import OpponentTracker
+from ..opponents import OpponentTracker, describe_params
 from ..session import Session
 from .. import analysis, logrepo
 
@@ -99,6 +99,9 @@ def list_roles() -> dict:
                     "press": p.params.press,
                     "reading": p.params.reading,
                 },
+                "style_text": describe_params(
+                    p.params.risk, p.params.press, p.params.reading
+                ),
             }
             for p in ROSTER.values()
         ],

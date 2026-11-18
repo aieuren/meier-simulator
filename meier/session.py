@@ -768,8 +768,47 @@ class Session:
             "result": self.result.to_dict() if self.result else None,
             "standings": self._standings(),
             "winner": self._winner(),
+            "views": self._views(),
             "log": [e.to_dict() for e in self.log],
         }
+
+    def _views(self) -> list[dict]:
+        """Vad varje agent tror om de andra, för insyn i webbappen.
+
+        En agent har en ``profiles``-mapp (motståndarnamn → profil). Den fylls
+        när agenten svarar på ett bud. Läsande agenter listas därför i takt med
+        att de får en bild; Axel (ingen läsning) får aldrig någon.
+        """
+        views = []
+        for idx in self.order:
+            player = self.players[idx]
+            profiles = getattr(player, "profiles", None)
+            if not profiles:
+                continue
+            # Bara bilder som vilar på något: en profil utan underlag säger
+            # inget och skulle bara skräpa i listan.
+            shown = [
+                (opp, prof)
+                for opp, prof in profiles.items()
+                if prof.source != "population"
+            ]
+            if not shown:
+                continue
+            views.append(
+                {
+                    "agent": player.name,
+                    "role": player.role.key,
+                    "profiles": [
+                        {
+                            "opponent": opp,
+                            "profile": prof.to_dict(),
+                            "text": prof.describe(),
+                        }
+                        for opp, prof in shown
+                    ],
+                }
+            )
+        return views
 
     def _phase(self) -> str:
         if self.finished:

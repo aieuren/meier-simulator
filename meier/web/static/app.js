@@ -98,16 +98,17 @@ function playerCard(r) {
   const div = document.createElement("div");
   div.className = "player-card";
   const p = r.params || {};
-  const tags = [
+  const numbers = [
     `risk ${Math.round((p.risk ?? 0) * 100)} %`,
     `press ${Math.round((p.press ?? 0) * 100)} %`,
     `läsning ${Math.round((p.reading ?? 0) * 100)} %`,
   ].join(" · ");
-  const kind = r.uses_llm ? "LLM" : "basmodell (ingen LLM)";
+  const style = r.style_text || numbers;
+  const kind = r.uses_llm ? "" : " · basmodell utan språkmodell";
   div.innerHTML = `
     <div class="player-name">${r.name}</div>
     <div class="player-desc">${r.description}</div>
-    <p class="player-style">${kind} — ${tags}</p>
+    <p class="player-style">${style}${kind}</p>
   `;
   return div;
 }
@@ -331,8 +332,41 @@ function renderSession(data) {
   }
 
   renderOrderNote(data);
+  renderViews(data.views);
   renderLog(data.log, data.result);
   placeControls(data, pending);
+}
+
+// Motståndarbilder: vad varje agent tror om de andra. Tomt → dölj rutan.
+function renderViews(views) {
+  const box = $("viewsBox");
+  const list = $("viewsList");
+  if (!box || !list) return;
+  const rows = (views || []).filter((v) => (v.profiles || []).length > 0);
+  if (rows.length === 0) {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  list.innerHTML = "";
+  rows.forEach((v) => {
+    const card = document.createElement("div");
+    card.className = "view-card";
+    const items = v.profiles
+      .map(
+        (p) => `
+        <li class="view-item">
+          <span class="view-opp">${escapeHtml(p.opponent)}</span>
+          <span class="view-text">${escapeHtml(p.text)}</span>
+        </li>`
+      )
+      .join("");
+    card.innerHTML = `
+      <div class="view-agent">${escapeHtml(v.agent)}s bild av de andra</div>
+      <ul class="view-items">${items}</ul>
+    `;
+    list.appendChild(card);
+  });
 }
 
 // Visa spelordningen och vem som börjar – slumpas fram vid Ny session.

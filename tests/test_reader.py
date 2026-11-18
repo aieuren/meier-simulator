@@ -195,3 +195,58 @@ def test_profile_factor_is_damped_by_confidence():
     sure = tracker.profile_factor(OpponentProfile(press=0.9, confidence=1.0))
     assert unsure == 1.0
     assert sure > unsure
+
+
+# -- Klartext för människan --------------------------------------------------
+
+def test_profile_describe_has_words_and_numbers():
+    from meier.opponents import OpponentProfile
+
+    p = OpponentProfile(
+        kind="bluffbenägen", risk=0.7, press=0.9, confidence=0.7, source="llm"
+    )
+    text = p.describe()
+    assert "bluffbenägen" in text.lower()
+    assert "bluffar" in text
+    # Siffrorna står kvar i parentesen så beskrivningen går att kontrollera.
+    assert "90 %" in text and "70 %" in text
+
+
+def test_profile_describe_says_when_there_is_no_picture():
+    from meier.opponents import OpponentProfile
+
+    assert "Ingen bild" in OpponentProfile().describe()
+
+
+def test_session_views_show_agents_picture_of_the_others():
+    # En spelad match ska rapportera vilka bilder agenterna byggt, i klartext.
+    from meier.agents.roster import make_players
+    from meier.session import Session
+
+    players, tracker = make_players(["axel", "berit", "cecilia", "david"])
+    session = Session.new(players, seed=7)
+    session.tracker = tracker
+    session.play_to_end()
+
+    views = session.to_dict()["views"]
+    assert views, "minst en agent ska ha en bild"
+    # Axel läser ingen och får därför aldrig någon bild.
+    assert all(v["agent"] != "Axel" for v in views)
+    for v in views:
+        assert v["profiles"], "en listad agent ska ha minst en bild"
+        for p in v["profiles"]:
+            assert p["text"], "bilden ska ha en klartext"
+            assert p["profile"]["source"] != "population"
+
+
+def test_describe_params_reads_as_a_character():
+    from meier.opponents import describe_params
+
+    cautious = describe_params(0.25, 0.25, 0.15)
+    bold = describe_params(0.65, 0.60, 0.35)
+    assert "sällan" in cautious
+    assert "ofta" in bold
+    # Siffrorna finns kvar i parentesen.
+    assert "25 %" in cautious and "65 %" in bold
+    # Ingen läsning ska sägas rakt ut, inte som "0 %".
+    assert "läser ingen motståndare" in describe_params(0.5, 0.5, 0.0)

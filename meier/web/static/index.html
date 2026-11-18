@@ -26,9 +26,10 @@
     <section class="card">
       <h2>De fyra spelarna</h2>
       <p class="hint">
-        Fyra oberoende LLM-agenter spelar mot varandra. Var och en har sin egen
+        Fyra oberoende AI-agenter spelar mot varandra. Var och en har sin egen
         karaktär och spelstil, och ser bara den information en riktig spelare
-        skulle ha. Rollerna är desamma i alla flikar.
+        skulle ha. Tre av dem använder en språkmodell för replikerna; Axel är
+        basmodellen. Rollerna är desamma i alla flikar.
       </p>
       <div id="playerList" class="players"></div>
     </section>
@@ -104,6 +105,15 @@
       </div>
 
       <div id="orderNote" class="order-note" hidden></div>
+
+      <div id="viewsBox" class="views-box" hidden>
+        <h3 class="log-title">Motståndarbilder</h3>
+        <p class="hint">
+          Vad varje agent har kommit fram till om de andra, ur offentligt spel.
+          Bilden växer fram och kan ändras när matchen fortsätter.
+        </p>
+        <div id="viewsList" class="views-list"></div>
+      </div>
 
       <div id="sessionStatus" class="session-status" hidden>
         <div class="session-note" id="sessionNote"></div>

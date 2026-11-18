@@ -385,6 +385,23 @@ offentligt beteende. Det är inte bara en konvention: sammanställningen byggs a
 Utan LLM (utvärderingsläget) faller läsaren tillbaka på sekreterarens aritmetik,
 så en match kan alltid spelas klart utan nätverk.
 
+### 6.05 Klartext för människan
+
+Profilen är tekniska tal. För att en människa ska kunna läsa vad agenten *tror*
+översätter `OpponentProfile.describe()` dem till en mening, med siffrorna kvar i
+parentes:
+
+> Försiktig: bluffar nästan aldrig, synar sällan och är mycket förutsägbar
+> (risk 20 %, press 10 %, förutsägbarhet 90 %; gott underlag).
+
+Översättningen är ren presentation — den påverkar aldrig ett beslut. Samma idé
+används för spelarens **egen** kända karaktär i spelarlistan
+(`describe_params`), så att "risk 25 % · press 25 %" blir "synar sällan,
+bluffar sällan och läser motståndarna lite (risk 25 %, press 25 %, läsning 15 %)".
+
+I webbappen syns motståndarbilderna i spelfliken under **Motståndarbilder**.
+Rutan växer fram när agenterna får underlag och kan ändras när matchen fortsätter.
+
 ### 6.0 Hur profilen får användas: relativt, aldrig absolut
 
 Detta är den subtilaste punkten i hela modellen. En läsande agent får **inte**
