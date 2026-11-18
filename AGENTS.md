@@ -399,6 +399,11 @@ python -m meier.cli play rackar kalkyl trygg
   entry. As a fallback, `git push
   "https://x-access-token:${GITHUB_PUSH_TOKEN}@github.com/aieuren/meier-simulator.git" main`
   bypasses the helper entirely.
+  **Gotcha (2026-11-18):** putting `$GITHUB_TOKEN` in the remote URL also fails
+  (403) — that token has read-only access here. Push must go through
+  `GITHUB_PUSH_TOKEN`. Don't rewrite the remote; just run
+  `GITHUB_PUSH_TOKEN="$GITHUB_PUSH_TOKEN" git push origin main` and let the
+  repo-local credential helper inject it.
 - The user has delegated version control: from now on, commit and push to
   `main` yourself when the work is green and complete — no need to ask first.
 - Secrets for this conversation live in the agent-server, not the shell:
