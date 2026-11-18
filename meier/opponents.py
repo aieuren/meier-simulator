@@ -29,6 +29,64 @@ PRIOR_STRENGTH = 4.0
 #: fortfarande en lögn motståndarna ser, så det väger mer än noll.
 BLIND_WEIGHT = 0.5
 
+#: Namnet på den nominella spelaren i motståndarprofilen. Profilens tal är
+#: **relativa** mot detta: ``press = 0,5`` betyder "bluffar som folk gör mest".
+#: Talet är medvetet inte samma som ``DEFAULT_Q`` (0,715) — ``DEFAULT_Q`` är en
+#: uppmätt *bluff-frekvens*, medan profilens tal är en *benägenhet* på en
+#: neutral skala där 0,5 är mitten. Översättningen sker i
+#: :meth:`OpponentTracker.profile_factor`.
+NEUTRAL_PRESS = 0.5
+
+
+@dataclass(frozen=True)
+class OpponentProfile:
+    """En agents **uppskattning** av en annan spelare.
+
+    Detta är en gissning byggd ur offentligt observerbart beteende — aldrig ur
+    motståndarens verkliga parametrar. Varje tal ligger mellan 0 och 1.
+
+    ``risk``           – hur gärna motståndaren tar en osäker chans.
+    ``press``          – hur ofta motståndaren bluffar och pressar.
+    ``predictability`` – hur förutsägbar motståndaren är.
+    ``kind``           – kort etikett, t.ex. "bluffbenägen" eller "försiktig".
+    ``confidence``     – hur säker uppskattningen är.
+    ``source``         – varifrån profilen kommer: ``"llm"``, ``"statistik"``
+                         (sekreterarens sammanställning utan LLM) eller
+                         ``"population"`` (ingen data alls).
+    """
+
+    risk: float = 0.5
+    press: float = NEUTRAL_PRESS
+    predictability: float = 0.5
+    kind: str = "okänd"
+    confidence: float = 0.0
+    source: str = "population"
+
+    def __post_init__(self) -> None:
+        for name in ("risk", "press", "predictability", "confidence"):
+            object.__setattr__(self, name, _clamp01(getattr(self, name)))
+
+    def to_dict(self) -> dict:
+        return {
+            "risk": round(self.risk, 3),
+            "press": round(self.press, 3),
+            "predictability": round(self.predictability, 3),
+            "kind": self.kind,
+            "confidence": round(self.confidence, 3),
+            "source": self.source,
+        }
+
+
+def _clamp01(value: float) -> float:
+    """Klämm ett tal till [0, 1]; tål skräp från en LLM."""
+    try:
+        x = float(value)
+    except (TypeError, ValueError):
+        return 0.5
+    if x != x:  # NaN
+        return 0.5
+    return 0.0 if x < 0.0 else 1.0 if x > 1.0 else x
+
 
 @dataclass
 class OpponentStats:
@@ -214,6 +272,108 @@ class OpponentTracker:
         if bucket is None or bucket.decisions == 0:
             return None
         return bucket.passes / bucket.decisions
+
+    def call_rate(self, player: str) -> float | None:
+        """Hur ofta spelaren synar i stället för att skicka/slå. Riskbenägenhet."""
+        bucket = self.stats.get(player)
+        if bucket is None or bucket.decisions == 0:
+            return None
+        return bucket.calls / bucket.decisions
+
+    # -- Sekreterarens sammanställning ----------------------------------
+    def evidence(self, player: str) -> dict:
+        """Rå, **offentlig** sammanställning om ``player``. Ingen tolkning.
+
+        Detta är vad sekreteraren har skrivit i protokollet: antal synliga bud,
+        hur många som avslöjats, hur många av dem som var lögner, hur spelaren
+        svarat på bud. Motståndarprofilen byggs ur detta — men tolkningen görs
+        av LLM:en, inte här. Alla tal är sådana en åskådare vid bordet hade
+        kunnat räkna upp; inga dolda tärningar ingår.
+        """
+        bucket = self.stats.get(player)
+        if bucket is None:
+            return {
+                "visible_bids": 0,
+                "revealed": 0,
+                "revealed_bluffs": 0,
+                "decisions": 0,
+                "passes": 0,
+                "raises": 0,
+                "calls": 0,
+                "calls_won": 0,
+                "bluff_rate": None,
+                "pass_rate": None,
+                "call_rate": None,
+            }
+        revealed = bucket.revealed + bucket.revealed_blind
+        bluffs = bucket.revealed_bluffs + bucket.revealed_blind_bluffs
+        return {
+            "visible_bids": bucket.visible_bids,
+            "revealed": revealed,
+            "revealed_bluffs": bluffs,
+            "decisions": bucket.decisions,
+            "passes": bucket.passes,
+            "raises": bucket.raises,
+            "calls": bucket.calls,
+            "calls_won": bucket.calls_won,
+            "bluff_rate": (bluffs / revealed) if revealed else None,
+            "pass_rate": (bucket.passes / bucket.decisions) if bucket.decisions else None,
+            "call_rate": (bucket.calls / bucket.decisions) if bucket.decisions else None,
+        }
+
+    def has_evidence(self, player: str) -> bool:
+        """Finns något alls att tolka? Annars är profilen bara populationen."""
+        bucket = self.stats.get(player)
+        if bucket is None:
+            return False
+        return (bucket.revealed + bucket.revealed_blind) > 0 or bucket.decisions > 0
+
+    def statistical_profile(self, player: str) -> OpponentProfile:
+        """Deterministisk fallback-profil ur sekreterarens siffror.
+
+        Används när ingen LLM finns (utvärderingsläget) eller när LLM:en inte
+        svarar. Den läser samma offentliga historik som LLM:en får se, men med
+        enkel aritmetik i stället för tolkning. Utan data: populationen.
+        """
+        ev = self.evidence(player)
+        if not self.has_evidence(player):
+            return OpponentProfile()
+        n = ev["revealed"] + ev["decisions"]
+        confidence = min(1.0, n / 10.0)
+        # Skalan är centrerad kring NEUTRAL_PRESS = "bluffar som folk gör mest".
+        # En rå bluff-frekvens (~0,72 för en vanlig spelare) skulle annars lägga
+        # varje spelare över mitten och skruva upp tron i onödan. Därför skalas
+        # benägenheten **relativt** populationen, precis som ``bluff_ratio``.
+        press = (
+            NEUTRAL_PRESS * self.bluff_ratio(player)
+            if ev["bluff_rate"] is not None
+            else NEUTRAL_PRESS
+        )
+        risk = ev["call_rate"] if ev["call_rate"] is not None else 0.5
+        if ev["bluff_rate"] is None and ev["call_rate"] is None:
+            return OpponentProfile()
+        return OpponentProfile(
+            risk=risk,
+            press=press,
+            predictability=0.5,
+            kind="okänd",
+            confidence=confidence,
+            source="statistik",
+        )
+
+    def profile_factor(self, profile: OpponentProfile) -> float:
+        """Översätt en motståndarprofils ``press`` till en **relativ** faktor.
+
+        Faktorn är kring 1,0 och multipliceras på den budspecifika tron, precis
+        som :meth:`bluff_ratio`. ``press = 0,5`` (neutralt) ger 1,0; en spelare
+        som bedöms bluffa dubbelt så ofta ger 2,0. Faktorn dämpas av profilens
+        konfidens, så en osäker gissning inte får slå över populationstron.
+        """
+        span = max(1e-9, 1.0 - NEUTRAL_PRESS)
+        raw = 1.0 + (profile.press - NEUTRAL_PRESS) / span
+        raw = max(0.25, min(4.0, raw))
+        c = profile.confidence
+        return 1.0 + c * (raw - 1.0)
 
     def to_dict(self) -> dict:
         return {

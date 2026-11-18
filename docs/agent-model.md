@@ -74,20 +74,28 @@ aldrig vilka drag som är tillåtna. Legaliteten bor kvar i motorn
 | Lager | Ansvar | Deterministiskt? |
 |---|---|---|
 | **Policy-kärna** (`meier/policy.py`) | Räknar fram draget ur tillstånd + parametrar | **Ja** |
-| **Motståndarmodell** (`meier/opponents.py`) | Bygger profiler ur offentlig historik | **Ja** |
+| **Sekreterare** (`meier/opponents.py`) | Bokför offentligt spel i siffror | **Ja** |
+| **Läsare** (`meier/agents/reader.py`) | **LLM:en** tolkar siffrorna → motståndarprofil | Nej (profilen) |
 | **LLM-lager** (`meier/agents/strategic.py`) | Replik och persona | Nej (påverkar ej draget) |
 
-Draget ägs helt av policyn. LLM:en formulerar **bara repliken** — den kan inte
-föreslå, ändra eller överrida ett drag. Skälet är mätbarhet: om LLM:en fick
-påverka draget skulle en profil kunna vinna på sin formulering i stället för på
-sina parametrar, och då går det inte att avgöra vilket som avgjorde. Motiveringen
-som sparas är därför alltid policyns maskinella skäl (t.ex. `"EV=-0.386 liv"`),
-aldrig en LLM-text.
+Draget ägs helt av policyn. LLM:en har **två** uppgifter, och ingen av dem rör
+draget direkt:
+
+1. **Repliken** — formulera vad spelaren säger.
+2. **Motståndarprofilen** — tolka motståndarnas offentliga beteende och sätta en
+   profil. Profilen är en **indata** till policyn, precis som parametrarna.
+
+Det andra är det nya. Det är fortfarande mätbart: profilen är ett strukturerat
+estimat som policyn räknar på, inte ett fritt val. Skälet att hålla isär dem: om
+LLM:en fick välja drag skulle en profil kunna vinna på sin formulering i stället
+för sina parametrar, och då går det inte att avgöra vilket som avgjorde.
+Motiveringen som sparas är därför alltid policyns maskinella skäl (t.ex.
+`"EV=-0.386 liv"`), med profilens etikett och konfidens som tillägg.
 
 Konsekvensen är också praktisk: en match kan köras **utan LLM** (`--no-llm`) och
-ger exakt samma utfall, men på millisekunder i stället för minuter. Det är läget
-för utvärdering och statistik. LLM:en slås på när replikerna ska läsas av en
-människa.
+ger då en deterministisk match — läsaren faller tillbaka på sekreterarens
+aritmetik. Det är läget för utvärdering och statistik. LLM:en slås på när
+replikerna och tolkningen ska göras på riktigt.
 
 ---
 
@@ -350,16 +358,32 @@ mot de fyra preseterna (baslinje 20 %, fem spelare). En läsande agent (högre
 
 ---
 
-## 6. Motståndarhistorik (läsande agenter)
+## 6. Motståndarprofil (läsande agenter)
 
-`reading` avgör hur mycket agenten använder en profil av varje motståndare.
-Profilen byggs ur **endast offentligt observerbar information** och kan innehålla:
+`reading` avgör hur mycket agenten låter en **motståndarprofil** styra sina
+beslut. Arbetet är delat i två roller med skarp gräns:
 
-- andel bluffar (av synliga bud som blivit avslöjade),
-- andel riskfyllda drag,
-- benägenhet att ge upp under press (skickar vidare i stället för att slå),
-- förutsägbarhet (hur ofta agenten höjer minsta möjliga),
-- senaste resultat.
+- **Sekreteraren** (`OpponentTracker`) bokför vad som hänt vid bordet: antal bud,
+  hur många som avslöjats genom en syn, hur många av dem som var lögner, hur
+  spelaren svarat. Rena siffror, ingen tolkning.
+- **Läsaren** (`OpponentReader`) tolkar siffrorna och sätter profilen. Här är
+  **LLM:en** den som dömer — den avgör helt själv vad beteendet betyder
+  ("bluffbenägen", "försiktig", "oförutsägbar").
+
+Motståndarprofilen innehåller:
+
+- `risk` – hur gärna motståndaren tar en osäker chans,
+- `press` – hur ofta motståndaren bluffar och pressar,
+- `predictability` – hur förutsägbar motståndaren är,
+- `kind` – en kort etikett,
+- `confidence` – hur säker uppskattningen är.
+
+**Agenten får aldrig veta motståndarens verkliga parametrar** — bara gissa ur
+offentligt beteende. Det är inte bara en konvention: sammanställningen byggs av
+`OpponentTracker`, som per konstruktion bara tar emot offentliga händelser.
+
+Utan LLM (utvärderingsläget) faller läsaren tillbaka på sekreterarens aritmetik,
+så en match kan alltid spelas klart utan nätverk.
 
 ### 6.0 Hur profilen får användas: relativt, aldrig absolut
 
@@ -367,26 +391,29 @@ Detta är den subtilaste punkten i hela modellen. En läsande agent får **inte*
 byta ut den budspecifika tron `CALL_PRIOR[B]` mot motståndarens *absoluta*
 bluff-frekvens. Skälet:
 
-- `CALL_PRIOR[41] ≈ 0,06`. Nästan ingen bluffar till ett lågt bud.
+- `CALL_PRIOR[41] ≈ 0,28`. Nästan ingen bluffar till ett lågt bud.
 - En motståndare som bluffar dubbelt så ofta som normalt har frekvens ≈ 1,2 —
   men det säger inget om **budnivån**. Sätter man in 1,2 (eller ens 0,4) som
   `P(vinst | 41)` synar agenten bud som nästan alltid är sanna, och förlorar.
 
-Rätt konstruktion är en **relativ justering**: motståndarens benägenhet skalas in
-i tabellen som en faktor kring 1,0.
+Rätt konstruktion är en **relativ justering**: profilens benägenhet skalas in i
+tabellen som en faktor kring 1,0. Faktorn är centrerad kring `press = 0,5` och
+**dämpas av LLM:ens konfidens**, så en osäker gissning inte slår över
+populationstron.
 
 ```
-ratio = bluff_estimate(spelare) / DEFAULT_Q        # ≈ 1,0 för en typisk spelare
-P(vinst | B, spelare) = CALL_PRIOR[B] * ratio**reading
+raw    = 1 + (profil.press − 0,5) / (1 − 0,5)      # 0,5 → 1,0; 0,9 → 1,8
+faktor = 1 + profil.confidence · (raw − 1)         # osäker gissning → 1,0
+signal = 1 + reading · (faktor − 1)                # agentens egen ovilja
+P(vinst | B, spelare) = CALL_PRIOR[B] · signal
 ```
 
 - `reading = 0` ger exakt `CALL_PRIOR[B]` (ingen läsning, oavsett motståndare).
-- `reading = 1` ger spelarens relativa benägenhet fullt ut.
+- `reading = 1` ger motståndarens benägenhet fullt ut.
 - Resultatet klipps vid 0,95 så ett litet urval inte kan slå över.
 
-`bluff_estimate` använder en förhandstro (`PRIOR_STRENGTH = 4`) mot `DEFAULT_Q`,
-så en spelare med noll avslöjade bud bedöms som populationen. Det gör att en
-läsande agent aldrig drar för stora slutsatser ur litet underlag.
+En spelare utan data bedöms som populationen (`press = 0,5`), så en läsande
+agent drar aldrig för stora slutsatser ur litet underlag.
 
 ### 6.1 Den läckagefria regeln (obligatorisk)
 
@@ -406,7 +433,8 @@ det än. Det gör resultaten ogiltiga.
 Modulen är byggd så att regeln **inte kan brytas av misstag**:
 `OpponentTracker` tar emot enbart offentliga observationer via
 `observe_bid`/`observe_decision`, och de faktiska tärningarna kommer in **bara**
-via `reveal`, som motorn anropar *efter* att en syn avgjorts.
+via `reveal`, som motorn anropar *efter* att en syn avgjorts. Läsaren matas
+därför bara med `tracker.evidence(...)` — aldrig med sessionens logg.
 
 ### 6.2 Invariant att testa
 

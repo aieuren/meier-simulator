@@ -596,14 +596,38 @@ The roster was rebuilt. The old roles (`arling`/`trygg`/`kalkyl`/`rackar`) are
 - **Axel is BASE** — deterministic, non-reading, **no LLM**. He is the fixed
   measuring stick the others are compared against. He is allowed to lose often.
 - **The policy owns the move.** `StrategicAgent` (`meier/agents/strategic.py`)
-  computes the move with `BasePolicy`; the LLM only phrases the line. It can
-  never propose, change, or override a move. The stored `reasoning` is always the
-  policy's machine reason (e.g. `"EV=-0.386 liv"`), never LLM text. This is what
-  makes winners measurable.
+  computes the move with `BasePolicy`. The LLM has **two** jobs, neither of which
+  is the move itself:
+  1. **Narrate the line** (`_narrate`) — say what the player says.
+  2. **Read the opponents** (`OpponentReader`, `meier/agents/reader.py`) — turn
+     the secretary's public numbers into an `OpponentProfile`.
+  The profile is an **input** to the policy, not a free choice: the policy still
+  computes the move. The stored `reasoning` is the policy's machine reason plus
+  the profile label and confidence (e.g. `"EV=-0.386 liv | bild av David:
+  försiktig (press 0.10, konf 0.40)"`).
+- **Secretary vs reader.** `OpponentTracker` (`meier/opponents.py`) is the
+  secretary: it *records* public play in numbers (bids, reveals, bluffs, calls,
+  passes) and never interprets. `OpponentReader` is the reader: the **LLM decides
+  alone** what the numbers mean. The reader is fed only
+  `tracker.evidence(player)` — never the session log — so it cannot see hidden
+  dice. Ask "who judges?" and the answer is: the LLM. The secretary only writes.
+- **`OpponentProfile`** has `risk`, `press`, `predictability`, `kind`,
+  `confidence`, `source`. `source` is `"llm"`, `"statistik"` (fallback without
+  LLM) or `"population"` (no data). Values are clamped to 0–1 so a garbled LLM
+  reply cannot leak junk into decisions.
+- **The profile is cached per opponent** and recomputed only when new evidence
+  becomes public (a reveal). So a match makes a handful of reader calls per
+  opponent, not one per decision.
+- **Relative scaling, never absolute.** `profile_factor` maps `press` to a factor
+  around 1.0 centred on `NEUTRAL_PRESS = 0.5`, damped by `confidence`; the agent's
+  own `reading` then scales how much of that signal it wants. This preserves the
+  `reading = 0 → exact CALL_PRIOR` invariant. Absolute bluff rates here are ~0.72
+  for everyone, so feeding them in raw inflates every opponent — the factor must
+  stay relative.
 - **Evaluation runs without LLM.** `play_match(..., with_llm=False)` and
-  `cli match --no-llm` give the *same* outcome but in milliseconds instead of
-  minutes (~100+ LLM calls per match at 15 rpm ≈ 7 min/match). Use `--no-llm` for
-  statistics; turn LLM on when a human will read the lines.
+  `cli match --no-llm` give a deterministic match: the reader falls back to the
+  secretary's arithmetic. Fast (milliseconds vs minutes). Use `--no-llm` for
+  statistics; turn LLM on when the lines and the reading should be real.
 - **The opponent model is now wired into the engine.** `Session.tracker` feeds
   the shared `OpponentTracker` as events become public; `make_players()` gives
   every reading player the same tracker (one shared view of the table).

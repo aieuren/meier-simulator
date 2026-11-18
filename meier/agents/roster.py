@@ -111,6 +111,11 @@ def make_players(keys, *, llm_factory=None):
 
     ``llm_factory`` kallas en gång per LLM-spelare för att ge var och en sin
     egen klient (så tokenräkningen per spelare hålls åtskild). Axel får ingen.
+
+    En läsande spelare får dessutom en **läsare** med sin egen LLM-klient: det är
+    den som tolkar motståndarnas beteende. Utan klient (``llm_factory=None``)
+    faller läsaren tillbaka på sekreterarens aritmetik, så utvärderingsläget
+    spelar exakt som förut men utan nätverk.
     """
     from ..opponents import OpponentTracker
 

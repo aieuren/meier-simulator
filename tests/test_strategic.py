@@ -131,3 +131,28 @@ def test_make_players_shares_one_tracker_among_readers():
     assert all(p.tracker is tracker for p in readers)
     # Axel får aldrig en LLM-klient.
     assert by_key["axel"].llm is None
+
+
+def test_reader_profile_is_used_when_answering_a_bid():
+    # En läsande agent ska bygga en motståndarprofil ur offentligt spel och
+    # låta den styra synbeslutet — utan LLM via sekreterarens aritmetik.
+    tracker = OpponentTracker()
+    for _ in range(8):
+        tracker.observe_bid("bluffare", blind=False)
+        tracker.reveal("bluffare", was_bluff=True)
+    reader = make("cecilia", ROSTER["cecilia"].params, tracker)
+    decision = reader.decide(61, opponent="bluffare")
+    assert "bluffare" in reader.profiles
+    assert reader.profiles["bluffare"].press > 0.5
+    assert "bild av bluffare" in decision.reasoning
+
+
+def test_non_reader_never_builds_a_profile():
+    # Axel läser ingen: ingen profil, ingen justering av tron.
+    tracker = OpponentTracker()
+    for _ in range(8):
+        tracker.reveal("bluffare", was_bluff=True)
+    axel = make("axel", ROSTER["axel"].params, tracker)
+    assert axel.opponent_profile("bluffare") is None
+    assert axel._opponent_prior(61, "bluffare") is None
+    assert axel.profiles == {}

@@ -18,10 +18,11 @@ from dataclasses import replace
 
 from .. import rules
 from ..llm import LLMClient, parse_json_object
-from ..opponents import OpponentTracker
+from ..opponents import OpponentProfile, OpponentTracker
 from ..policy import AgentParams, BasePolicy
 from .base import Agent, Role
 from .player import ActionDecision, Announcement
+from .reader import OpponentReader
 
 #: Kompakt regeltext för replikprompten. Den påverkar inte draget.
 _RULES = (
@@ -52,6 +53,7 @@ class StrategicAgent(Agent):
         tracker: OpponentTracker | None = None,
         policy: BasePolicy | None = None,
         llm: LLMClient | None = None,
+        reader: OpponentReader | None = None,
     ):
         # Ingen LLM-klient skapas om ingen ges: agenten kan spela utan nätverk.
         self.role = role
@@ -59,6 +61,11 @@ class StrategicAgent(Agent):
         self.params = params
         self.tracker = tracker
         self.policy = policy or BasePolicy(params)
+        # Läsaren bygger motståndarprofiler. Utan LLM faller den tillbaka på
+        # sekreterarens aritmetik, så en match kan alltid spelas klart.
+        self.reader = reader or OpponentReader(llm=llm)
+        #: Senaste profilen per motståndare, för insyn i loggen.
+        self.profiles: dict[str, OpponentProfile] = {}
 
     # -- Replik -----------------------------------------------------------
     def system_prompt(self) -> str:
@@ -92,16 +99,41 @@ class StrategicAgent(Agent):
         return f"Jag säger {rules.name(bid)}."
 
     # -- Hjälpare ---------------------------------------------------------
+    def opponent_profile(self, opponent: str | None) -> OpponentProfile | None:
+        """Motståndarprofilen för ``opponent``, eller ``None`` om ingen läsning.
+
+        Profilen byggs av :class:`~meier.agents.reader.OpponentReader`, där
+        LLM:en tolkar sekreterarens sammanställning. Utan läsande agent (Axel)
+        eller utan motståndare finns ingen profil.
+        """
+        if self.tracker is None or opponent is None or self.params.reading <= 0.0:
+            return None
+        profile = self.reader.profile(self.tracker, opponent)
+        self.profiles[opponent] = profile
+        return profile
+
     def _opponent_prior(self, bid: int, opponent: str | None) -> float | None:
         """Budspecifik tro, justerad för motståndaren — eller None (populationen).
 
         Justeringen är **relativ**: motståndarens benägenhet skalas in i den
-        budspecifika tron. Att i stället sätta in motståndarens absoluta
-        bluff-frekvens vore fel — se :meth:`OpponentTracker.bluff_ratio`.
+        budspecifika tron, precis som :meth:`OpponentTracker.bluff_ratio`. Att i
+        stället sätta in motståndarens absoluta bluff-frekvens vore fel — ett lågt
+        bud skulle då bedömas som en bluff och agenten skulle syna bud som nästan
+        alltid är sanna.
         """
-        if self.tracker is None or opponent is None or self.params.reading <= 0.0:
+        from ..policy import CALL_PRIOR
+
+        profile = self.opponent_profile(opponent)
+        if profile is None:
             return None
-        return self.tracker.effective_prior(bid, opponent, reading=self.params.reading)
+        base = CALL_PRIOR[bid]
+        # Faktorn är motståndarens benägenhet (ur profilen, dämpad av LLM:ens
+        # konfidens). Agentens egen ``reading`` avgör hur mycket den **vill**
+        # låta den styra — en agent som läser lite tar bara en bråkdel av
+        # signalen. ``reading = 0`` ger exakt den frysta populationstabellen.
+        factor = self.tracker.profile_factor(profile)
+        factor = 1.0 + self.params.reading * (factor - 1.0)
+        return min(0.95, base * factor)
 
     @staticmethod
     def _coerce_higher(bid: int, previous_bid: int) -> int:
@@ -180,9 +212,13 @@ class StrategicAgent(Agent):
         """Svara på ett bud. Agenten ser inte sina egna tärningar här."""
         if not rules.is_valid_value(bid):
             raise ValueError(f"{bid} är inte ett giltigt bud")
+        profile = self.opponent_profile(opponent)
         decision = self.policy.decide_call(
             bid, lives=lives, opponent_q=self._opponent_prior(bid, opponent)
         )
+        reason = decision.reason
+        if profile is not None:
+            reason = f"{reason} | bild av {opponent}: {profile.kind} (press {profile.press:.2f}, konf {profile.confidence:.2f})"
         verb = "syna budet" if decision.action == "syna" else "skicka vidare"
         situation = f"Motståndaren bjöd {rules.name(bid)}. Din strategi säger att du ska {verb}."
         if decision.action == "syna":
@@ -193,6 +229,6 @@ class StrategicAgent(Agent):
             action=decision.action,
             bid=None,
             line=self._narrate(situation, fallback),
-            reasoning=decision.reason,
+            reasoning=reason,
             role=self.role.key,
         )
