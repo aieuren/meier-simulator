@@ -107,7 +107,11 @@ class Game:
         holder = order[0]  # ansvarig för budet (byter vid skicka vidare)
         dice = self.roll()
         shown = rules.read_dice(*dice)
-        ann = self.players[bidder].agent.announce(dice)
+        # Den som sitter näst efter budgivaren är den som först får svara.
+        nxt = order[1 % len(order)]
+        ann = self.players[bidder].agent.announce(
+            dice, opponent=self.players[nxt].name
+        )
         bid = ann.bid
         self._record(
             f"Runda {self.rounds}: {self.players[bidder].name} slår och säger "
@@ -147,7 +151,12 @@ class Game:
                 # Tärningarna slås om; budgivaren väljer att titta eller bjuda blint.
                 dice = self.roll()
                 shown = rules.read_dice(*dice)
-                forced = self.players[bidder].agent.announce_forced(dice, previous_bid=bid)
+                responder = order[(order.index(bidder) + 1) % len(order)]
+                forced = self.players[bidder].agent.announce_forced(
+                    dice,
+                    previous_bid=bid,
+                    opponent=self.players[responder].name,
+                )
                 bid = forced.bid
                 holder = bidder  # budgivaren ansvarar nu för det nya budet
                 blind_note = " (blint)" if forced.blind else ""

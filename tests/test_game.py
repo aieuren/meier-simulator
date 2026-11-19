@@ -19,7 +19,7 @@ class ScriptedAgent(Agent):
     def system_prompt(self):
         return ""
 
-    def announce(self, dice, *, previous_bid=None):
+    def announce(self, dice, *, previous_bid=None, opponent=None):
         shown = rules.read_dice(*dice)
         if previous_bid is not None:
             # Tvingad höjning: välj nästa högre bud.
@@ -30,7 +30,7 @@ class ScriptedAgent(Agent):
             dice=dice, shown=shown, bid=bid, truth=bid == shown, line="", reasoning="", role=self.role.key
         )
 
-    def decide(self, bid, *, lives=3):
+    def decide(self, bid, *, lives=3, opponent=None):
         action, new_bid = self._decisions.pop(0) if self._decisions else ("skicka", None)
         return ActionDecision(action=action, bid=new_bid, line="", reasoning="", role=self.role.key)
 

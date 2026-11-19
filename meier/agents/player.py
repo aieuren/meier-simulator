@@ -111,7 +111,13 @@ class MeierPlayerAgent(Agent):
         )
 
     # -- Kärnfunktion: givet tärningsutfallet, hur svarar spelaren? ---------
-    def announce(self, dice: tuple[int, int], *, previous_bid: int | None = None) -> Announcement:
+    def announce(
+        self,
+        dice: tuple[int, int],
+        *,
+        previous_bid: int | None = None,
+        opponent: str | None = None,
+    ) -> Announcement:
         """Bestäm spelarens bud givet utfallet av ett tärningsslag.
 
         ``previous_bid`` är det senaste budet i rundan om spelaren höjer efter
@@ -142,7 +148,9 @@ class MeierPlayerAgent(Agent):
             corrected=proposed != bid,
         )
 
-    def announce_blind(self, dice: tuple[int, int], *, previous_bid: int) -> Announcement:
+    def announce_blind(
+        self, dice: tuple[int, int], *, previous_bid: int, opponent: str | None = None
+    ) -> Announcement:
         """Spelaren **slår** och måste säga ett strikt högre bud.
 
         Spelaren skakar bägaren själv och får inte lyfta på locket – bägaren är
@@ -176,7 +184,9 @@ class MeierPlayerAgent(Agent):
             blind=True,
         )
 
-    def announce_forced(self, dice: tuple[int, int], *, previous_bid: int) -> Announcement:
+    def announce_forced(
+        self, dice: tuple[int, int], *, previous_bid: int, opponent: str | None = None
+    ) -> Announcement:
         """Budgivaren måste höja när bägaren gått ett helt varv.
 
         Tärningarna har redan slagits om av motorn. Spelaren får själv välja om
@@ -193,10 +203,12 @@ class MeierPlayerAgent(Agent):
         choice = self._wants_blind_forced(previous_bid, higher)
         if choice.action == "blint":
             # Spelaren väljer att bjuda blint utan att titta på de nya tärningarna.
-            ann = self.announce_blind(dice, previous_bid=previous_bid)
+            ann = self.announce_blind(
+                dice, previous_bid=previous_bid, opponent=opponent
+            )
         else:
             # Spelaren tittar på de nya tärningarna och höjer som vid ett vanligt bud.
-            ann = self.announce(dice, previous_bid=previous_bid)
+            ann = self.announce(dice, previous_bid=previous_bid, opponent=opponent)
         return replace(ann, choice_line=choice.line, choice_reasoning=choice.reasoning)
 
     def _wants_blind_forced(self, previous_bid: int, higher: list[int]) -> ActionDecision:

@@ -12,6 +12,9 @@ Två saker är viktiga att låsa fast:
 
 from dataclasses import dataclass, field
 
+import pytest
+
+from meier import rules
 from meier.agents.reader import OpponentReader
 from meier.opponents import NEUTRAL_PRESS, OpponentProfile, OpponentTracker
 
@@ -108,7 +111,33 @@ def test_reader_uses_the_llm_when_available():
     assert profile.source == "llm"
     assert profile.kind == "bluffbenägen"
     assert profile.press == 0.9
-    assert profile.confidence == 0.8
+    # Sex synar har avgjorts vid bordet: 6/(6+3) = 0,667. Modellen bad om 0,8,
+    # men underlaget sätter taket — en bild får inte vara säkrare än facit medger.
+    assert profile.confidence == pytest.approx(6 / 9)
+
+
+def test_confidence_is_capped_by_the_evidence_at_the_table():
+    """En bild byggd på en enda syn får inte räknas som säker."""
+    tracker = OpponentTracker()
+    tracker.observe_bid("bluffare", blind=False)
+    tracker.reveal("bluffare", was_bluff=True)
+    reader = OpponentReader(llm=FakeLLM(confidence=1.0))
+    profile = reader.profile(tracker, "bluffare")
+    assert profile.confidence == pytest.approx(1 / 4)  # 1/(1+3)
+
+
+def test_confidence_grows_as_more_calls_are_revealed():
+    """Ju fler synar bordet har facit på, desto säkrare får bilden bli."""
+    seen = []
+    for reveals in (1, 3, 9):
+        tracker = OpponentTracker()
+        for _ in range(reveals):
+            tracker.observe_bid("bluffare", blind=False)
+            tracker.reveal("bluffare", was_bluff=True)
+        reader = OpponentReader(llm=FakeLLM(confidence=1.0))
+        seen.append(reader.profile(tracker, "bluffare").confidence)
+    assert seen[0] < seen[1] < seen[2]
+    assert seen == sorted(seen)
 
 
 def test_reader_never_sends_hidden_information():
@@ -195,6 +224,113 @@ def test_profile_factor_is_damped_by_confidence():
     sure = tracker.profile_factor(OpponentProfile(press=0.9, confidence=1.0))
     assert unsure == 1.0
     assert sure > unsure
+
+
+# -- Risk: motståndarens synbenägenhet --------------------------------------
+
+def test_risk_factor_is_one_for_a_neutral_profile():
+    tracker = OpponentTracker()
+    assert tracker.risk_factor(OpponentProfile()) == 1.0
+
+
+def test_risk_factor_tracks_risk_not_press():
+    """Risk handlar om att syna, press om att ljuga. De får inte blandas."""
+    tracker = OpponentTracker()
+    synbenägen = tracker.risk_factor(OpponentProfile(risk=0.9, press=0.1, confidence=1.0))
+    lögnaktig = tracker.risk_factor(OpponentProfile(risk=0.1, press=0.9, confidence=1.0))
+    assert synbenägen > 1.0 > lögnaktig
+
+
+def test_risk_factor_is_damped_by_confidence():
+    tracker = OpponentTracker()
+    unsure = tracker.risk_factor(OpponentProfile(risk=0.9, confidence=0.0))
+    sure = tracker.risk_factor(OpponentProfile(risk=0.9, confidence=1.0))
+    assert unsure == 1.0
+    assert sure > unsure
+
+
+def test_a_calling_opponent_makes_the_policy_bluff_less():
+    """Möter agenten en synbenägen motståndare blir bluffen dyrare."""
+    from meier.policy import BasePolicy
+
+    policy = BasePolicy()
+    shown = 52
+    neutral = policy.decide_bid(shown)
+    vs_caller = policy.decide_bid(shown, opponent_factor=2.0)
+    assert rules.compare(vs_caller.bid, neutral.bid) <= 0
+
+
+def test_opponent_factor_never_lowers_the_bid_below_the_truth():
+    """En synbenägen motståndare får aldrig locka fram en *högre* bluff."""
+    from meier.policy import BasePolicy
+
+    policy = BasePolicy()
+    for shown in rules.RANKING:
+        if rules.is_meier(shown):
+            continue
+        neutral = policy.decide_bid(shown)
+        vs_caller = policy.decide_bid(shown, opponent_factor=3.0)
+        assert rules.compare(vs_caller.bid, neutral.bid) <= 0
+
+
+def test_call_ratio_is_relative_to_the_population():
+    tracker = OpponentTracker()
+    for _ in range(20):
+        tracker.observe_bid("normal", blind=False)
+    for i in range(20):
+        tracker.observe_decision("normal", "syna" if i < 4 else "skicka")
+    for _ in range(20):
+        tracker.observe_bid("synare", blind=False)
+    for i in range(20):
+        tracker.observe_decision("synare", "syna" if i < 12 else "skicka")
+    normal = tracker.call_ratio("normal")
+    synare = tracker.call_ratio("synare")
+    assert normal == pytest.approx(1.0, abs=0.15), "typisk synfrekvens ska ge ratio ~1"
+    assert synare > normal
+
+
+def test_risk_reaches_the_bid_through_the_agent():
+    """Riskfaktorn ska faktiskt styra agentens bud, inte bara räknas ut."""
+    from meier.agents.base import Role
+    from meier.agents.strategic import StrategicAgent
+    from meier.policy import AgentParams
+
+    def agent_for(call_rate: float) -> StrategicAgent:
+        tracker = OpponentTracker()
+        n = 40
+        for _ in range(n):
+            tracker.observe_bid("X", blind=False)
+            tracker.reveal("X", was_bluff=False)
+        for i in range(n):
+            tracker.observe_decision("X", "syna" if i < int(call_rate * n) else "skicka")
+        role = Role(key="t", name="Test", description="", style="")
+        return StrategicAgent(role, AgentParams(0.5, 0.7, 1.0), tracker=tracker)
+
+    timid = agent_for(0.03)
+    caller = agent_for(0.50)
+    assert timid._call_factor("X") < 1.0 < caller._call_factor("X")
+
+    def bluffs(agent: StrategicAgent) -> int:
+        count = 0
+        for shown in rules.RANKING:
+            if rules.is_meier(shown):
+                continue
+            d = agent.policy.decide_bid(shown, opponent_factor=agent._call_factor("X"))
+            if d.bid is not None and rules.compare(d.bid, shown) > 0:
+                count += 1
+        return count
+
+    assert bluffs(caller) < bluffs(timid)
+
+
+def test_summary_gives_the_model_a_reference_point():
+    """Modellen ska veta vad en *vanlig* synfrekvens är, inte läsa 19 % som noll."""
+    tracker = _tracker_with_bluffer()
+    llm = FakeLLM()
+    reader = OpponentReader(llm=llm)
+    reader.profile(tracker, "bluffare")
+    assert "19" in llm.last_user, "referenspunkten ska stå i sammanställningen"
+    assert "RELATIVT" in llm.last_user.upper()
 
 
 # -- Klartext för människan --------------------------------------------------

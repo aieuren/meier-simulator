@@ -135,6 +135,20 @@ class StrategicAgent(Agent):
         factor = 1.0 + self.params.reading * (factor - 1.0)
         return min(0.95, base * factor)
 
+    def _call_factor(self, opponent: str | None) -> float:
+        """Hur mycket oftare motståndaren synar, relativt det normala.
+
+        Samma relativa konstruktion som :meth:`_opponent_prior`, men för
+        motståndarens **risk** i stället för dess bluffbenägenhet. Används när
+        agenten väljer bud: en synbenägen motståndare gör bluffen dyrare.
+        ``reading = 0`` eller ingen profil ger exakt 1,0.
+        """
+        profile = self.opponent_profile(opponent)
+        if profile is None:
+            return 1.0
+        factor = self.tracker.risk_factor(profile)
+        return 1.0 + self.params.reading * (factor - 1.0)
+
     @staticmethod
     def _coerce_higher(bid: int, previous_bid: int) -> int:
         """Se till att budet är strikt högre än det förra."""
@@ -144,9 +158,15 @@ class StrategicAgent(Agent):
         return higher[-1] if higher else bid
 
     # -- Beslut 1: första budet (ser tärningarna) ------------------------
-    def announce(self, dice: tuple[int, int], *, previous_bid: int | None = None) -> Announcement:
+    def announce(
+        self,
+        dice: tuple[int, int],
+        *,
+        previous_bid: int | None = None,
+        opponent: str | None = None,
+    ) -> Announcement:
         shown = rules.read_dice(*dice)
-        decision = self.policy.decide_bid(shown)
+        decision = self.policy.decide_bid(shown, opponent_factor=self._call_factor(opponent))
         bid = decision.bid if decision.bid is not None else shown
         if previous_bid is not None:
             bid = self._coerce_higher(bid, previous_bid)
@@ -169,7 +189,9 @@ class StrategicAgent(Agent):
         )
 
     # -- Beslut 2: slå (ser inte tärningarna) ----------------------------
-    def announce_blind(self, dice: tuple[int, int], *, previous_bid: int) -> Announcement:
+    def announce_blind(
+        self, dice: tuple[int, int], *, previous_bid: int, opponent: str | None = None
+    ) -> Announcement:
         if not rules.is_valid_value(previous_bid):
             raise ValueError(f"{previous_bid} är inte ett giltigt bud")
         decision = self.policy.decide_raise(previous_bid)
@@ -193,14 +215,18 @@ class StrategicAgent(Agent):
         )
 
     # -- Beslut 4: tvingad höjning (titta eller blint) -------------------
-    def announce_forced(self, dice: tuple[int, int], *, previous_bid: int) -> Announcement:
+    def announce_forced(
+        self, dice: tuple[int, int], *, previous_bid: int, opponent: str | None = None
+    ) -> Announcement:
         if not rules.is_valid_value(previous_bid):
             raise ValueError(f"{previous_bid} är inte ett giltigt bud")
         choice = self.policy.decide_forced(previous_bid)
         if choice.action == "blint":
-            ann = self.announce_blind(dice, previous_bid=previous_bid)
+            ann = self.announce_blind(
+                dice, previous_bid=previous_bid, opponent=opponent
+            )
         else:
-            ann = self.announce(dice, previous_bid=previous_bid)
+            ann = self.announce(dice, previous_bid=previous_bid, opponent=opponent)
         return replace(
             ann,
             choice_line=choice.reason,

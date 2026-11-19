@@ -58,7 +58,7 @@ def _fmt_rate(value: Any) -> str:
     return "–" if value is None else f"{float(value):.2f}"
 
 
-def _summarise(player: str, ev: dict) -> str:
+def _summarise(player: str, ev: dict, *, table_reveals: int, strength: float) -> str:
     """Gör sekreterarens siffror till en läsbar sammanställning för modellen."""
     lines = [
         f"Motståndare: {player}",
@@ -71,6 +71,14 @@ def _summarise(player: str, ev: dict) -> str:
         f"  slog högre: {ev['raises']}",
         f"  synade: {ev['calls']} (frekvens {_fmt_rate(ev['call_rate'])})",
         f"  synen gick hem: {ev['calls_won']}",
+        "",
+        "JÄMFÖRELSE: en vanlig Meier-spelare synar ungefär 19 % av gångerna och "
+        "bluffar ofta (runt 70 % av de avslöjade buden). Bedöm motståndaren "
+        "RELATIVT det — inte som om 0 vore normalt.",
+        "",
+        f"Synar som avgjorts vid bordet hittills (alla spelare): {table_reveals}",
+        f"Underlagets styrka: {strength:.2f} av 1,00 "
+        "(0 = inget facit än, 1 = gott om facit)",
     ]
     return "\n".join(lines)
 
@@ -111,31 +119,44 @@ class OpponentReader:
         if cached is not None and cached[0] == signature:
             return cached[1]
 
-        profile = self._ask_llm(player, ev) if self.llm is not None else None
+        profile = self._ask_llm(player, ev, tracker) if self.llm is not None else None
         if profile is None:
             profile = tracker.statistical_profile(player)
         self._cache[player] = (signature, profile)
         return profile
 
-    def _ask_llm(self, player: str, ev: dict) -> OpponentProfile | None:
+    def _ask_llm(self, player: str, ev: dict, tracker: OpponentTracker) -> OpponentProfile | None:
         """Låt LLM:en tolka sammanställningen. ``None`` om den inte svarar."""
         if not tracker_has_evidence(ev):
             # Inget att tolka: låt sekreteraren svara (populationen).
             return None
+        table_reveals = tracker.reveal_count()
+        strength = tracker.evidence_strength()
         try:
-            raw = self.llm.complete(_SYSTEM, _summarise(player, ev), json_mode=True)
+            raw = self.llm.complete(
+                _SYSTEM,
+                _summarise(
+                    player, ev, table_reveals=table_reveals, strength=strength
+                ),
+                json_mode=True,
+            )
             data = parse_json_object(raw)
         except Exception:  # noqa: BLE001 - en trasig läsning får aldrig fälla en match
             return None
         if not data:
             return None
         self.calls += 1
+        # LLM:en får säga hur säker den är på sin tolkning. Men underlaget sätter
+        # ett **tak**: en bild byggd på en enda syn får inte räknas som säker,
+        # hur tvärsäker modellen än är. Bordets facit är ett hårdare mått än
+        # modellens självförtroende, och det växer när fler synar avslöjas.
+        asked = _clamp01(data.get("confidence", 0.0))
         return OpponentProfile(
             risk=_clamp01(data.get("estimated_risk", 0.5)),
             press=_clamp01(data.get("estimated_press", 0.5)),
             predictability=_clamp01(data.get("estimated_predictability", 0.5)),
             kind=str(data.get("type") or "okänd")[:32],
-            confidence=_clamp01(data.get("confidence", 0.0)),
+            confidence=min(asked, strength),
             source="llm",
         )
 

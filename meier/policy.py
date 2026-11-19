@@ -289,7 +289,7 @@ class BasePolicy:
         return Decision("slå", bid=new_bid, reason=f"Slår till {rules.name(new_bid)}.")
 
     # -- Beslut 1: första budet (ser tärningarna) -----------------------
-    def decide_bid(self, shown: int) -> Decision:
+    def decide_bid(self, shown: int, *, opponent_factor: float = 1.0) -> Decision:
         """Vilket bud ska agenten säga när den sett tärningarna visa ``shown``?
 
         Att bjuda ``shown`` är **säkert**: blir det synat visar tärningarna minst
@@ -300,6 +300,11 @@ class BasePolicy:
         En bluff lönar sig därför bara när den är *billig att bli synad på* — alltså
         på budnivåer som sällan synas. ``press`` väger vinsten av att lägga sig;
         vid låg press bjuder agenten sanning, vid hög press tar den chansen.
+
+        ``opponent_factor`` är motståndarens **synbenägenhet** relativt det
+        normala (1,0 = som folk mest). En motståndare som synar ofta gör varje
+        bluff dyrare, och då bluffar agenten mindre. Det är läsningens inverkan
+        på budet — skild från ``press``, som är agentens egen benägenhet.
         """
         if rules.is_meier(shown):
             return Decision("bud", bid=shown, reason="Meier — högsta möjliga, bjuder det.")
@@ -307,7 +312,7 @@ class BasePolicy:
         best_bluff: int | None = None
         best_gain = 0.0
         for cand in rules.higher_options(shown):  # strikt högre än visat
-            p_called = self._p_called(cand)
+            p_called = self._p_called(cand, opponent_factor)
             gain = (1.0 - p_called) * self.params.press - p_called * CALL_ODDS[cand].l_lose
             if gain > best_gain:
                 best_gain, best_bluff = gain, cand
@@ -340,15 +345,21 @@ class BasePolicy:
         p_called = self._p_called(bid)
         return (1.0 - p_called) * self.params.press - p_called * CALL_ODDS[bid].l_lose
 
-    def _p_called(self, bid: int) -> float:
+    def _p_called(self, bid: int, opponent_factor: float = 1.0) -> float:
         """Uppskattad sannolikhet att ett bud blir synat.
 
         Fryst heuristik, kalibrerad mot empirin: högre bud synas oftare eftersom
         de är billigare att syna (synaren vinner oftare). Låga bud synas sällan
         men aldrig *aldrig* — därför ett golv. Utan golvet ser en bluff till ett
         lågt bud ut att vara gratis, och agenten bluffar ihjäl sig.
+
+        ``opponent_factor`` skalar uppskattningen med motståndarens kända
+        synbenägenhet (se :meth:`OpponentTracker.risk_factor`). Den som möter en
+        synbenägen motståndare räknar med att bli synad oftare — och bluffar
+        därför mindre.
         """
-        return min(1.0, CALL_FLOOR + CALL_SLOPE * _strength(bid))
+        base = min(1.0, CALL_FLOOR + CALL_SLOPE * _strength(bid))
+        return min(1.0, base * opponent_factor)
 
     # -- Beslut 4: tvingad höjning (titta eller blint) ------------------
     def decide_forced(self, bid: int) -> Decision:

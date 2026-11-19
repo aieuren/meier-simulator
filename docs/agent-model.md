@@ -385,6 +385,37 @@ offentligt beteende. Det är inte bara en konvention: sammanställningen byggs a
 Utan LLM (utvärderingsläget) faller läsaren tillbaka på sekreterarens aritmetik,
 så en match kan alltid spelas klart utan nätverk.
 
+### 6.03 Konfidensen mäts i facit, inte i självförtroende
+
+Agenterna får dra snabba slutsatser om varandra — det är meningen. Men de
+**gissar**, och en gissning byggd på en enda syn är inte värd lika mycket som en
+byggd på tjugo. Därför sätter bordets facit ett **tak** på hur säker bilden får
+bli:
+
+```
+underlag = antal avgjorda synar vid bordet (alla spelare, hela matchen)
+styrka   = underlag / (underlag + 3)
+konfidens = min(LLM:ens egen konfidens, styrka)
+```
+
+Tre synar ger alltså styrka 0,50 — modellen får inte påstå sig vara mer än
+halvsäker. Nio synar ger 0,75. Taket gäller även reservprofilen utan LLM.
+
+Poängen är att konfidensen ska spegla **hur tidig gissningen är**, inte hur
+tvärsäker modellen råkar låta. Modellen får alltid be om 1,0; taket håller emot.
+
+En session med en låtsas-LLM som ständigt svarar 1,0 visar kurvan:
+
+| Synar vid bordet | Underlag | Konfidens |
+|---|---|---|
+| 0 | 0,00 | 0,00 |
+| 1 | 0,25 | 0,25 |
+| 3 | 0,50 | 0,50 |
+| 5 | 0,62 | 0,62 |
+
+Samma siffror skickas med i sammanställningen till modellen, så den vet hur tunt
+underlaget är när den dömer.
+
 ### 6.05 Klartext för människan
 
 Profilen är tekniska tal. För att en människa ska kunna läsa vad agenten *tror*
@@ -431,6 +462,43 @@ P(vinst | B, spelare) = CALL_PRIOR[B] · signal
 
 En spelare utan data bedöms som populationen (`press = 0,5`), så en läsande
 agent drar aldrig för stora slutsatser ur litet underlag.
+
+### 6.07 Risk: synbenägenheten styr hur mycket agenten bluffar
+
+Samma relativa konstruktion används för `risk`, men med **omvänt tecken**. `press`
+säger hur ofta motståndaren ljuger; `risk` säger hur ofta hon **synar**. En
+motståndare som gärna synar gör varje bluff dyrare, så agenten ska bluffa mindre
+mot henne.
+
+```
+raw    = 1 + (profil.risk − 0,5) / (1 − 0,5)       # 0,5 → 1,0; 0,9 → 1,8
+faktor = 1 + profil.confidence · (raw − 1)
+P(syn | bud) = min(1, CALL_PRIOR_syn · faktor)
+```
+
+Faktorn går in i `BasePolicy.decide_bid(shown, opponent_factor=...)` och vidare
+till `_p_called`, som räknar ut hur sannolikt det är att budet blir synat. Ett
+högre `opponent_factor` gör bluffen mindre lönsam, och agenten lägger sig närmare
+sanningen.
+
+Mätt i ett kontrollerat läge (agent med full läsning mot en motståndare med känd
+synfrekvens, 20 möjliga tärningsutfall):
+
+| Motståndaren synar | Faktor | Agenten bluffar i |
+|---|---|---|
+| 5 % | 0,31 | 20 av 20 lägen |
+| 19 % (normalt) | 0,93 | 14 av 20 lägen |
+| 45 % | 1,93 | 5 av 20 lägen |
+
+**Skalan måste vara relativ, inte absolut.** Den råa synfrekvensen ligger kring
+19 % för alla roller. Sätter man in den rakt på 0–1-skalan (där 0,5 är neutral)
+ser *varje* motståndare extremt försiktig ut, och agenten bluffar vilt mot alla.
+Därför finns `POPULATION_CALL_RATE = 0,19` och `OpponentTracker.call_ratio()`:
+ratio 1,0 betyder "synar som folk mest". Samma fälla som för `press` — se 6.0.
+
+Båda faktorerna kan vara aktiva samtidigt. `press` justerar tron på att ett visst
+bud är sant (`_opponent_prior`), `risk` justerar chansen att budet blir synat
+(`_p_called`). De rör alltså olika led i samma uträkning.
 
 ### 6.1 Den läckagefria regeln (obligatorisk)
 

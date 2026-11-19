@@ -615,6 +615,13 @@ The roster was rebuilt. The old roles (`arling`/`trygg`/`kalkyl`/`rackar`) are
   `confidence`, `source`. `source` is `"llm"`, `"statistik"` (fallback without
   LLM) or `"population"` (no data). Values are clamped to 0–1 so a garbled LLM
   reply cannot leak junk into decisions.
+- **`confidence` is capped by evidence at the table, not by the LLM's self-report.**
+  `OpponentTracker.evidence_strength()` = `reveals / (reveals + 3)` over the whole
+  match (every player's settled calls), and `reader.profile()` takes
+  `min(llm_confidence, strength)`. The same cap applies to the arithmetic fallback
+  in `statistical_profile`. So an early guess cannot claim to be certain: one call
+  gives 0.25, three give 0.50, nine give 0.75. Both `table_reveals` and `strength`
+  are also sent to the model in the summary so it knows how thin the evidence is.
 - **Plain-language view.** `OpponentProfile.describe()` renders the numbers as a
   sentence with the percentages in parentheses (e.g. *"Försiktig: bluffar nästan
   aldrig, synar sällan och är mycket förutsägbar (risk 20 %, press 10 %,
@@ -632,6 +639,20 @@ The roster was rebuilt. The old roles (`arling`/`trygg`/`kalkyl`/`rackar`) are
   `reading = 0 → exact CALL_PRIOR` invariant. Absolute bluff rates here are ~0.72
   for everyone, so feeding them in raw inflates every opponent — the factor must
   stay relative.
+- **`risk` is wired into bidding too, not just `press`.** `risk_factor` maps the
+  opponent's `risk` to a factor around 1.0 centred on `NEUTRAL_RISK = 0.5`; it
+  flows as `opponent_factor` into `BasePolicy.decide_bid()` and on to `_p_called`,
+  which scales the chance the bid gets called. A calling opponent makes bluffing
+  expensive, so the agent moves closer to the truth. Measured: 5 % call rate →
+  factor 0.31 → bluffs in 20/20 spots; 19 % → 0.93 → 14/20; 45 % → 1.93 → 5/20.
+  `press` adjusts belief about a bid (`_opponent_prior`), `risk` adjusts the
+  chance of being called (`_p_called`) — different terms, both live.
+- **The same absolute-scale trap hits `risk`.** Raw call rate is ~0.19 for every
+  role, so feeding it straight onto the 0–1 scale makes every opponent look timid
+  and the agent bluffs wildly against all of them. `POPULATION_CALL_RATE = 0.19`
+  plus `OpponentTracker.call_ratio()` keep it relative: ratio 1.0 = "calls as much
+  as people usually do". The LLM summary states this reference point too, so the
+  model does not read 19 % as "never calls".
 - **Evaluation runs without LLM.** `play_match(..., with_llm=False)` and
   `cli match --no-llm` give a deterministic match: the reader falls back to the
   secretary's arithmetic. Fast (milliseconds vs minutes). Use `--no-llm` for

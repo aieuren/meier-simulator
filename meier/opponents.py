@@ -37,6 +37,20 @@ BLIND_WEIGHT = 0.5
 #: :meth:`OpponentTracker.profile_factor`.
 NEUTRAL_PRESS = 0.5
 
+#: Neutral riskbenägenhet i :meth:`OpponentTracker.risk_factor`.
+NEUTRAL_RISK = 0.5
+
+#: Typisk synfrekvens vid bordet, uppmätt över 200 matcher utan LLM (alla fyra
+#: rollerna låg på 17–22 %). Används av :meth:`OpponentTracker.call_ratio` för att
+#: skala en spelares synfrekvens **relativt** populationen — inte som ett absolut
+#: mått på den 0–1-skala där 0,5 är neutral.
+POPULATION_CALL_RATE = 0.19
+
+#: Hur många synar (facit) bordet behöver innan underlaget räknas som starkt.
+#: Används av :meth:`OpponentTracker.evidence_strength`, som dämpar LLM:ens
+#: konfidens: en bild byggd på en enda syn ska inte väga som en på tjugo.
+REVEAL_HALF_LIFE = 3.0
+
 
 @dataclass(frozen=True)
 class OpponentProfile:
@@ -366,6 +380,20 @@ class OpponentTracker:
             return None
         return bucket.calls / bucket.decisions
 
+    def call_ratio(self, player: str) -> float:
+        """Spelarens synbenägenhet **relativt** populationen, kring 1,0.
+
+        Samma konstruktion som :meth:`bluff_ratio`, och av samma skäl: den råa
+        synfrekvensen ligger kring ``POPULATION_CALL_RATE`` för alla, så att sätta
+        in den rakt på den 0–1-skala där 0,5 är neutral skulle få **varje**
+        motståndare att se extremt försiktig ut. En spelare som synar dubbelt så
+        ofta som normalt får i stället ratio 2,0.
+        """
+        rate = self.call_rate(player)
+        if rate is None or POPULATION_CALL_RATE <= 0.0:
+            return 1.0
+        return rate / POPULATION_CALL_RATE
+
     # -- Sekreterarens sammanställning ----------------------------------
     def evidence(self, player: str) -> dict:
         """Rå, **offentlig** sammanställning om ``player``. Ingen tolkning.
@@ -424,8 +452,9 @@ class OpponentTracker:
         ev = self.evidence(player)
         if not self.has_evidence(player):
             return OpponentProfile()
-        n = ev["revealed"] + ev["decisions"]
-        confidence = min(1.0, n / 10.0)
+        # Samma tak som LLM-läsningen: underlaget över hela bordet sätter
+        # konfidensen, så en bild byggd på en enda syn inte räknas som säker.
+        confidence = self.evidence_strength()
         # Skalan är centrerad kring NEUTRAL_PRESS = "bluffar som folk gör mest".
         # En rå bluff-frekvens (~0,72 för en vanlig spelare) skulle annars lägga
         # varje spelare över mitten och skruva upp tron i onödan. Därför skalas
@@ -435,7 +464,15 @@ class OpponentTracker:
             if ev["bluff_rate"] is not None
             else NEUTRAL_PRESS
         )
-        risk = ev["call_rate"] if ev["call_rate"] is not None else 0.5
+        # Risk skalas **relativt** populationen, av samma skäl som pressen: den
+        # råa synfrekvensen ligger kring 0,19 för alla, så att sätta in den rakt
+        # på 0–1-skalan (där 0,5 är neutral) skulle få varje motståndare att se
+        # extremt försiktig ut. Ratio 1,0 = synar som folk mest.
+        risk = (
+            NEUTRAL_RISK * self.call_ratio(player)
+            if ev["call_rate"] is not None
+            else NEUTRAL_RISK
+        )
         if ev["bluff_rate"] is None and ev["call_rate"] is None:
             return OpponentProfile()
         return OpponentProfile(
@@ -460,6 +497,43 @@ class OpponentTracker:
         raw = max(0.25, min(4.0, raw))
         c = profile.confidence
         return 1.0 + c * (raw - 1.0)
+
+    def risk_factor(self, profile: OpponentProfile) -> float:
+        """Översätt motståndarens ``risk`` till en faktor på **synbenägenheten**.
+
+        Skild från :meth:`profile_factor`, som handlar om hur ofta motståndaren
+        *ljuger*. Den här handlar om hur ofta den *synar*. Skillnaden spelar
+        roll: en ärlig spelare kan vara synbenägen, och en lögnare kan vara
+        feg. Faktorn är kring 1,0 och multipliceras på ``p_called`` i budbeslutet.
+
+        ``risk = 0,5`` (neutralt) ger 1,0. En motståndare som bedöms syna
+        dubbelt så ofta ger 2,0. Faktorn dämpas av konfidensen, precis som
+        :meth:`profile_factor`, så en tunn gissning knappt märks.
+        """
+        span = max(1e-9, 1.0 - NEUTRAL_RISK)
+        raw = 1.0 + (profile.risk - NEUTRAL_RISK) / span
+        raw = max(0.25, min(4.0, raw))
+        c = profile.confidence
+        return 1.0 + c * (raw - 1.0)
+
+    def reveal_count(self) -> int:
+        """Antal synar som avgjorts vid bordet hittills, alla spelare räknade."""
+        return sum(s.revealed + s.revealed_blind for s in self.stats.values())
+
+    def evidence_strength(self) -> float:
+        """Hur starkt underlaget är **över hela bordet**, 0–1.
+
+        Räknar alla synar som avgjorts hittills — oavsett vem de gällde. Det är
+        den enklaste ärliga måttstocken på hur mycket bordet faktiskt vet: varje
+        syn är ett facit som avslöjat en dold tärning för alla.
+
+        Kurvan är mättad: de första synarna ger mycket, de senare allt mindre.
+        ``strength = n / (n + REVEAL_HALF_LIFE)``. Med halvlivet 3 ger 1 syn
+        0,25, 3 synar 0,50 och 9 synar 0,75 — en bild byggd på en enda syn
+        väger alltså en fjärdedel av en mogen bild.
+        """
+        n = self.reveal_count()
+        return n / (n + REVEAL_HALF_LIFE) if n > 0 else 0.0
 
     def to_dict(self) -> dict:
         return {

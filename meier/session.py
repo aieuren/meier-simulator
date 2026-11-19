@@ -426,7 +426,8 @@ class Session:
         dice = self.pending_dice
         assert dice is not None
         player = self.players[self.actor]
-        ann = player.announce(dice)
+        # Den som sitter näst efter är den som först får svara på budet.
+        ann = player.announce(dice, opponent=self.name_of(self._next_actor(self.actor)))
         self._notify_bid(player.name, blind=False)
         entry = self._log_entry(
             player, dice, ann, action="bud", previous_bid=None, blind=False, actor_idx=self.actor
@@ -456,7 +457,9 @@ class Session:
             # Spelaren skakar bägaren på nytt: ett färskt slag, och locket lyfts inte.
             dice = rules.roll(self.rng)
             self._log_roll(player=player.name, dice=dice, shown=rules.read_dice(*dice))
-            ann = player.announce_blind(dice, previous_bid=bid)
+            ann = player.announce_blind(
+                dice, previous_bid=bid, opponent=self.name_of(self._next_actor(self.actor))
+            )
             ann = self._enforce_bid(ann, previous_bid=bid)
             self._notify_bid(player.name, blind=True)
             entry = self._log_entry(
@@ -512,7 +515,9 @@ class Session:
         # själv om den tittar på dem eller bjuder blint (som vid ett slag).
         dice = rules.roll(self.rng)
         self._log_roll(player=player.name, dice=dice, shown=rules.read_dice(*dice))
-        ann = player.announce_forced(dice, previous_bid=bid)
+        ann = player.announce_forced(
+            dice, previous_bid=bid, opponent=self.name_of(self._next_actor(self.bidder))
+        )
         ann = self._enforce_bid(ann, previous_bid=bid)
         # Tvingad höjning: mekanisk, räknas separat i motståndarprofilen.
         self._notify_bid(player.name, blind=ann.blind, forced=True)
