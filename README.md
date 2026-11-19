@@ -18,7 +18,8 @@ roller kan spela hela spel mot varandra.
   - **Matchserie** – kör många matcher och få statistik + ett JSONL-protokoll för analys.
   - **Analys** – ladda upp en eller flera JSONL-filer och ställ frågor mot materialet.
     Svaren kommer från en LLM och kan innehålla diagram (stapel, linje eller tabell).
-- **Fyra spelarroller** – Ärlig-Adolf, Rackar-Rakel, Kalkylerande-Karin och Trygge-Tor.
+- **Fyra spelare** – Axel, Berit, Cecilia och David. Axel är basmodellen; de
+  andra är samma policy med milda personligheter ovanpå.
 - **Interaktiv spelsession** – fyra spelare spelar mot varandra i ett fullt flöde
   fram till en syn. Slumpen avgör ordningen och vem som börjar. Varje steg
   bekräftas med **Ett drag**, eller så körs flödet vidare med **Till syn**
@@ -88,16 +89,16 @@ python -m uvicorn meier.web.app:app --host 0.0.0.0 --port 12000
 
 ```bash
 # Givet tärningsslaget 2 och 5: hur svarar spelaren?
-python -m meier.cli announce 2 5 --role rackar
+python -m meier.cli announce 2 5 --role david
 
 # Om spelaren slår efter ett tidigare bud (måste höja)
-python -m meier.cli announce 2 5 --role kalkyl --previous-bid 43
+python -m meier.cli announce 2 5 --role cecilia --previous-bid 43
 
 # Spelaren möter en motståndares bud
-python -m meier.cli decide 43 --role trygg
+python -m meier.cli decide 43 --role berit
 
 # Spela ett helt spel med flera oberoende agenter
-python -m meier.cli play rackar kalkyl trygg
+python -m meier.cli play berit cecilia david
 
 # Interaktiv session med steg-grind och logg
 python -m meier.cli session
@@ -111,12 +112,39 @@ python -m meier.cli summarize matches.jsonl
 
 ### Roller
 
-| Nyckel | Namn | Stil |
-|---|---|---|
-| `arling` | Ärlig-Adolf | Spelar rakt och ärligt |
-| `rackar` | Rackar-Rakel | Bluffar högt, tar risker |
-| `kalkyl` | Kalkylerande-Karin | Matematisk, väger risk mot vinst |
-| `trygg` | Trygge-Tor | Feg och defensiv |
+Personligheten bor i tre parametrar, inte i namnet. Skalan är 0–1.
+
+| Parameter | Betydelse |
+|---|---|
+| `risk` | Hur gärna spelaren synar och tar en osäker chans |
+| `press` | Hur ofta spelaren bluffar och pressar budet |
+| `reading` | Hur mycket spelaren låter motståndarnas beteende styra |
+
+| Nyckel | Namn | Risk | Press | Läsning | LLM | Karaktär |
+|---|---|---:|---:|---:|---|---|
+| `axel` | Axel | 0,50 | 0,50 | 0,00 | nej | Basmodellen; fast mätsticka |
+| `berit` | Berit | 0,25 | 0,25 | 0,15 | ja | Försiktig; bjuder nära sanningen |
+| `cecilia` | Cecilia | 0,50 | 0,45 | 0,50 | ja | Kalkylerande; läser motståndaren |
+| `david` | David | 0,65 | 0,60 | 0,35 | ja | Djärv; pressar budet högre |
+
+Samma tabell i klartext, som webbappen visar den:
+
+- **Axel** – Synar ibland, bluffar lagom mycket och läser ingen motståndare
+  (risk 50 %, press 50 %, läsning 0 %).
+- **Berit** – Synar sällan, bluffar sällan och läser motståndarna lite
+  (risk 25 %, press 25 %, läsning 15 %).
+- **Cecilia** – Synar ibland, bluffar lagom mycket och läser motståndarna
+  (risk 50 %, press 45 %, läsning 50 %).
+- **David** – Synar ofta, bluffar ofta och läser motståndarna
+  (risk 65 %, press 60 %, läsning 35 %).
+
+Klartexten **räknas fram** ur siffrorna av `describe_params()`. Den är en
+presentation av tabellen, inte en egen sanning: ändrar du en parameter ändras
+meningen. Axel har ingen LLM med flit — han är den deterministiska referensen
+som de andra mäts mot.
+
+Hela modellen, med formler och mätvärden, står i
+[`docs/agent-model.md`](docs/agent-model.md).
 
 ## Interaktiv spelsession
 
@@ -309,7 +337,7 @@ Exempel:
 ```bash
 curl -X POST http://localhost:12000/api/announce \
   -H "Content-Type: application/json" \
-  -d '{"die1": 2, "die2": 5, "role": "rackar"}'
+  -d '{"die1": 2, "die2": 5, "role": "david"}'
 
 # Starta 10 matcher i bakgrunden (3 samtidigt) och följ dem
 curl -X POST http://localhost:12000/api/matches/run \
@@ -382,9 +410,14 @@ meier/
   match.py            Batchkörning av många matcher + statistik (JSONL)
   analysis.py         Analys: digest av protokoll + LLM-frågor med diagram
   cli.py              Kommandoradsgränssnitt
+  opponents.py        Motståndarprofilen: statistik och klartext
+  policy.py           Besluten: bud, slå, syna, tvingad höjning
   agents/
     base.py           Agent-grundklass och roll
-    player.py         Meier-spelaragenten och rollerna
+    roster.py         De fyra spelarna och deras parametrar
+    strategic.py      Spelaren som knyter ihop policy, läsning och replik
+    reader.py         Läser motståndarna med LLM
+    player.py         Meier-spelaragenten (enkelt gränssnitt)
   web/
     app.py            FastAPI-app
     static/           Frontend (HTML/CSS/JS)

@@ -55,7 +55,7 @@ def _get_agent(role_key: str):
 class AnnounceRequest(BaseModel):
     die1: int = Field(..., ge=1, le=6, description="Första tärningen")
     die2: int = Field(..., ge=1, le=6, description="Andra tärningen")
-    role: str = Field("kalkyl", description="Agentens roll")
+    role: str = Field("cecilia", description="Agentens roll")
     previous_bid: int | None = Field(
         None, description="Tidigare bud om spelaren slår efter någon annan"
     )
@@ -63,7 +63,7 @@ class AnnounceRequest(BaseModel):
 
 class DecideRequest(BaseModel):
     bid: int = Field(..., description="Motståndarens bud")
-    role: str = Field("kalkyl", description="Agentens roll")
+    role: str = Field("cecilia", description="Agentens roll")
     lives: int = Field(3, ge=0, le=3)
 
 
