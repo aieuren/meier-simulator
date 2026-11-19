@@ -87,3 +87,144 @@ def test_readme_cli_examples_use_real_roles():
 
 def test_readme_links_to_the_full_model():
     assert "docs/agent-model.md" in _text()
+
+
+# -- docs/om-meier.md: kompisversionen --------------------------------------
+
+OM_MEIER = README.parent / "docs" / "om-meier.md"
+
+
+def _om() -> str:
+    return OM_MEIER.read_text(encoding="utf-8")
+
+
+def test_om_meier_exists_and_is_linked_from_readme():
+    assert OM_MEIER.is_file(), "docs/om-meier.md saknas"
+    assert "docs/om-meier.md" in _text(), "README länkar inte till Om Meier"
+
+
+def test_om_meier_has_no_technical_installation_instructions():
+    """Kompisversionen ska inte innehålla kommandon och installationssteg."""
+    text = _om()
+    for noise in ("pip install", "uvicorn", "pytest", "curl ", "export "):
+        assert noise not in text, f"Om Meier innehåller teknik: {noise!r}"
+
+
+def test_om_meier_player_table_matches_the_roster():
+    """Siffertabellen i Om Meier ska visa samma parametrar som koden."""
+    text = _om()
+    for profile in ROSTER.values():
+        row = next(
+            (ln for ln in text.splitlines() if f"**{profile.name}**" in ln and "|" in ln),
+            None,
+        )
+        assert row is not None, f"Om Meier saknar tabellrad för {profile.name}"
+        cells = [c.strip() for c in row.split("|")[1:-1]]
+        for cell, value in zip(cells[1:4], (
+            profile.params.risk, profile.params.press, profile.params.reading
+        )):
+            assert cell == f"{value:.2f}".replace(".", ","), (
+                f"{profile.name}: Om Meier visar {cell}, koden har {value}"
+            )
+
+
+def test_om_meier_win_rates_are_close_to_a_measured_series():
+    """Vinstsiffrorna i Om Meier ska ligga nära en färsk mätning.
+
+    Exakta procenttal går inte att kräva: 120 matcher ger andra siffror än 200,
+    eftersom slumpen spelar in. Toleransen fångar ändå riktig drift, som att en
+    spelare plötsligt vinner dubbelt så ofta.
+    """
+    from meier.match import run_matches, summarize
+
+    res = [
+        m.to_dict()
+        for m in run_matches(list(ROSTER), 120, base_seed=11, with_llm=False)
+    ]
+    measured = summarize(res)["roles"]
+    text = _om()
+    documented: dict[str, int] = {}
+    for line in text.splitlines():
+        cells = [c.strip().replace("*", "") for c in line.split("|")[1:-1]]
+        if len(cells) == 3 and cells[1].rstrip(" %").isdigit():
+            documented[cells[0]] = int(cells[1].rstrip(" %"))
+    assert documented, "hittade ingen vinsttabell i Om Meier"
+    for stats in measured.values():
+        name = stats["name"]
+        assert name in documented, f"Om Meier saknar en rad för {name}"
+        got = round(stats["win_rate"] * 100)
+        assert abs(got - documented[name]) <= 10, (
+            f"{name}: Om Meier säger {documented[name]} %, mätningen ger {got} %. "
+            "Uppdatera tabellen om ändringen är verklig."
+        )
+
+
+def test_om_meier_dice_table_matches_the_rules():
+    """Tärningstabellen ska stämma med FACE_WEIGHTS, inte med en kub."""
+    from meier import rules
+
+    weights = {i: w for i, w in zip(range(1, 7), rules.FACE_WEIGHTS)}
+    total = sum(weights.values()) ** 2
+    text = _om()
+    for value, label in ((21, "21 (Meier)"), (11, "11"), (65, "65")):
+        hi, lo = divmod(value, 10)
+        p = weights[hi] * weights[lo] / total * (1 if hi == lo else 2)
+        shown = f"{p * 100:.1f}".replace(".", ",") + " %"
+        row = next((ln for ln in text.splitlines() if ln.startswith(f"| {label}")), None)
+        assert row is not None, f"Om Meier saknar tärningsraden {label}"
+        assert shown in row, f"{label}: Om Meier borde visa {shown}, fick {row}"
+
+
+def test_om_meier_worked_examples_are_real():
+    """De konkreta tärningsexemplen ska ge de svar texten påstår."""
+    from meier.agents.roster import make_player
+
+    text = _om()
+    # 43: Berit säger sanningen, de andra bluffar till 51.
+    assert make_player("berit").announce((4, 3)).bid == 43
+    for key in ("axel", "cecilia", "david"):
+        assert make_player(key).announce((4, 3)).bid == 51
+    assert "4 och 3" in text and "51" in text
+    # 21: alla bjuder Meier.
+    for key in ROSTER:
+        assert make_player(key).announce((1, 2)).bid == 21
+
+
+def test_om_meier_bluff_table_matches_the_policy():
+    """Blufftabellen ska stämma med hur policyn faktiskt väljer bud."""
+    from meier import rules
+    from meier.policy import BasePolicy
+
+    def bluffs(factor: float) -> int:
+        policy = BasePolicy()
+        count = 0
+        for shown in rules.RANKING:
+            if rules.is_meier(shown):
+                continue
+            bid = policy.decide_bid(shown, opponent_factor=factor).bid
+            if bid is not None and rules.compare(bid, shown) > 0:
+                count += 1
+        return count
+
+    text = _om()
+    for factor, expected in ((0.31, 20), (0.93, 11), (1.93, 3)):
+        assert bluffs(factor) == expected, (
+            f"policyn bluffar {bluffs(factor)} av 20 vid faktor {factor}, "
+            f"dokumentet säger {expected}"
+        )
+        assert f"{expected} av 20" in text, (
+            f"Om Meier saknar blufftalet {expected} av 20"
+        )
+
+
+def test_agents_md_examples_use_real_roles():
+    """Även AGENTS.md ska bara nämna roller som finns."""
+    agents = README.parent / "AGENTS.md"
+    if not agents.is_file():
+        return
+    text = agents.read_text(encoding="utf-8")
+    for match in re.finditer(r"--role\s+(\w+)", text):
+        assert match.group(1) in ROSTER, f"AGENTS.md använder okänd roll: {match.group(1)}"
+    for match in re.finditer(r"meier\.cli play ([\w\s]+)", text):
+        for word in match.group(1).split():
+            assert word in ROSTER, f"AGENTS.md spelar med okänd roll: {word}"

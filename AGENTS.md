@@ -322,13 +322,46 @@ agent — do not reintroduce a deterministic check as a "judge".
 pip install -r requirements.txt
 python -m pytest tests/ -q                     # run tests (fast, no network)
 python -m uvicorn meier.web.app:app --port 12000
-python -m meier.cli announce 2 5 --role rackar
-python -m meier.cli play rackar kalkyl trygg
+python -m meier.cli announce 2 5 --role david
+python -m meier.cli play berit cecilia david
 ```
+
+## Three documents, three audiences
+
+Documentation drifts. This repo keeps three files that must agree with the
+code, and `tests/test_docs.py` enforces it:
+
+| File | Reader | Content |
+|---|---|---|
+| `README.md` | whoever runs and changes the code | install, CLI, API, config |
+| `docs/om-meier.md` | a friend who just wants to understand | what it is, rules, players, findings |
+| `docs/agent-model.md` | whoever tunes the model | formulas, calibration, measurements |
+
+When you change a player parameter, a measured statistic, or the dice weights,
+update the affected files **and** let the tests tell you what else broke. The
+tests read the markdown as text and compare against `ROSTER`, `describe_params`,
+`FACE_WEIGHTS`, `BasePolicy` and a fresh match series. They caught real drift
+already: the README described roles that had been deleted, and the companion
+doc claimed a bid the policy never makes.
+
+Two rules that keep the companion doc honest:
+
+- **No commands, no installation.** It is prose for non-developers. A test
+  asserts the absence of `pip install`, `uvicorn`, `pytest`, `curl`, `export`.
+- **Every number is measured, not remembered.** If you cannot reproduce a
+  figure with a command, do not put it in the doc. The win-rate test tolerates
+  ±10 points, because 120 matches differ from 200 by chance alone.
 
 ## Conventions
 
 - Code comments and docstrings are in Swedish, matching the domain. Keep them.
+- Player personality lives in three numbers (`risk`, `press`, `reading`), never
+  in the player's name. Names are deliberately neutral: an evocative label makes
+  the model play a caricature of the label instead of playing the game, and then
+  you cannot tell whether it wins on tactics or on its name. The old roles
+  (Ärlig-Adolf, Rackar-Rakel, …) were removed for this reason.
+- `axel` has `uses_llm=False` on purpose. He is the deterministic reference the
+  others are measured against. Do not "upgrade" him.
 - The 21-outcome ranking is fixed: 21, 11, 22, 33, 44, 55, 66, 65, 64, 63, 62,
   61, 54, 53, 52, 51, 43, 42, 41, 32, 31. Meier (21) is highest and costs double.
 - Agents must always respond with a JSON object; parsing tolerates code fences

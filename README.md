@@ -9,6 +9,10 @@ ett tärningsslag med två tärningar bestämmer agenten hur spelaren svarar –
 säger sanningen, ett högre eller ett lägre resultat. Fler agenter med olika
 roller kan spela hela spel mot varandra.
 
+> **Vill du bara veta vad det här är?** Läs
+> [Om Meier](docs/om-meier.md) – en kort genomgång för den som är nyfiken men
+> inte ska bygga vidare. Den här filen är för dig som ska köra och ändra i koden.
+
 ## Vad som finns
 
 - **Webbapp med fem flikar:**
