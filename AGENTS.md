@@ -404,6 +404,11 @@ python -m meier.cli play rackar kalkyl trygg
   `GITHUB_PUSH_TOKEN`. Don't rewrite the remote; just run
   `GITHUB_PUSH_TOKEN="$GITHUB_PUSH_TOKEN" git push origin main` and let the
   repo-local credential helper inject it.
+  **Gotcha (2026-11-08):** a token baked into the remote URL *shadows* the
+  credential helper — git uses the URL credentials and never asks the helper.
+  Symptom: `Invalid username or token` or `403` even though `GITHUB_PUSH_TOKEN`
+  is fine. Fix: `git remote set-url origin https://github.com/aieuren/meier-simulator.git`
+  (no credentials in the URL), then push and let the helper inject the token.
 - The user has delegated version control: from now on, commit and push to
   `main` yourself when the work is green and complete — no need to ask first.
 - Secrets for this conversation live in the agent-server, not the shell:
@@ -665,6 +670,13 @@ The roster was rebuilt. The old roles (`arling`/`trygg`/`kalkyl`/`rackar`) are
 - **Provider:** Anthropic Claude if `ANTHROPIC_API_KEY` is set, otherwise Gemini
   via `GEMINI_API_KEY`. In this sandbox only the Gemini key is present, so the
   fallback is what runs. `LLMConfig.from_env()` reports which is active.
+- **The Gemini proxy hits a 429 quota.** When it does, `LLMError` surfaces after
+  three retries and a full LLM round can hang for many minutes. Do not use a live
+  session to verify model wiring while the quota is exhausted — a session-level
+  check needs dozens of calls. Verify the mechanism with a fake LLM instead:
+  `tests/test_reader.py` has a `FakeLLM` that returns fixed JSON, and an
+  end-to-end `Session` with a fake client shows the confidence curve in seconds.
+  Check quota first with a one-shot `LLMClient().complete("Svara kort.", "hej")`.
 
 ### Running an evaluation
 
