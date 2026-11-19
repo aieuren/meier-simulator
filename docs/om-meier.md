@@ -12,9 +12,8 @@ modellen: se [agent-model.md](agent-model.md).
 ## Vad är det här?
 
 Fyra AI-spelare som spelar det svenska tärningsspelet **Meier** mot varandra.
-Varje spelare drivs av en språkmodell (Claude, eller Gemini som reserv), och
-varje spelare har sin egen personlighet: en är feg, en bluffar mycket, en
-räknar mycket.
+Varje spelare drivs av en språkmodell, och varje spelare har sin egen
+personlighet: en är feg, en bluffar mycket, en räknar mycket.
 
 Du kan sitta vid sidan och titta på när de spelar. Du kan också själv mata in
 ett tärningsslag och se vad en spelare skulle svara. Och du kan låta dem spela
@@ -99,12 +98,6 @@ och ändrar sig aldrig. Han är måttstocken de andra jämförs mot. Han är byg
 för att vara "tillräckligt bra", inte optimerad – och som mätningarna nedan
 visar räcker det långt.
 
-**Varför neutrala namn?** De hette "Rackar-Rakel" och "Trygge-Tor" förut. Det
-visade sig vara ett misstag: en etikett säger åt modellen vem den *ska vara*,
-och då spelar den en karikatyr i stället för att spela spelet. Då går det inte
-att veta om spelaren vinner på sin taktik eller på sin etikett. Nu styr
-siffrorna, och namnen säger ingenting.
-
 ---
 
 ## Hur en spelare tänker
@@ -122,13 +115,30 @@ det inte finnas något att bluffa om.
 
 ### Spelaren väger risk mot vinst
 
-Varje beslut är en avvägning. Att bjuda sanningen är **säkert** – blir det
-synat vinner du. Att bjuda högre är en chansning: går den hem vinner du mer,
-åker du dit förlorar du ett liv (två om det är Meier).
+Varje beslut är en avvägning mellan två saker: **chansen att rundan går hem**
+och **vad det kostar om den inte gör det**.
 
-Så en spelare som bjuder 51 när tärningarna visar 43 gör det inte av misstag.
-Den har räknat ut att chansen att bli synad är tillräckligt låg för att
-bluffen ska löna sig.
+Att bjuda exakt det tärningarna visar är **säkert**. Blir du synad vinner du
+rundan, för tärningarna visar då minst budet.
+
+Att bjuda högre är en bluff. Den ger dig **inget extra** om den går hem – du
+vinner rundan i vilket fall som helst. Priset är att du förlorar ett liv om
+någon synar (två om budet är Meier).
+
+Så vad köper en bluff? Att motståndaren får ett **svårare beslut**. Hen måste
+antingen syna ett bud hen misstror, eller slå blint till något ännu högre. En
+bluff är alltså inte "värd mer" – den flyttar risken över till motståndaren.
+Den lönar sig bara när motståndaren hellre avstår från att syna än tar den
+chansen.
+
+En bluff läggs därför alltid på den **minsta möjliga höjningen**. Ett högre bud
+synas nämligen oftare (en syn på 66 är billigare än en syn på 51, eftersom
+tärningarna då oftare är lägre än budet). Att höja längre ökar alltså bara
+risken att åka dit, utan att ge något tillbaka.
+
+Så när en spelare bjuder 51 på tärningarna 43 är det inget misstag. Den har
+vägt chansen att bli synad (omkring 20 % på den nivån) mot livskostnaden, och
+kommit fram till att chansningen lönar sig.
 
 ### Spelaren bluffar med flit
 
@@ -204,20 +214,6 @@ bluff dyrare, så spelaren bluffar mindre mot hen. Mätt i ett kontrollerat läg
 
 Mot en som aldrig synar är det alltså fritt fram. Mot en som synar ofta lönar
 sig bara de bud som är nästan säkra.
-
-### En fälla vi gick i
-
-Första versionen av läsningen såg rimlig ut men var fel. Nästan alla spelare
-synar ungefär 19 % av gångerna – det är det normala. Men skalan spelaren
-jämförde med hade 50 % som "neutral". Alltså såg **varje** motståndare extremt
-försiktig ut, och spelaren bluffade vilt mot alla.
-
-Lösningen var att mäta **relativt** i stället för absolut: "synar den här
-spelaren mer eller mindre än folk brukar?" En som synar dubbelt så ofta som
-normalt får 2,0. En som synar som folk mest får 1,0.
-
-Det är en allmän lärdom som är lätt att gå i: ett tal som ser ut som en
-sannolikhet är inte samma sak som ett tal på en skala.
 
 ---
 

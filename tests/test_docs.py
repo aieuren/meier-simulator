@@ -228,3 +228,26 @@ def test_agents_md_examples_use_real_roles():
     for match in re.finditer(r"meier\.cli play ([\w\s]+)", text):
         for word in match.group(1).split():
             assert word in ROSTER, f"AGENTS.md spelar med okänd roll: {word}"
+
+
+def test_om_meier_bluffs_are_always_the_smallest_raise():
+    """Dokumentet säger att en bluff läggs på minsta möjliga höjning.
+
+    Stämmer det inte längre är resonemanget i "Spelaren väger risk mot vinst"
+    fel, inte bara siffran.
+    """
+    from meier import rules
+    from meier.agents.roster import make_player
+
+    for key in ROSTER:
+        agent = make_player(key)
+        for value in rules.RANKING:
+            hi, lo = divmod(value, 10)
+            bid = agent.announce((hi, lo)).bid
+            if bid == value:
+                continue
+            smallest = rules.higher_options(value)[-1]
+            assert bid == smallest, (
+                f"{agent.name} bjöd {rules.name(bid)} på {rules.name(value)}, "
+                f"men minsta höjning är {rules.name(smallest)}"
+            )
