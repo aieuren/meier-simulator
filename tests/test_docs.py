@@ -251,3 +251,43 @@ def test_om_meier_bluffs_are_always_the_smallest_raise():
                 f"{agent.name} bjöd {rules.name(bid)} på {rules.name(value)}, "
                 f"men minsta höjning är {rules.name(smallest)}"
             )
+
+
+def test_om_meier_round_terminology_matches_the_engine():
+    """En runda tar slut vid syn, inte vid matchslut.
+
+    Dokumentet säger: "En runda är från första budet till dess att någon
+    synar." Testet spelar riktiga matcher och kontrollerar att varje runda
+    slutar med en livsförlust (undantaget Meier-varvet, som startar en ny
+    runda utan syn). Det fångar både feldelade rundor och en text som lovar
+    fel slut på rundan.
+    """
+    from meier.agents.roster import make_players
+    from meier.game import Game
+
+    text = _om()
+    assert "till dess att någon **synar**" in text, (
+        "Om Meier måste definiera att en runda slutar vid syn"
+    )
+    assert "En **match** är många rundor" in text, (
+        "Om Meier måste skilja runda från match"
+    )
+
+    rounds_without_call = 0
+    total_rounds = 0
+    for seed in range(40):
+        players, _ = make_players(["axel", "berit", "cecilia", "david"])
+        game = Game.new(players, seed=seed)
+        game.play()
+        for line in game.log:
+            if line.startswith("Runda "):
+                total_rounds += 1
+            if "slår om och börjar ny runda" in line:
+                rounds_without_call += 1
+
+    assert total_rounds > 300, "för få rundor för att testet ska betyda något"
+    # Meier-varvet är det enda undantaget, och det är sällsynt.
+    assert rounds_without_call / total_rounds < 0.05, (
+        f"{rounds_without_call} av {total_rounds} rundor slutade utan syn; "
+        "då är 'en runda slutar vid syn' fel"
+    )

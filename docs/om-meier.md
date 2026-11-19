@@ -38,6 +38,9 @@ högsta först **först**: 2 och 5 blir **52**.
 Lägg märke till att 11 är näst bäst och 31 sämst. Det är med flit förvirrande –
 det är hela charmen.
 
+En **runda** är från första budet till dess att någon **synar**. I praktiken
+slutar alltså varje runda med att någon förlorar liv – oftast ett, ibland två.
+
 Så här går en runda:
 
 1. Du skakar bägaren, tittar **i smyg**, och säger ett resultat. Det kan vara
@@ -45,17 +48,22 @@ Så här går en runda:
 2. Nästa spelare väljer mellan tre saker:
    - **Slå** – skaka om utan att titta och säga ett **högre** bud. Du måste
      höja, vad tärningarna än visar.
-   - **Syna** – lyft på locket. Var tärningarna lägre än budet förlorar
-     budgivaren ett liv. Var de samma eller högre förlorar du ett liv.
+   - **Syna** – lyft på locket. Var tärningarna lägre än budet förlorar den
+     som ansvarar för budet ett liv. Var de samma eller högre förlorar du ett
+     liv. **Rundan är då slut.**
    - **Skicka vidare** – skicka bägaren med samma bud. Då tar du över ansvaret
      för budet.
 3. **Meier kostar dubbelt.** Är budet Meier, eller visar tärningarna Meier när
    någon synar, förlorar man två liv i stället för ett.
-4. Tre liv, sedan är man ute. Sist kvar vinner.
 
 En detalj som gör spelet elakt: kommer bägaren ett helt varv tillbaka till den
 som satte budet, **måste** den spelaren höja. Tärningarna slås då om, och hen
-får välja att titta eller bjuda blint.
+får välja att titta eller bjuda blint. Är budet Meier går det inte att höja –
+då slås tärningarna om och en **ny runda** börjar, utan att någon förlorat liv.
+
+En **match** är många rundor i följd. Varje spelare har tre liv, och i stort
+sett varje runda kostar någon ett liv. När man mist sina tre liv är man ute.
+Sist kvar vinner matchen. En match tar i snitt knappt tio rundor.
 
 ### Tärningarna är inte kubiska
 
@@ -115,21 +123,21 @@ det inte finnas något att bluffa om.
 
 ### Spelaren väger risk mot vinst
 
-Varje beslut är en avvägning mellan två saker: **chansen att rundan går hem**
-och **vad det kostar om den inte gör det**.
+Varje beslut är en avvägning mellan två saker: **chansen att slippa bli synad**
+och **vad det kostar om du blir synad**.
 
 Att bjuda exakt det tärningarna visar är **säkert**. Blir du synad vinner du
 rundan, för tärningarna visar då minst budet.
 
-Att bjuda högre är en bluff. Den ger dig **inget extra** om den går hem – du
-vinner rundan i vilket fall som helst. Priset är att du förlorar ett liv om
-någon synar (två om budet är Meier).
+Att bjuda högre är en bluff. Blir du synad **förlorar du ett liv** (två om budet
+är Meier), för tärningarna visar då mindre än du sa. En bluff som avslöjas ger
+dig alltså ingenting.
 
 Så vad köper en bluff? Att motståndaren får ett **svårare beslut**. Hen måste
-antingen syna ett bud hen misstror, eller slå blint till något ännu högre. En
-bluff är alltså inte "värd mer" – den flyttar risken över till motståndaren.
-Den lönar sig bara när motståndaren hellre avstår från att syna än tar den
-chansen.
+antingen syna ett bud hen misstror, eller slå blint till något ännu högre – och
+då ta över risken själv. En bluff är inte "värd mer". Den flyttar risken över
+till motståndaren, och den lönar sig bara när motståndaren hellre avstår från
+att syna än tar den chansen.
 
 En bluff läggs därför alltid på den **minsta möjliga höjningen**. Ett högre bud
 synas nämligen oftare (en syn på 66 är billigare än en syn på 51, eftersom
@@ -161,7 +169,7 @@ tre gånger av fyra.
 En nyans värd att känna till: `press` styr bluffrekvensen i **skarpt spel**, men
 i det enklaste läget – ett enda slag utan motståndare att läsa – skiljer sig
 spelarna mindre än man kunde tro. Vid 52 säger Berit 52 medan de andra säger 53.
-Skillnaden är verklig men liten. Det är först över många rundor, när läget och
+Skillnaden är verklig men liten. Det är först över många matcher, när läget och
 motståndarna spelar in, som personligheterna verkligen märks.
 
 ### Spelaren läser sina motståndare
