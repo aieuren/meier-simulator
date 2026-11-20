@@ -11,8 +11,8 @@ modellen: se [agent-model.md](agent-model.md).
 ## Vad är det här?
 
 Fyra AI-spelare som spelar det svenska tärningsspelet **Meier** mot varandra.
-Varje spelare drivs av en språkmodell, och varje spelare har sin egen **profil**:
-en är feg, en bluffar mycket, en räknar mycket.
+Varje spelare har sin egen **profil** – alltså sin egen spelstil – och de spänner
+från försiktig till djärv och kalkylerande. Tre av dem drivs av en språkmodell.
 
 Du kan sitta vid sidan och titta på när de spelar. Du kan också själv mata in
 ett tärningsslag och se vad en spelare skulle svara. Och du kan låta dem spela
@@ -94,11 +94,12 @@ Spelarens **egen profil** sitter i tre parametrar, inte i namnet. Varje paramete
 går från 0 till 1.
 
 - **`risk`** – riskbenägenhet: hur gärna spelaren synar och tar en chans
-- **`press`** – press: hur ofta spelaren bluffar och pressar budet
+- **`press`** – press: hur ofta spelaren bluffar, och hur högt den lägger det
+  blinda budet
 - **`reading`** – läsförmåga: hur mycket spelaren låter information om andras
   tidigare spel styra
 
-| Spelare | risk | press | läsning | LLM | Profil |
+| Spelare | risk | press | läsförmåga | LLM | Profil |
 |---|---:|---:|---:|---|---|
 | **Axel** | 0,50 | 0,50 | 0,00 | nej | Grundtaktik. Fast mätsticka. |
 | **Berit** | 0,25 | 0,25 | 0,15 | ja | Försiktig. Bjuder nära sanningen. |
@@ -106,8 +107,9 @@ går från 0 till 1.
 | **David** | 0,65 | 0,60 | 0,35 | ja | Djärv. Pressar budet högre. |
 
 **Axel är referensen.** Han har ingen språkmodell alls, spelar alltid likadant
-och ändrar sig aldrig. Han är måttstocken de andra jämförs mot. Han är byggd
-för att vara "tillräckligt bra", inte optimerad. Hans uppsättning kallas
+och ändrar sig aldrig. **Han deltar i matcherna – jämförelsenivån sitter alltså
+i spelet, inte på en hylla.** De andras resultat mäts mot hans. Han är byggd för
+att vara "tillräckligt bra", inte optimerad. Hans uppsättning kallas
 **grundtaktik**.
 
 Tre begrepp som är lätta att blanda ihop:
@@ -154,12 +156,26 @@ då ta över risken själv. En bluff är inte "värd mer". Den flyttar risken ö
 till motståndaren, och den lönar sig bara när motståndaren hellre avstår från
 att syna än tar den chansen.
 
-En bluff läggs därför alltid på den **minsta möjliga höjningen**. Ett högre bud
-synas nämligen oftare (en syn på 66 är billigare än en syn på 51, eftersom
-tärningarna då oftare är lägre än budet). Att höja längre ökar alltså bara
-risken att åka dit, utan att ge något tillbaka.
+Här är det lätt att tro att det finns en enda regel, men maskinen fattar **två
+olika slags höjningar**, och de fungerar olika.
 
-Maskinen är byggd så: höjningen är alltid ett steg, aldrig flera.
+**När spelaren har sett sina tärningar** och bluffar över det hen såg, väljer
+hen den **minsta möjliga höjningen**. Ett högre bud synas nämligen oftare: en
+syn på 66 är billigare för motståndaren än en syn på 51, eftersom tärningarna
+då oftare är lägre än budet. Att höja längre ökar alltså bara risken att åka
+dit, utan att ge något tillbaka. Här höjs det därför bara ett enda steg, aldrig
+flera.
+
+**När spelaren slår blint** vet hen inte alls vad tärningarna visar. Då finns
+ingen "sann" nivå att lägga sig strax över, och då är kalkylen en annan. Här
+bestämmer `press` hur högt budet läggs: låg press lägger sig nära minimum, hög
+press tar ett språng uppåt för att sätta motståndaren i ett dyrare läge. Det är
+ett medvetet val i modellen, inte en sanning om spelet – ett språng är farligare
+om det blir synat, men svårare att värja sig mot.
+
+Så: **minsta höjning gäller bluffen över sedda tärningar.** Den blinda
+höjningen styrs av `press`. Det är två skilda beslut i koden
+(`decide_bid` respektive `decide_raise`).
 
 ### Spelaren bluffar med flit
 
@@ -185,13 +201,13 @@ ett mått på hur säker gissningen är.
 Två saker är viktiga här:
 
 **Modellen får aldrig se dolda tärningar.** Den får bara det som varit
-offentligt. Annars skulle läsningen vara fusk.
+offentligt. Annars skulle läsförmågan vara fusk.
 
 **Modellen får inte bestämma draget.** Den tolkar och beskriver. Själva beslutet
 tas av en beräkning som är densamma för alla spelare. Det gör att en spelare
 aldrig kan spela sämre för att modellen skriver en dålig mening.
 
-### Spelaren litar inte fullt på sin egen läsning
+### Spelaren litar inte fullt på sin egen läsförmåga
 
 Det här är den nyaste delen, och den är värd att förklara.
 
@@ -200,10 +216,23 @@ gå på. Fråga den efter en enda syn och den svarar "jag är helt säker". Det 
 en risk: en spelare som agerar på en tunn gissning som vore den ett faktum
 låter brus styra spelet.
 
-Därför har läsningen ett **tak som sätts av bordet, inte av modellen**. Antalet
-synar som faktiskt avgjorts bestämmer hur mycket läsningen får väga:
+Därför har läsförmågan ett **tak, och taket sätts av bordet — inte av modellen
+och inte av den enskilda motståndaren**. Här är det lätt att blanda ihop två
+saker:
 
-| Synar vid bordet | Hur mycket får läsningen väga |
+- **Motståndarprofilen** gäller **en** motståndare i taget. Den byggs bara på
+  vad just den spelaren gjort.
+- **Taket** för hur mycket läsförmågan får väga gäller **hela bordet**. Det räknar
+  alla synar som avgjorts i matchen, oavsett vem de gällde.
+
+Skälet är att varje syn är ett offentligt facit: när locket lyfts ser alla vad
+som låg i bägaren, och hela bordet lär sig något om hur spelet brukar se ut.
+Därför är bordets samlade erfarenhet den ärliga måttstocken – inte bara de synar
+som råkade gälla din motståndare.
+
+Antalet avgjorda synar bestämmer hur mycket läsförmågan får väga:
+
+| Synar vid bordet | Hur mycket får läsförmågan väga |
 |---|---:|
 | 0 | 0 % |
 | 1 | 25 % |
@@ -230,6 +259,32 @@ friare fram; mot en som synar ofta lönar sig bara de bud som är nästan säkra
 - **Matchserie** – kör många matcher och få statistik.
 - **Analys** – ladda upp loggarna och ställ frågor om materialet. Svaren kommer
   från en språkmodell och kan innehålla diagram.
+
+---
+
+## Vad resultaten betyder
+
+Maskinen mäter ingenting åt dig, men den ger underlag. Efter en matchserie kan
+du titta på två frågor:
+
+- **Vilken spelstil som vinner oftast.** I Meier är de två samma sak: den som
+  står kvar sist har vunnit, för den som mist tre liv är ute. Överlevnad är
+  spelets enda mått, och därför finns det ingen poängliga att titta på.
+- **Om läsförmågan lönar sig.** Cecilia läser motståndarna, Berit nästan inte.
+  Går det att se någon skillnad mellan dem, eller väger tur och bordets övriga
+  spelare tyngre?
+
+Om det sista: `reading` är medvetet satt lågt, och taket för hur mycket
+läsförmågan får väga är strängt. Det betyder inte att läsförmåga är värdelös –
+det betyder att modellen inte vill överskatta en gissning byggd på få synar. Om
+läsförmågan inte syns i siffrorna är det en upplysning om modellen, inte om
+spelet.
+
+En viktig varning: **enstaka matcher säger nästan ingenting.** Meier har hög
+slump i sig, och fyra spelare med liv som tar slut gör att en enskild match kan
+vända på en enda syn. Det är mönstret över många matcher som är intressant. Kör
+hellre flera hundra än tio, och titta på hela bilden i stället för att jaga
+förklaringar till en enskild förlust.
 
 ---
 

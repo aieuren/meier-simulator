@@ -377,3 +377,23 @@ def test_skicka_vidare_ar_blint_i_regeltext_och_prompt():
         None, 52, [61, 62, 63, 64, 65, 66], 3
     )
     assert "Du ser inte tärningarna" in prompt
+
+
+def test_om_meier_does_not_claim_raises_are_always_one_step():
+    """Dokumentet får inte påstå att *alla* höjningar är ett steg.
+
+    ``decide_bid`` (sedda tärningar) höjer exakt ett steg, men ``decide_raise``
+    (blint) skalar med ``press`` och kan hoppa ända till Meier. Ett påstående om
+    att höjningen "alltid" är ett steg beskriver bara det första beslutet.
+    """
+    text = _om()
+    flat = " ".join(text.split()).lower()
+    for claim in (
+        "höjningen är alltid ett steg",
+        "alltid ett steg, aldrig flera",
+        "alltid på den minsta möjliga höjningen",
+    ):
+        assert claim not in flat, (
+            f"Om Meier påstår {claim!r}. Minsta höjning gäller bluffen över sedda "
+            "tärningar; blind höjning styrs av press."
+        )

@@ -134,7 +134,7 @@ Namnen på parametrarna är korta; här är vad de står för:
 | Parameter | Enkelt namn | Betydelse |
 |---|---|---|
 | `risk` | Riskbenägenhet | Hur gärna spelaren synar och tar en osäker chans |
-| `press` | Press | Hur ofta spelaren bluffar, höjer eller försöker tvinga andra |
+| `press` | Press | Hur ofta spelaren bluffar, och hur högt den lägger blinda bud |
 | `reading` | Läsförmåga | Hur mycket spelaren använder information om andras tidigare spel |
 
 Skilj på tre saker:

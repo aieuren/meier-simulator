@@ -135,6 +135,26 @@ This is why the engine logs a fresh `kind="roll"` entry before every slå, and
 why `announce_blind` (not `announce`) is used for it. A slå that is not strictly
 higher is corrected to the smallest legal raise: `Session._enforce_bid`.
 
+## Two different raises — do not conflate them (gotcha)
+
+The docs used to claim "the raise is always one step, never more". That is true
+of exactly one of the two decisions. Keep them apart:
+
+- **`decide_bid(shown)`** — bidder *has* seen the dice. A bluff over `shown` is
+  **always exactly one step** above it (`min(higher_options(shown))`), at every
+  `press`. Higher bids get called more often, so a longer jump is pure downside.
+- **`decide_raise(bid)`** — blind shake, dice unseen. This one **scales with
+  `press`**: `steps = round(press * (len(higher_options(bid)) - 1))`, so
+  `press` 0.0 sits on minimum and `press` 1.0 can jump all the way to Meier.
+  There is no "true level" to sit just above when the dice are unknown.
+
+Measured on 80 no-LLM matches: 63.3 % of raises were one step, 36.7 % were
+more, up to 18. So "always one step" was wrong for the table as played.
+
+Guarded by `tests/test_policy.py::test_blind_raise_grows_with_press` and
+`::test_seen_bid_bluff_is_always_exactly_one_step`, plus
+`tests/test_docs.py::test_om_meier_does_not_claim_raises_are_always_one_step`.
+
 ## Forced raise (full lap) = a fresh shake too (gotcha)
 
 When the cup comes back to the bidder after a full lap, the rule we play is

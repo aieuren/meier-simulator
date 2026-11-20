@@ -257,11 +257,22 @@ Spelaren skakar en **ny** bägare och får inte lyfta locket. Budet måste vara
 strikt högre än det förra. Agenten vet alltså inte vad tärningarna visar — men
 vet att **motståndaren** kommer att se dem vid en syn.
 
-Policy: välj den **minsta lagliga höjning** som gör att förväntad syn-kostnad för
-motståndaren överstiger dess tröskel. I praktiken: höj så lite som möjligt, men
-tillräckligt för att en rationell motståndare inte ska syna. `press` höjer budet
-utöver minimum (större press = dyrare för motståndaren att syna, men större risk
-om det blir synat).
+Policy: `decide_raise` lägger budet på en nivå som styrs av `press`. Låg
+`press` väljer den **minsta lagliga höjningen** — den är säkrast, eftersom
+chansen att tärningarna visar mindre än budet är som minst där. Hög `press` tar
+ett språng uppåt: ett högre bud är dyrare för motståndaren att syna, men också
+större risk om det blir synat.
+
+Formeln är `steps = round(press · (len(higher) − 1))`, så `press` = 1,0 kan
+hoppa ända till Meier. Det är alltså **inte** en regel om att höjningen alltid
+är ett steg — bara om att ett steg är minimum, och om att `press` väljer hur
+långt över minimum budet läggs.
+
+Skilj detta från **beslut 1** (`decide_bid`), där spelaren *har* sett
+tärningarna. Där är bluffen alltid **exakt ett steg** över det visade utfallet:
+`min(higher_options(shown))`. Där finns ingen `press`-styrning, eftersom den
+kalkylen (sann budnivå + ett steg) inte har någon motsvarighet när nivån är
+okänd.
 
 ### Beslut 3 — Syna eller skicka (ser dem inte)
 

@@ -152,3 +152,43 @@ def test_params_must_be_in_unit_range():
 def test_profiles_are_distinct():
     keys = {p.params.press for p in ROSTER.values()}
     assert len(keys) == len(ROSTER)
+
+
+# -- Höjningens längd: två olika beslut, två olika regler ------------------
+
+def test_blind_raise_grows_with_press():
+    """Blind höjning styrs av `press`, inte av "alltid ett steg".
+
+    ``decide_raise`` räknar ``steps = round(press * (len(higher) - 1))``. Låg
+    press ligger på minimum, hög press kan hoppa till Meier. Dokumentationen
+    påstod tidigare att höjningen alltid är ett steg; det gällde bara
+    ``decide_bid``, där spelaren har sett tärningarna.
+    """
+    opts = rules.higher_options(31)
+    steps_for = {}
+    for press in (0.0, 0.5, 1.0):
+        p = BasePolicy(AgentParams(risk=0.5, press=press, reading=0.0))
+        d = p.decide_raise(31)
+        steps_for[press] = len(opts) - 1 - opts.index(d.bid)
+
+    assert steps_for[0.0] == 0, "press 0 ska lägga sig på minsta lagliga höjning"
+    assert steps_for[1.0] == len(opts) - 1, "press 1 ska kunna hoppa till Meier"
+    assert steps_for[0.0] < steps_for[0.5] < steps_for[1.0], "höjden ska öka med press"
+
+
+def test_seen_bid_bluff_is_always_exactly_one_step():
+    """Bluff över *sedda* tärningar är alltid exakt ett steg, oavsett press."""
+    for press in (0.0, 0.25, 0.5, 0.75, 1.0):
+        p = BasePolicy(AgentParams(risk=0.5, press=press, reading=0.0))
+        for shown in rules.RANKING:
+            d = p.decide_bid(shown)
+            if d.bid is None or d.bid == shown:
+                continue
+            opts = rules.higher_options(shown)
+            if d.bid not in opts:
+                continue
+            steps = len(opts) - opts.index(d.bid)
+            assert steps == 1, (
+                f"press={press} visar {rules.name(shown)} bjöd {rules.name(d.bid)} "
+                f"({steps} steg) — bluffen ska vara exakt ett steg"
+            )
