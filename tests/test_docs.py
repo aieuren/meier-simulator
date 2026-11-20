@@ -11,6 +11,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 from meier.agents.roster import ROSTER
 from meier.opponents import describe_params
 
@@ -334,3 +336,44 @@ def test_granskningen_redovisar_lagre_bud_avvikelsen():
     text = _flat(GRANSKNING.read_text(encoding="utf-8"))
     assert "lägre" in text.lower()
     assert "strategival" in text.lower()
+
+
+PDF = Path(__file__).resolve().parent.parent / "docs" / "regler" / "meier-regler.pdf"
+
+
+def test_regel_pdf_finns_i_repot():
+    assert PDF.exists(), "docs/regler/meier-regler.pdf saknas"
+    assert PDF.stat().st_size > 50_000, "PDF:en ser trunkerad ut"
+
+
+def test_regel_pdf_sager_samma_som_regeltexten():
+    """PDF:en är originalet. Brödtexten ska stämma med den.
+
+    Kräver pypdf. Saknas det hoppas testet över i stället för att falla, så att
+    en mager testmiljö inte ger falskt larm.
+    """
+    pypdf = pytest.importorskip("pypdf")
+    pdf_text = " ".join(" ".join(p.extract_text().split()) for p in pypdf.PdfReader(PDF).pages)
+    flat = _flat(pdf_text)
+
+    for regel in (
+        "21 kallas Meier och är högst",
+        "det sanna, ett högre eller ett lägre",
+        "Den som slår måste alltid säga ett högre bud",
+        "går bägaren till föregående spelare",
+        "Meier kostar dubbelt",
+        "Kommer bägaren ett helt varv tillbaka",
+    ):
+        assert regel in flat, f"PDF:en saknar regeln: {regel}"
+
+    # PDF:en skriver Meier. Felstavningen får inte smyga in i regeltexten.
+    assert "Mejer" not in flat
+    regler = REGLER.read_text(encoding="utf-8")
+    assert "Mejer" not in regler, "regeltexten stavar Meier fel"
+
+
+def test_regeltexten_citerar_pdf_ordalydelsen():
+    text = _flat(REGLER.read_text(encoding="utf-8"))
+    assert "PDF:ens ordalydelse" in text
+    assert "meier-regler.pdf" in text
+    assert "Vid tvekan gäller" in text

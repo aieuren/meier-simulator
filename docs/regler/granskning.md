@@ -1,7 +1,20 @@
 # Granskning: följer maskinen reglerna?
 
-Kontroll gjord mot `docs/regler/meier-regler.md`. Varje punkt är mätt i körande
-kod, inte läst ur källfilerna.
+Kontroll gjord mot `docs/regler/meier-regler.md` och originalet
+`docs/regler/meier-regler.pdf`. Varje punkt är mätt i körande kod, inte läst ur
+källfilerna.
+
+## Källan
+
+PDF:en (en sida, 190 559 byte) lästes in och jämfördes med koden:
+
+- **Brödtexten** är ordagrant samma regler som projektet redan utgick från.
+  Inga skillnader i sak.
+- **Poängtabellen ligger som bild.** Den lästes av och jämfördes rad för rad
+  mot `rules.RANKING`: **alla 21 rader stämmer**, inklusive att 21 är Meier och
+  att 31 är sämst.
+- **Stavning:** PDF:en skriver **Meier**, inte "Mejer". Koden skrev redan Meier.
+  Den nya regeltexten rättades till Meier.
 
 ## Sammanfattning
 
@@ -16,9 +29,9 @@ tillåter det, och LLM-agenten kan göra det.
 |---|---|---|---|
 | 1 | Högsta tärningen först: 2+5 blir 52 | ✅ | `read_dice(2,5) == 52` |
 | 2 | Rangordningen exakt som tabellen | ✅ | `RANKING` identisk med tabellen, 21 värden |
-| 3 | Mejer är högst | ✅ | `compare(21,11) > 0`, `higher_options(21) == []` |
-| 4 | Mejer kostar dubbelt (bud) | ✅ | `resolve_call(21,31).lives == 2` |
-| 5 | Mejer kostar dubbelt (visat) | ✅ | `resolve_call(43,21).lives == 2` |
+| 3 | Meier är högst | ✅ | `compare(21,11) > 0`, `higher_options(21) == []` |
+| 4 | Meier kostar dubbelt (bud) | ✅ | `resolve_call(21,31).lives == 2` |
+| 5 | Meier kostar dubbelt (visat) | ✅ | `resolve_call(43,21).lives == 2` |
 | 6 | Vanligt bud kostar ett liv | ✅ | `resolve_call(43,31).lives == 1` |
 | 7 | Visar lägre än budet → budgivaren förlorar | ✅ | `resolve_call(52,43).caller_loses is False` |
 | 8 | Visar samma → synaren förlorar | ✅ | `resolve_call(43,43).caller_loses is True` |
@@ -29,7 +42,7 @@ tillåter det, och LLM-agenten kan göra det.
 | 13 | Budet stiger strikt inom rundan | ✅ | 0 brott på 60 matcher |
 | 14 | Bägaren till föregående **aktiva** spelare | ✅ | 1727/1727 kontroller (100 %) |
 | 15 | Helt varv → måste höja | ✅ | 743 tvingade höjningar på 40 matcher |
-| 16 | Mejer-varv → slå om, ingen livsförlust | ✅ | `higher_options(21) == []`, mätt 0 av 1158 rundor |
+| 16 | Meier-varv → slå om, ingen livsförlust | ✅ | `higher_options(21) == []`, mätt 0 av 1158 rundor |
 | 17 | En runda slutar vid syn | ✅ | 0 rundor utan syn på 1158 |
 | 18 | **Första budet får vara lägre än tärningarna** | ⚠️ | Motorn: ja. Policyn: nej. Se nedan. |
 
