@@ -121,6 +121,10 @@ slut på något annat sätt (se undantaget om Meier nedan).
    - **Skicka vidare** – skickar bägaren **utan att slå**, med **samma bud och
      samma tärningar**. Spelaren tar då över ansvaret för budet.
 
+     Den som skickar vidare **tittar inte på tärningarna**. Att lyfta på locket
+     är att syna, och det är en annan handling. Spelaren vet alltså bara vad
+     budet säger, inte vad tärningarna visar.
+
 3. **Meier kostar dubbelt.** Om budet är Meier, **eller** om tärningarna visar
    Meier när någon synar, förlorar man **två liv** i stället för ett.
 
@@ -150,3 +154,17 @@ regeltexten ändras:
   *är* en regel, men *vilket* högre bud som väljs är ett strategival.
 - Hur ofta en agent bluffar, synar eller skickar vidare.
 - Att tärningarnas exakta form modelleras som `DIE_ELONGATION = 1.3`.
+
+## Ett förtydligande som PDF:en bara antyder
+
+PDF:en säger att "skicka vidare" sker "utan att slå". Den säger inte ordagrant
+att spelaren är blind för tärningarna. Men alternativet vore orimligt: att lyfta
+på locket **är** att syna. Kunde man titta och sedan skicka vidare skulle
+"skicka vidare" vara en gratis syn, och syna-alternativet vore meningslöst.
+Därför gäller:
+
+> Den som skickar vidare ser **inte** tärningarna. Spelaren vet bara vad budet
+> säger.
+
+Motorn följer detta: den som ska välja handling får **budet** och sitt
+**livsantal**, aldrig tärningsvärdet. Se `docs/regler/granskning.md`, punkt 19.

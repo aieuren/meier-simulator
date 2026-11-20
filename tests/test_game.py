@@ -4,7 +4,8 @@ import pytest
 
 from meier import rules
 from meier.agents.base import Agent, Role
-from meier.agents.player import ActionDecision, Announcement
+from meier.agents.player import ActionDecision, Announcement, MeierPlayerAgent
+from meier.agents.roster import make_players
 from meier.game import Game
 
 
@@ -184,3 +185,52 @@ def test_engine_accepts_lower_first_bid():
     announcement = agent.announce((5, 2))  # tärningarna visar 52
     assert announcement.bid == 31
     assert rules.compare(announcement.bid, 52) < 0
+
+
+def test_pass_is_blind_the_dice_never_reach_the_chooser():
+    """Den som skickar vidare får inte se tärningarna.
+
+    Att lyfta på locket är att syna. Kunde spelaren titta och sedan skicka
+    vidare vore "skicka vidare" en gratis syn. Testet fångar varje anrop till
+    ``decide`` och kontrollerar att inget tärningsvärde följer med.
+    """
+    seen_calls: list[dict] = []
+
+    class Spy:
+        def __init__(self, inner):
+            self.name = inner.name
+            self._inner = inner
+
+        def announce(self, dice, **kw):
+            return self._inner.announce(dice, **kw)
+
+        def announce_forced(self, dice, **kw):
+            return self._inner.announce_forced(dice, **kw)
+
+        def decide(self, bid, **kw):
+            seen_calls.append({"bid": bid, **kw})
+            return self._inner.decide(bid, **kw)
+
+    for seed in range(5):
+        spied = [Spy(p) for p in make_players(["axel", "berit", "cecilia", "david"])[0]]
+        Game.new(spied, seed=seed).play()
+
+    assert len(seen_calls) > 100, "för få beslut för att testet ska betyda något"
+    for call in seen_calls:
+        assert set(call) == {"bid", "lives"}, (
+            f"beslutsmottagaren fick mer än bud och liv: {sorted(call)}. "
+            "Tärningarna får aldrig nå den som väljer handling – att titta är att syna."
+        )
+        assert isinstance(call["bid"], int)
+        assert rules.is_valid_value(call["bid"])
+
+
+def test_decide_signature_cannot_take_dice():
+    """Skyddar mot att någon lägger till tärningarna i anropet senare."""
+    import inspect
+
+    params = set(inspect.signature(MeierPlayerAgent.decide).parameters)
+    assert params == {"self", "bid", "lives", "opponent"}, (
+        f"decide har fått nya parametrar: {params}. Om tärningarna läggs till "
+        "bryts regeln att skicka vidare är blint."
+    )

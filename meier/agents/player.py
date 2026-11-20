@@ -419,7 +419,7 @@ class MeierPlayerAgent(Agent):
                 "- Slå: säg ett strikt högre bud än det förra.",
                 "- Syna: lyft locket. Visar tärningarna lägre än budet förlorar den förra spelaren ett liv. "
                 "Är värdet samma eller högre förlorar du ett liv. Meier kostar dubbelt.",
-                "- Skicka vidare: skicka bägaren vidare med samma bud.",
+                "- Skicka vidare: skicka bägaren vidare med samma bud. Du ser inte tärningarna.",
                 "",
                 f"Om du slår är giltiga bud: {', '.join(rules.name(v) for v in higher) or 'inga (budet är högst)'}.",
                 "",

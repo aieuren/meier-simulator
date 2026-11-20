@@ -46,6 +46,7 @@ Så här går den, i korthet:
    eller lägre.
 2. Nästa spelare **slår** (höjer blint), **synar** (lyfter locket) eller
    **skickar vidare** (samma bud, samma tärningar, men du tar över ansvaret).
+   Den som skickar vidare tittar inte – att lyfta locket är att syna.
 3. **Meier kostar dubbelt** – både som bud och som visat resultat vid syn.
 
 En **match** är många rundor i följd. Varje spelare har tre liv, och i stort

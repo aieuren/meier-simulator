@@ -377,3 +377,17 @@ def test_regeltexten_citerar_pdf_ordalydelsen():
     assert "PDF:ens ordalydelse" in text
     assert "meier-regler.pdf" in text
     assert "Vid tvekan gäller" in text
+
+
+def test_skicka_vidare_ar_blint_i_regeltext_och_prompt():
+    """Att titta är att syna. Regeln ska stå i både regeltext och LLM-prompt."""
+    regler = _flat(REGLER.read_text(encoding="utf-8"))
+    assert "tittar inte på tärningarna" in regler
+    assert "gratis syn" in regler
+
+    from meier.agents.player import MeierPlayerAgent
+
+    prompt = MeierPlayerAgent._decide_context(
+        None, 52, [61, 62, 63, 64, 65, 66], 3
+    )
+    assert "Du ser inte tärningarna" in prompt
