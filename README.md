@@ -12,6 +12,11 @@ roller kan spela hela spel mot varandra.
 > **Vill du bara veta vad det här är?** Läs
 > [Om Meier](docs/om-meier.md) – en kort genomgång för den som är nyfiken men
 > inte ska bygga vidare. Den här filen är för dig som ska köra och ändra i koden.
+>
+> **Vill du veta vad som är regel och vad som är val?** Läs
+> [reglerna](docs/regler/meier-regler.md). Den filen är kanonisk: avviker koden
+> från den är koden fel. [Granskningen](docs/regler/granskning.md) visar punkt
+> för punkt att maskinen följer dem.
 
 ## Vad som finns
 

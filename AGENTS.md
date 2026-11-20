@@ -326,23 +326,35 @@ python -m meier.cli announce 2 5 --role david
 python -m meier.cli play berit cecilia david
 ```
 
-## Three documents, three audiences
+## Four documents, four audiences
 
-Documentation drifts. This repo keeps three files that must agree with the
+Documentation drifts. This repo keeps four files that must agree with the
 code, and `tests/test_docs.py` enforces it:
 
 | File | Reader | Content |
 |---|---|---|
 | `README.md` | whoever runs and changes the code | install, CLI, API, config |
+| `docs/regler/meier-regler.md` | anyone asking "is this a rule or a choice?" | **canonical rules** – the source of truth |
 | `docs/om-meier.md` | a friend who just wants to understand | what it is, rules, players, findings |
 | `docs/agent-model.md` | whoever tunes the model | formulas, calibration, measurements |
+| `docs/regler/granskning.md` | anyone doubting the engine | rule-by-rule audit with measurements |
+
+The rules file is canonical. If code and rules disagree, the code is wrong.
+If prose in `docs/om-meier.md` and the rules file disagree, the prose is wrong.
+
+`docs/regler/granskning.md` records the rule audit: 18 checks, each measured
+in running code. It documents one known deviation – the engine accepts a
+lower first bid (as the rules allow), but `BasePolicy` never chooses one.
+That is a strategy choice, not a rule break, and it means policy players and
+LLM players are not perfectly comparable.
 
 When you change a player parameter, a measured statistic, or the dice weights,
 update the affected files **and** let the tests tell you what else broke. The
 tests read the markdown as text and compare against `ROSTER`, `describe_params`,
 `FACE_WEIGHTS`, `BasePolicy` and a fresh match series. They caught real drift
-already: the README described roles that had been deleted, and the companion
-doc claimed a bid the policy never makes.
+already: the README described roles that had been deleted, the companion
+doc claimed a bid the policy never makes, and it called a round "always ending
+in a life loss" when the Meier full loop ends one without.
 
 Two rules that keep the companion doc honest:
 

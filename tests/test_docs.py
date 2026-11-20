@@ -291,3 +291,46 @@ def test_om_meier_round_terminology_matches_the_engine():
         f"{rounds_without_call} av {total_rounds} rundor slutade utan syn; "
         "då är 'en runda slutar vid syn' fel"
     )
+
+
+REGLER = Path(__file__).resolve().parent.parent / "docs" / "regler" / "meier-regler.md"
+GRANSKNING = Path(__file__).resolve().parent.parent / "docs" / "regler" / "granskning.md"
+
+
+def test_regeltexten_finns_och_ar_kanonisk():
+    assert REGLER.exists(), "docs/regler/meier-regler.md saknas"
+    text = _flat(REGLER.read_text(encoding="utf-8"))
+    assert "kanoniska regeltexten" in text
+    assert "Sist kvar vinner" in text
+
+
+def test_regeltextens_tabell_ar_identisk_med_rules_ranking():
+    """Regeltabellen får inte glida ifrån koden."""
+    from meier import rules
+
+    text = REGLER.read_text(encoding="utf-8")
+    # Hämta sifferraden ur tabellen, i ordning.
+    rader = re.findall(r"^\|\s*\d+\s*\|\s*[⚀-⚅]\s*[⚀-⚅]\s*\|\s*\*{0,2}(\d{2})", text, re.M)
+    assert rader, "kunde inte läsa poängordningen ur regeltabellen"
+    assert [int(v) for v in rader] == list(rules.RANKING)
+
+
+def test_regeltexten_namner_alla_tre_handlingar():
+    text = _flat(REGLER.read_text(encoding="utf-8"))
+    for handling in ("Slå", "Syna", "Skicka vidare"):
+        assert handling in text, f"regeltexten saknar handlingen {handling}"
+
+
+def test_regeltexten_tillater_lagre_forsta_bud():
+    """Reglerna säger 'det sanna, ett högre eller ett lägre'."""
+    text = _flat(REGLER.read_text(encoding="utf-8"))
+    assert "lägre" in text
+    assert "båda hållen" in text
+
+
+def test_granskningen_redovisar_lagre_bud_avvikelsen():
+    """Avvikelsen ska stå skriven, inte upptäckas på nytt varje gång."""
+    assert GRANSKNING.exists(), "docs/regler/granskning.md saknas"
+    text = _flat(GRANSKNING.read_text(encoding="utf-8"))
+    assert "lägre" in text.lower()
+    assert "strategival" in text.lower()

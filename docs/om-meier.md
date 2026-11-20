@@ -35,35 +35,27 @@ högsta först **först**: 2 och 5 blir **52**.
 
 > 21, 11, 22, 33, 44, 55, 66, 65, 64, 63, 62, 61, 54, 53, 52, 51, 43, 42, 41, 32, 31
 
-Lägg märke till att 11 är näst bäst och 31 sämst. Det är med flit förvirrande –
-det är hela charmen.
+Lägg märke till att 11 är näst bäst och 31 sämst. **Par slår singlar** – 44 slår
+alltså 65. Det är med flit förvirrande, och det är hela charmen.
 
 En **runda** är från första budet till dess att någon **synar**. I praktiken
 slutar alltså varje runda med att någon förlorar liv – oftast ett, ibland två.
+Så här går den, i korthet:
 
-Så här går en runda:
-
-1. Du skakar bägaren, tittar **i smyg**, och säger ett resultat. Det kan vara
-   sant, eller en bluff åt något håll.
-2. Nästa spelare väljer mellan tre saker:
-   - **Slå** – skaka om utan att titta och säga ett **högre** bud. Du måste
-     höja, vad tärningarna än visar.
-   - **Syna** – lyft på locket. Var tärningarna lägre än budet förlorar den
-     som ansvarar för budet ett liv. Var de samma eller högre förlorar du ett
-     liv. **Rundan är då slut.**
-   - **Skicka vidare** – skicka bägaren med samma bud. Då tar du över ansvaret
-     för budet.
-3. **Meier kostar dubbelt.** Är budet Meier, eller visar tärningarna Meier när
-   någon synar, förlorar man två liv i stället för ett.
-
-En detalj som gör spelet elakt: kommer bägaren ett helt varv tillbaka till den
-som satte budet, **måste** den spelaren höja. Tärningarna slås då om, och hen
-får välja att titta eller bjuda blint. Är budet Meier går det inte att höja –
-då slås tärningarna om och en **ny runda** börjar, utan att någon förlorat liv.
+1. Du skakar bägaren, tittar **i smyg**, och säger ett resultat: sant, högre
+   eller lägre.
+2. Nästa spelare **slår** (höjer blint), **synar** (lyfter locket) eller
+   **skickar vidare** (samma bud, samma tärningar, men du tar över ansvaret).
+3. **Meier kostar dubbelt** – både som bud och som visat resultat vid syn.
 
 En **match** är många rundor i följd. Varje spelare har tre liv, och i stort
 sett varje runda kostar någon ett liv. När man mist sina tre liv är man ute.
 Sist kvar vinner matchen. En match tar i snitt knappt tio rundor.
+
+Den fullständiga regeltexten, med undantagen om Meier-varvet och vem som
+förlorar liv vid syn, står i [`docs/regler/meier-regler.md`](regler/meier-regler.md).
+Den filen är den kanoniska versionen. Avviker den här sammanfattningen från den
+har den här fel.
 
 ### Tärningarna är inte kubiska
 

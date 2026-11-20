@@ -118,3 +118,69 @@ def test_meier_full_loop_triggers_reroll():
     game.play()
     log = "\n".join(game.log)
     assert "Meier" in log and "slår om" in log
+
+
+def test_bag_goes_to_previous_active_player_every_round():
+    """Regeln: bägaren går till föregående spelare, som börjar nästa runda.
+
+    Utslagna spelare hoppas över. Detta mäts på riktiga matcher, så att
+    ``_previous_active`` inte kan glida ifrån regeltexten.
+    """
+    import re
+
+    from meier.agents.roster import make_players
+
+    checks = 0
+    for seed in range(40):
+        players, _ = make_players(["axel", "berit", "cecilia", "david"])
+        game = Game.new(players, seed=seed)
+        game.play()
+        names = [p.name for p in game.players]
+        out: set[str] = set()
+        loser = None
+        for line in game.log:
+            found = re.search(r"Syn!.*?(\w+) har nu \d+ liv", line)
+            if found:
+                loser = found.group(1)
+            gone = re.match(r"\s+(\w+) är ute!", line)
+            if gone:
+                out.add(gone.group(1))
+            if line.startswith("Runda ") and loser:
+                starter = re.search(r"Runda \d+: (\w+) slår", line).group(1)
+                active = [n for n in names if n not in out]
+                if loser in active:
+                    expected = active[(active.index(loser) - 1) % len(active)]
+                else:
+                    idx = names.index(loser)
+                    expected = next(
+                        names[(idx - off) % len(names)]
+                        for off in range(1, len(names) + 1)
+                        if names[(idx - off) % len(names)] not in out
+                    )
+                assert starter == expected, (
+                    f"seed {seed}: {loser} förlorade, men {starter} började "
+                    f"(väntat {expected})"
+                )
+                checks += 1
+                loser = None
+    assert checks > 300, "för få rundor för att testet ska betyda något"
+
+
+def test_engine_accepts_lower_first_bid():
+    """Reglerna tillåter 'det sanna, ett högre eller ett lägre'.
+
+    Motorn ska acceptera ett lägre bud. Att policyn sedan aldrig väljer det är
+    ett strategival – se docs/regler/granskning.md.
+    """
+    from meier.agents.base import Role
+    from meier.agents.player import MeierPlayerAgent
+
+    class LowerLLM:
+        def complete(self, system, user, json_mode=False):
+            return '{"bid": 31, "line": "31", "reasoning": "lägre"}' 
+
+    role = Role(key="test", name="Test", description="t", style="t")
+    agent = MeierPlayerAgent(role, llm=LowerLLM())
+    announcement = agent.announce((5, 2))  # tärningarna visar 52
+    assert announcement.bid == 31
+    assert rules.compare(announcement.bid, 52) < 0
