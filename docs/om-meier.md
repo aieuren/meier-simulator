@@ -1,8 +1,7 @@
-# Om Meier – vad det här är och vad det ger
+# Om Meier – vad det här är
 
 En kort genomgång för dig som är nyfiken men inte ska bygga vidare på koden.
-Inga formler, ingen installation. Bara vad grejen är, vad spelarna gör och vad
-vi hittills lärt oss.
+Inga formler, ingen installation. Bara vad grejen är och vad spelarna gör.
 
 Vill du köra igång själv: se [README](../README.md). Vill du ha hela tekniska
 modellen: se [agent-model.md](agent-model.md).
@@ -17,12 +16,12 @@ personlighet: en är feg, en bluffar mycket, en räknar mycket.
 
 Du kan sitta vid sidan och titta på när de spelar. Du kan också själv mata in
 ett tärningsslag och se vad en spelare skulle svara. Och du kan låta dem spela
-hundratals matcher och få statistik på hur det gick.
+många matcher i följd.
 
 **Vad det inte är:** ett försök att hitta den bästa strategin. Vi bygger en
 *maskin för att förstå Meier* – ett slags laboratorium. Att vinna är inte
-poängen. Poängen är att kunna se vad som händer när en spelare bluffar, när en
-annan synar, och vad som faktiskt lönar sig.
+poängen. Poängen är att maskinen går att köra, går att upprepa och går att
+fråga. Vad den sedan visar är en senare fråga.
 
 ---
 
@@ -38,9 +37,8 @@ högsta först **först**: 2 och 5 blir **52**.
 Lägg märke till att 11 är näst bäst och 31 sämst. **Par slår singlar** – 44 slår
 alltså 65. Det är med flit förvirrande, och det är hela charmen.
 
-En **runda** är från första budet till dess att någon **synar**. I praktiken
-slutar alltså varje runda med att någon förlorar liv – oftast ett, ibland två.
-Så här går den, i korthet:
+En **runda** är från första budet till dess att någon **synar**. Så här går
+den, i korthet:
 
 1. Du skakar bägaren, tittar **i smyg**, och säger ett resultat: sant, högre
    eller lägre.
@@ -49,9 +47,8 @@ Så här går den, i korthet:
    Den som skickar vidare tittar inte – att lyfta locket är att syna.
 3. **Meier kostar dubbelt** – både som bud och som visat resultat vid syn.
 
-En **match** är många rundor i följd. Varje spelare har tre liv, och i stort
-sett varje runda kostar någon ett liv. När man mist sina tre liv är man ute.
-Sist kvar vinner matchen. En match tar i snitt knappt tio rundor.
+En **match** är många rundor i följd. Varje spelare har tre liv. När man mist
+sina tre liv är man ute. Sist kvar vinner matchen.
 
 Den fullständiga regeltexten, med undantagen om Meier-varvet och vem som
 förlorar liv vid syn, står i [`docs/regler/meier-regler.md`](regler/meier-regler.md).
@@ -75,7 +72,7 @@ Vad det gör med spelet:
 Alltså: **Meier och 11 blir ovanligare**, medan höga utfall där båda
 tärningarna är 3–6 blir vanligare. Udda och jämnt förblir ändå lika sannolikt.
 
-Det spelar roll för bluffandet. Ett bud på 65 är rimligare än ett bud på 21.
+Det är den fördelning maskinen använder när den slår tärningarna.
 
 ---
 
@@ -96,8 +93,7 @@ Personligheten sitter i tre rattar, inte i namnet. Varje ratt går från 0 till 
 
 **Axel är referensen.** Han har ingen språkmodell alls, spelar alltid likadant
 och ändrar sig aldrig. Han är måttstocken de andra jämförs mot. Han är byggd
-för att vara "tillräckligt bra", inte optimerad – och som mätningarna nedan
-visar räcker det långt.
+för att vara "tillräckligt bra", inte optimerad.
 
 ---
 
@@ -137,9 +133,7 @@ synas nämligen oftare (en syn på 66 är billigare än en syn på 51, eftersom
 tärningarna då oftare är lägre än budet). Att höja längre ökar alltså bara
 risken att åka dit, utan att ge något tillbaka.
 
-Så när en spelare bjuder 51 på tärningarna 43 är det inget misstag. Den har
-vägt chansen att bli synad (omkring 20 % på den nivån) mot livskostnaden, och
-kommit fram till att chansningen lönar sig.
+Maskinen är byggd så: höjningen är alltid ett steg, aldrig flera.
 
 ### Spelaren bluffar med flit
 
@@ -147,23 +141,8 @@ En vanlig missuppfattning är att en AI-spelare "ljuger" när den råkar säga f
 Så är det inte här. Bluffen är ett **aktivt val**, och hur ofta spelaren
 bluffar styrs av `press`.
 
-Mätt över 200 matcher utan språkmodell:
-
-| Spelare | Bluffar i |
-|---|---:|
-| Berit | 46 % |
-| Cecilia | 63 % |
-| Axel | 63 % |
-| David | 72 % |
-
-Berit, som är feg, bjuder oftast sanningen. David, som är djärv, bluffar nästan
-tre gånger av fyra.
-
-En nyans värd att känna till: `press` styr bluffrekvensen i **skarpt spel**, men
-i det enklaste läget – ett enda slag utan motståndare att läsa – skiljer sig
-spelarna mindre än man kunde tro. Vid 52 säger Berit 52 medan de andra säger 53.
-Skillnaden är verklig men liten. Det är först över många matcher, när läget och
-motståndarna spelar in, som personligheterna verkligen märks.
+En spelare med låg `press` bjuder oftast sanningen. En spelare med hög `press`
+tar chansen oftare. Parametern styr hur ofta, inte vilken strategi som är bäst.
 
 ### Spelaren läser sina motståndare
 
@@ -187,8 +166,8 @@ Det här är den nyaste delen, och den är värd att förklara.
 
 En språkmodell är väldigt säker på sin sak, även när den knappt har något att
 gå på. Fråga den efter en enda syn och den svarar "jag är helt säker". Det är
-farligt: en spelare som agerar på en tunn gissning som vore den ett faktum
-spelar sämre än en som inte läser alls.
+en risk: en spelare som agerar på en tunn gissning som vore den ett faktum
+låter brus styra spelet.
 
 Därför har läsningen ett **tak som sätts av bordet, inte av modellen**. Antalet
 synar som faktiskt avgjorts bestämmer hur mycket läsningen får väga:
@@ -204,51 +183,9 @@ Modellen får säga "jag är säker", men taket gäller ändå. En bild byggd p�
 enda syn väger en fjärdedel av en mogen bild.
 
 Samma princip gäller åt andra hållet: en motståndare som synar ofta gör varje
-bluff dyrare, så spelaren bluffar mindre mot hen. Mätt i ett kontrollerat läge
-(20 möjliga tärningsutfall, mot en motståndare med känd synfrekvens):
-
-| Motståndaren synar | Spelaren bluffar i |
-|---|---:|
-| 5 % | 20 av 20 lägen |
-| 19 % (normalt) | 11 av 20 lägen |
-| 45 % | 3 av 20 lägen |
-
-Mot en som aldrig synar är det alltså fritt fram. Mot en som synar ofta lönar
-sig bara de bud som är nästan säkra.
-
----
-
-## Vad mätningarna visar
-
-200 matcher, fyra spelare, ingen språkmodell inblandad (så att det går att
-upprepa exakt). En slumpmässig spelare skulle vinna 25 % av gångerna.
-
-| Spelare | Vinster | Synar i |
-|---|---:|---:|
-| Axel | 31 % | 18 % |
-| Berit | 29 % | 18 % |
-| Cecilia | 26 % | 18 % |
-| David | 15 % | 22 % |
-
-En match tar i snitt **9,4 rundor**.
-
-Tre saker är värda att notera:
-
-**David vinner minst.** Han pressar mest (0,60) och bluffar mest (72 %). Det
-straffar sig: hög press bluffar rakt in i synar. Det stämmer med vad de
-historiska loggarna visade – en extremt pressande profil förlorade nästan varje
-match.
-
-**Axel, som inte läser alls, vinner mest.** Han är enkel, förutsägbar och
-fungerar. Det är en nyttig påminnelse: i ett spel med mycket tur slår en stabil
-grundstrategi ofta en sofistikerad.
-
-**Alla synar ungefär lika ofta** (18–22 %), trots att deras `risk` skiljer sig.
-Synfrekvensen är alltså inte bara en fråga om personlighet – spelets läge tvingar
-fram synar.
-
-Och en varning: **200 matcher är inte mycket**. Skillnaderna mellan Axel, Berit
-och Cecilia ligger inom felmarginalen. Vi drar inga säkra slutsatser av dem.
+bluff dyrare, så spelaren bluffar mindre mot hen. Maskinen räknar med
+motståndarens synfrekvens när den väljer bud. Mot en som sällan synar är det
+friare fram; mot en som synar ofta lönar sig bara de bud som är nästan säkra.
 
 ---
 
@@ -265,14 +202,12 @@ och Cecilia ligger inom felmarginalen. Vi drar inga säkra slutsatser av dem.
 
 ---
 
-## Det roligaste att prova
+## Vad du kan prova
 
-Skriv in **4 och 3** (alltså 43) i fliken *Enskild spelare*. Berit säger 43,
-alltså sanningen. Axel, Cecilia och David säger 51 – en ren bluff. Samma
-tärningar, samma regler, olika personlighet. Det är hela poängen med projektet.
+Öppna fliken *Enskild spelare* och mata in två tärningar. Du får se vad varje
+spelare svarar på samma slag. Samma tärningar, samma regler, olika
+personlighet – det är själva poängen med maskinen.
 
-Prova sedan **2 och 5** (52). Då säger Berit 52 och de andra 53. Skillnaden är
-mindre, men mönstret detsamma: Berit håller igen, de andra tar chansen.
-
-Prova också **1 och 2** (21, Meier). Då ser du att spelet inte bara handlar om
-att ljuga: Meier är så starkt att alla fyra bjuder det direkt, utan att tveka.
+Prova samma slag med flera spelare och jämför. Prova också att köra en hel
+match och läsa loggen: varje bud, varje syn och vem som förlorade liv står
+med.

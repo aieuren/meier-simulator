@@ -335,14 +335,22 @@ code, and `tests/test_docs.py` enforces it:
 |---|---|---|
 | `README.md` | whoever runs and changes the code | install, CLI, API, config |
 | `docs/regler/meier-regler.md` | anyone asking "is this a rule or a choice?" | **canonical rules** – the source of truth |
-| `docs/om-meier.md` | a friend who just wants to understand | what it is, rules, players, findings |
+| `docs/om-meier.md` | a friend who just wants to understand | what it is, rules, players, how the machine is built |
 | `docs/agent-model.md` | whoever tunes the model | formulas, calibration, measurements |
 | `docs/regler/granskning.md` | anyone doubting the engine | rule-by-rule audit with measurements |
 
 The rules file is canonical. If code and rules disagree, the code is wrong.
 If prose in `docs/om-meier.md` and the rules file disagree, the prose is wrong.
 
-`docs/regler/granskning.md` records the rule audit: 18 checks, each measured
+`docs/om-meier.md` describes the machine, not what it produced. It must not
+contain win rates, bluff frequencies, match lengths or any other result of a
+simulation run – those belong in a report, and they age. It may describe
+construction: dice weights, reading caps, roster parameters. `tests/test_docs.py`
+enforces the boundary (`test_om_meier_describes_the_machine_not_its_results`).
+`docs/agent-model.md` is the place for measurements, because its reader tunes
+the model and needs them.
+
+`docs/regler/granskning.md` records the rule audit: 19 checks, each measured
 in running code. It documents one known deviation – the engine accepts a
 lower first bid (as the rules allow), but `BasePolicy` never chooses one.
 That is a strategy choice, not a rule break, and it means policy players and
@@ -350,19 +358,23 @@ LLM players are not perfectly comparable.
 
 When you change a player parameter, a measured statistic, or the dice weights,
 update the affected files **and** let the tests tell you what else broke. The
-tests read the markdown as text and compare against `ROSTER`, `describe_params`,
-`FACE_WEIGHTS`, `BasePolicy` and a fresh match series. They caught real drift
-already: the README described roles that had been deleted, the companion
-doc claimed a bid the policy never makes, and it called a round "always ending
-in a life loss" when the Meier full loop ends one without.
+tests read the markdown as text and compare against `ROSTER`, `describe_params`
+and `FACE_WEIGHTS`. They caught real drift already: the README described roles
+that had been deleted, the companion doc claimed a bid the policy never makes,
+and it called a round "always ending in a life loss" when the Meier full loop
+ends one without.
 
-Two rules that keep the companion doc honest:
+Three rules that keep the companion doc honest:
 
 - **No commands, no installation.** It is prose for non-developers. A test
   asserts the absence of `pip install`, `uvicorn`, `pytest`, `curl`, `export`.
-- **Every number is measured, not remembered.** If you cannot reproduce a
-  figure with a command, do not put it in the doc. The win-rate test tolerates
-  ±10 points, because 120 matches differ from 200 by chance alone.
+- **Describe the machine, not its output.** The companion doc says what is
+  set up: dice weights, reading caps, roster parameters. It does not say who
+  wins, how often players bluff, or how long a match runs. Those are results
+  of a simulation, they change with the seed, and the project is not hunting
+  strategies. Results go in `docs/agent-model.md` or a separate report.
+- **Every number that stays is a construction number.** If a figure would
+  change when the players play differently, it does not belong here.
 
 ## Conventions
 
