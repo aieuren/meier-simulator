@@ -231,7 +231,7 @@ def _match_usage(agents: list) -> dict[str, Any]:
 
     Varje LLM-spelare har sin egen klient, så en matchs total är summan över dem.
     ``by_role`` visar hur mycket varje roll drog, vilket avslöjar om en
-    personlighet (t.ex. en som resonerar mer) är dyrare än de andra. Axel saknar
+    spelare (t.ex. en som resonerar mer) är dyrare än de andra. Axel saknar
     klient och bidrar med noll.
     """
     total = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}

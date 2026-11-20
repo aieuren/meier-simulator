@@ -13,10 +13,12 @@ lower bid). Multiple agents with distinct roles can also play full games.
 
 - `meier/rules.py` – game rules. Single source of truth for the ranking order,
   bid comparison, and call resolution. Change rules here only. The dice are
-  elongated (length/width = `DIE_ELONGATION` = 1.3), so `roll` draws with
-  `FACE_WEIGHTS`: faces 3-6 (the long sides) are 1.3x as likely as 1-2 (the
-  square end faces). This makes Meier and 11 rarer than on a cube; odd and even
-  stay equally likely, since 1/2 sit on the ends (one odd, one even).
+  elongated (length/width = `DIE_ELONGATION` = 1.3). `roll` weights each face
+  by its **area** under that model, so faces 3-6 (the long sides) are 1.3x as
+  likely as 1-2 (the square end faces). Area is a modelling choice, not physics:
+  weighting by solid angle from the centre of mass gives 1.56 for the same
+  shape. See `docs/agent-model.md` §3.0. Odd and even stay equally likely
+  either way, since 1/2 sit on the ends (one odd, one even).
 - `meier/llm.py` – LLM client. Provider priority: Anthropic (Claude) via
   `ANTHROPIC_API_KEY`, then Google Gemini via `GEMINI_API_KEY`/`GOOGLE_API_KEY`
   (or the key files under `MEIER_SECRETS_DIR`). Both are real endpoints; there

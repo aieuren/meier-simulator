@@ -92,7 +92,7 @@ function setupTabs() {
   });
 }
 
-// -- Flik 1: de fyra spelarna och deras karaktärer --------------------------
+// -- Flik 1: de fyra spelarna och deras profiler -----------------------------
 
 function playerCard(r) {
   const div = document.createElement("div");

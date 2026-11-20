@@ -1,17 +1,17 @@
 """Spelarregistret: de fyra profilerna som möts i matcherna.
 
-Personligheten bor i **parametrarna** (``risk``, ``press``, ``reading``), inte i
-namnet. Namnen är neutrala med flit. En värderande etikett som "Rackar-Rakel"
+Spelarens egen profil bor i **parametrarna** (``risk``, ``press``, ``reading``),
+inte i namnet. Namnen är neutrala med flit. En värderande etikett som "Rackar-Rakel"
 säger åt modellen vem den *ska vara*, och då spelar den en karikatyr i stället
 för att spela spelet. Det gör det omöjligt att veta om en profil vinner på sin
 taktik eller på sin etikett. Neutrala namn tar bort den signalen.
 
 Fyra profiler:
 
-- **Axel** är basmodellen: deterministisk, icke-läsande, utan LLM. Han är den
+- **Axel** är grundtaktiken: deterministisk, icke-läsande, utan LLM. Han är den
   fasta mätstickan de andra jämförs mot (se ``docs/agent-model.md``).
 - **Berit**, **Cecilia** och **David** är samma policykärna med milda
-  personligheter ovanpå: försiktig, kalkylerande och djärv. Ingen av dem är så
+  profiler ovanpå: försiktig, kalkylerande och djärv. Ingen av dem är så
   extrem som de gamla rollerna var — de historiska loggarna visade att en
   extremt pressande profil (``press`` ≈ 0,9) förlorade varje match.
 
@@ -29,7 +29,7 @@ from .base import Role
 
 @dataclass(frozen=True)
 class Profile:
-    """En spelares identitet: namn, personlighet (parametrar) och LLM-val."""
+    """En spelares identitet: namn, egen profil (parametrar) och LLM-val."""
 
     key: str
     name: str
@@ -48,7 +48,7 @@ ROSTER: dict[str, Profile] = {
     "axel": Profile(
         key="axel",
         name="Axel",
-        description="Basmodellen. Fast, läser ingen motståndare och ändrar sig aldrig.",
+        description="Grundtaktiken. Fast, läser ingen motståndare och ändrar sig aldrig.",
         params=AgentParams(risk=0.50, press=0.50, reading=0.00),
         uses_llm=False,
     ),

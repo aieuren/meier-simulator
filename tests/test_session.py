@@ -896,3 +896,26 @@ def test_every_life_row_carries_a_standings_snapshot():
         # Livsställningen speglar radens egen livsnivå.
         loser = next(p for p in row["standings"] if p["name"] == row["player_name"])
         assert loser["lives"] == row["lives_left"]
+
+
+def test_die_model_is_area_based_and_says_so():
+    """Tärningens vikter ska vara areamodellen, och modellen ska vara märkt som val.
+
+    ``DIE_ELONGATION`` är längd/bredd. Areamodellen ger då viktförhållandet
+    L/w mellan lång- och ändyta. Rymdvinkelmodellen för samma form ger 1,56,
+    vilket är en annan fördelning (~2,94 % Meier i stället för 3,86 %). Testet
+    låser att koden använder areamodellen och att det står i docstringen att
+    det är ett val, inte en fysikalisk lag.
+    """
+    assert rules.DIE_ELONGATION == 1.3
+    ratio = rules.FACE_WEIGHTS[2] / rules.FACE_WEIGHTS[0]
+    assert ratio == rules.DIE_ELONGATION
+
+    import inspect
+
+    src = inspect.getsource(rules).lower()
+    start = src.index("face_weights: tuple[float, ...]")
+    comment = src[:start]
+    assert "area" in comment
+    assert "val" in comment or "choice" in comment
+    assert "rymdvinkel" in comment

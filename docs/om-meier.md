@@ -11,8 +11,8 @@ modellen: se [agent-model.md](agent-model.md).
 ## Vad är det här?
 
 Fyra AI-spelare som spelar det svenska tärningsspelet **Meier** mot varandra.
-Varje spelare drivs av en språkmodell, och varje spelare har sin egen
-personlighet: en är feg, en bluffar mycket, en räknar mycket.
+Varje spelare drivs av en språkmodell, och varje spelare har sin egen **profil**:
+en är feg, en bluffar mycket, en räknar mycket.
 
 Du kan sitta vid sidan och titta på när de spelar. Du kan också själv mata in
 ett tärningsslag och se vad en spelare skulle svara. Och du kan låta dem spela
@@ -59,9 +59,20 @@ har den här fel.
 
 Det här är en finurlighet som många inte känner till: tärningarna är
 **avlånga**. Ändytorna (1 och 2) är kvadratiska, långytorna (3–6) är längre.
-Därför är 3–6 ungefär 1,3 gånger så sannolika som 1–2.
+Längden är ungefär 1,3 gånger bredden.
 
-Vad det gör med spelet:
+**Maskinen antar** att chansen för en sida följer sidans area. Då blir 3–6
+exakt 1,3 gånger så sannolika som 1–2, eftersom långytan har arean bredd gånger
+längd medan ändytan har arean bredd gånger bredd.
+
+Det är ett antagande, inte en fysikalisk sanning. Den vanligaste modellen för en
+kropp som kastas slumpmässigt väger sidorna efter **rymdvinkeln** från
+masscentrum. För samma form blir förhållandet då 1,56 i stället för 1,30, och
+Meier blir 2,9 % i stället för 3,9 %. Skillnaden är liten, men den finns. Arean
+är vald för att den är enkel att förklara och kontrollera. Vilken modell som är
+rätt för Meiers tärningar vet vi inte.
+
+Med areamodellen blir fördelningen så här:
 
 | Utfall | Avlång tärning | Vanlig kub |
 |---|---:|---:|
@@ -70,7 +81,8 @@ Vad det gör med spelet:
 | 65, 64, 63, 54, 53, 43 | 6,5 % | 5,6 % |
 
 Alltså: **Meier och 11 blir ovanligare**, medan höga utfall där båda
-tärningarna är 3–6 blir vanligare. Udda och jämnt förblir ändå lika sannolikt.
+tärningarna är 3–6 blir vanligare. Udda och jämnt förblir ändå lika sannolikt,
+eftersom 1 och 2 ligger på ändytorna (en udda, en jämn) och 3–6 på långytorna.
 
 Det är den fördelning maskinen använder när den slår tärningarna.
 
@@ -78,22 +90,36 @@ Det är den fördelning maskinen använder när den slår tärningarna.
 
 ## De fyra spelarna
 
-Personligheten sitter i tre rattar, inte i namnet. Varje ratt går från 0 till 1.
+Spelarens **egen profil** sitter i tre parametrar, inte i namnet. Varje parameter
+går från 0 till 1.
 
-- **risk** – hur gärna spelaren synar och tar en chans
-- **press** – hur ofta spelaren bluffar och pressar budet
-- **läsning** – hur mycket spelaren låter motståndarnas beteende styra
+- **`risk`** – riskbenägenhet: hur gärna spelaren synar och tar en chans
+- **`press`** – press: hur ofta spelaren bluffar och pressar budet
+- **`reading`** – läsförmåga: hur mycket spelaren låter information om andras
+  tidigare spel styra
 
-| Spelare | risk | press | läsning | LLM | Karaktär |
+| Spelare | risk | press | läsning | LLM | Profil |
 |---|---:|---:|---:|---|---|
-| **Axel** | 0,50 | 0,50 | 0,00 | nej | Basmodellen. Fast mätsticka. |
+| **Axel** | 0,50 | 0,50 | 0,00 | nej | Grundtaktik. Fast mätsticka. |
 | **Berit** | 0,25 | 0,25 | 0,15 | ja | Försiktig. Bjuder nära sanningen. |
 | **Cecilia** | 0,50 | 0,45 | 0,50 | ja | Kalkylerande. Läser motståndaren. |
 | **David** | 0,65 | 0,60 | 0,35 | ja | Djärv. Pressar budet högre. |
 
 **Axel är referensen.** Han har ingen språkmodell alls, spelar alltid likadant
 och ändrar sig aldrig. Han är måttstocken de andra jämförs mot. Han är byggd
-för att vara "tillräckligt bra", inte optimerad.
+för att vara "tillräckligt bra", inte optimerad. Hans uppsättning kallas
+**grundtaktik**.
+
+Tre begrepp som är lätta att blanda ihop:
+
+| Begrepp | Vad det är |
+|---|---|
+| **Egen profil** | Spelarens egna `risk`, `press` och `reading`. Känd för spelaren själv. |
+| **Motståndarprofil** | Spelarens **gissning** om en annan spelares `risk` och `press`. Byggd enbart på offentligt beteende. |
+| **Motståndartyp** | Kort etikett som sammanfattar motståndarprofilen, till exempel "bluffbenägen". |
+
+Spelaren känner **aldrig** en motståndares verkliga parametrar. Den gissar, och
+gissningen kan vara fel. Det är skillnaden mellan profil och motståndarprofil.
 
 ---
 
@@ -146,10 +172,15 @@ tar chansen oftare. Parametern styr hur ofta, inte vilken strategi som är bäst
 
 ### Spelaren läser sina motståndare
 
-Här kommer språkmodellen in. Spelaren får en sammanställning av vad motståndaren
-gjort tidigare – hur ofta hen bluffat, hur ofta hen synat, hur ofta hen höjt –
-och **modellen tolkar siffrorna**. Den avgör om motståndaren ska ses som
-försiktig, djärv eller oberäknelig.
+Här kommer språkmodellen in. Arbetet är delat i två roller:
+
+**Sekreteraren** bokför vad som hänt vid bordet. Rena siffror, ingen tolkning:
+hur ofta motståndaren bluffat, hur ofta hen synat, hur ofta hen höjt.
+
+**Läsaren** är språkmodellen. Den tolkar siffrorna och sätter en
+**motståndarprofil**: en gissning om motståndarens `risk` och `press`, plus en
+kort **motståndartyp** som "bluffbenägen", "försiktig" eller "oförutsägbar", och
+ett mått på hur säker gissningen är.
 
 Två saker är viktiga här:
 
@@ -191,7 +222,7 @@ friare fram; mot en som synar ofta lönar sig bara de bud som är nästan säkra
 
 ## Vad du kan göra i webbappen
 
-- **Spelarna** – de fyra spelarna och deras personligheter.
+- **Spelarna** – de fyra spelarna och deras profiler.
 - **Enskild spelare** – skriv in två tärningar och se vad en spelare svarar.
   Det här är det enklaste sättet att se bluffandet i aktion.
 - **Fyra spelare** – fyra spelare spelar mot varandra, ett steg i taget eller
@@ -205,8 +236,8 @@ friare fram; mot en som synar ofta lönar sig bara de bud som är nästan säkra
 ## Vad du kan prova
 
 Öppna fliken *Enskild spelare* och mata in två tärningar. Du får se vad varje
-spelare svarar på samma slag. Samma tärningar, samma regler, olika
-personlighet – det är själva poängen med maskinen.
+spelare svarar på samma slag. Samma tärningar, samma regler, olika profil – det
+är själva poängen med maskinen.
 
 Prova samma slag med flera spelare och jämför. Prova också att köra en hel
 match och läsa loggen: varje bud, varje syn och vem som förlorade liv står

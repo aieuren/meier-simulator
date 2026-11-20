@@ -21,14 +21,14 @@ roller kan spela hela spel mot varandra.
 ## Vad som finns
 
 - **Webbapp med fem flikar:**
-  - **Spelarna** – de fyra spelarna och deras karaktärsbeskrivningar.
+  - **Spelarna** – de fyra spelarna och deras profilbeskrivningar.
   - **Enskild spelare** – skriv in tärningsutfallet (två tärningar) och se spelarens svar.
   - **Fyra spelare** – fyra spelare spelar mot varandra i ett fullt flöde fram till en syn.
   - **Matchserie** – kör många matcher och få statistik + ett JSONL-protokoll för analys.
   - **Analys** – ladda upp en eller flera JSONL-filer och ställ frågor mot materialet.
     Svaren kommer från en LLM och kan innehålla diagram (stapel, linje eller tabell).
-- **Fyra spelare** – Axel, Berit, Cecilia och David. Axel är basmodellen; de
-  andra är samma policy med milda personligheter ovanpå.
+- **Fyra spelare** – Axel, Berit, Cecilia och David. Axel är grundtaktiken; de
+  andra är samma policy med milda profiler ovanpå.
 - **Interaktiv spelsession** – fyra spelare spelar mot varandra i ett fullt flöde
   fram till en syn. Slumpen avgör ordningen och vem som börjar. Varje steg
   bekräftas med **Ett drag**, eller så körs flödet vidare med **Till syn**
@@ -62,13 +62,20 @@ Poängordning (högst först):
 ### Tärningens form
 
 Tärningarna är avlånga, inte kubiska. Ändytorna (1 och 2) är kvadratiska,
-långytorna (3–6) är längre. Vikten per sida följer ytans area, så en sida 3–6 är
-1,3 gånger så sannolik som en sida 1–2 (`rules.FACE_WEIGHTS`, `DIE_ELONGATION`).
+långytorna (3–6) är längre. Längden är ungefär 1,3 gånger bredden
+(`rules.DIE_ELONGATION`).
 
-Det gör att **Meier (21) och 11 blir ovanligare** än vid en kub, medan utfall
-som 65, 64 och 43 blir vanligare. Udda och jämn förblir ändå lika sannolika,
-eftersom 1 och 2 ligger på ändytorna (en udda, en jämn) och 3–6 på långytorna
-(två udda, två jämna).
+Maskinen **antar** att vikten per sida följer ytans area. Då blir en sida 3–6
+exakt 1,3 gånger så sannolik som en sida 1–2 (`rules.FACE_WEIGHTS`). Det är ett
+antagande, inte en fysikalisk sanning: väger man i stället efter rymdvinkeln
+från masscentrum — den vanligaste modellen för en slumpmässigt kastad kropp —
+blir förhållandet 1,56 för samma form. Skillnaden är liten men verklig. Se
+`docs/agent-model.md` för resonemanget.
+
+Med areamodellen blir **Meier (21) och 11 ovanligare** än vid en kub, medan
+utfall som 65, 64 och 43 blir vanligare. Udda och jämn förblir ändå lika
+sannolika, eftersom 1 och 2 ligger på ändytorna (en udda, en jämn) och 3–6 på
+långytorna (två udda, två jämna).
 
 ## Kom igång
 
@@ -121,17 +128,33 @@ python -m meier.cli summarize matches.jsonl
 
 ### Roller
 
-Personligheten bor i tre parametrar, inte i namnet. Skalan är 0–1.
+Spelarens **egen profil** bor i tre parametrar, inte i namnet. Skalan är 0–1.
+Namnen på parametrarna är korta; här är vad de står för:
 
-| Parameter | Betydelse |
-|---|---|
-| `risk` | Hur gärna spelaren synar och tar en osäker chans |
-| `press` | Hur ofta spelaren bluffar och pressar budet |
-| `reading` | Hur mycket spelaren låter motståndarnas beteende styra |
+| Parameter | Enkelt namn | Betydelse |
+|---|---|---|
+| `risk` | Riskbenägenhet | Hur gärna spelaren synar och tar en osäker chans |
+| `press` | Press | Hur ofta spelaren bluffar, höjer eller försöker tvinga andra |
+| `reading` | Läsförmåga | Hur mycket spelaren använder information om andras tidigare spel |
 
-| Nyckel | Namn | Risk | Press | Läsning | LLM | Karaktär |
+Skilj på tre saker:
+
+- **Egen profil** — spelarens egna `risk`, `press` och `reading`.
+- **Motståndarprofil** — spelarens *gissning* om en annan spelares `risk` och
+  `press`, byggd enbart på offentligt beteende (`OpponentProfile`).
+- **Motståndartyp** — kort etikett som sammanfattar motståndarprofilen,
+  exempelvis "bluffbenägen".
+
+En spelare får aldrig veta en motståndares verkliga parametrar. Läsaren
+(`OpponentReader`) gissar, och gissningen kan vara fel.
+
+`BASE` kallas **grundtaktik**: den kalla grundstrategin utan läsning.
+
+Registret (`ROSTER`) sätter värdena:
+
+| Nyckel | Namn | Risk | Press | Läsning | LLM | Profil |
 |---|---|---:|---:|---:|---|---|
-| `axel` | Axel | 0,50 | 0,50 | 0,00 | nej | Basmodellen; fast mätsticka |
+| `axel` | Axel | 0,50 | 0,50 | 0,00 | nej | Grundtaktiken; fast mätsticka |
 | `berit` | Berit | 0,25 | 0,25 | 0,15 | ja | Försiktig; bjuder nära sanningen |
 | `cecilia` | Cecilia | 0,50 | 0,45 | 0,50 | ja | Kalkylerande; läser motståndaren |
 | `david` | David | 0,65 | 0,60 | 0,35 | ja | Djärv; pressar budet högre |

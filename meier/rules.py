@@ -46,11 +46,16 @@ DIE_ELONGATION = 1.3
 
 #: Vikter per tärningssida 1..6 för en avlång tärning.
 #:
-#: Ändytorna (1 och 2) är kvadratiska med arean w². Långytorna (3-6) har arean
-#: w·L, där L är längden. Vikten är ytans area, så en sida 3-6 är
-#: DIE_ELONGATION gånger så sannolik som en sida 1-2. En kub (1,0) ger
-#: likformig fördelning. Udda och jämn förblir alltid lika sannolika, eftersom
-#: 1 och 2 ligger på ändytorna (en udda, en jämn) och 3-6 på långytorna.
+#: Modellen är "chansen följer sidans area": ändytorna (1, 2) är kvadratiska med
+#: arean w², långytorna (3-6) har arean w·L. Vikten blir då ytans area, så en
+#: sida 3-6 väger DIE_ELONGATION gånger en sida 1-2. En kub (1,0) ger likformig
+#: fördelning. Udda och jämn förblir alltid lika sannolika, eftersom 1 och 2
+#: ligger på ändytorna (en udda, en jämn) och 3-6 på långytorna.
+#:
+#: Area är ett val, inte en fysikalisk lag. Väger man i stället efter sidans
+#: rymdvinkel från masscentrum — den vanligaste modellen för en slumpmässigt
+#: kastad kropp — blir förhållandet 1,56 för samma form, och P(21) går från
+#: 3,86 % till 2,94 %. Se docs/agent-model.md avsnitt 3.0.
 FACE_WEIGHTS: tuple[float, ...] = (
     1.0, 1.0, DIE_ELONGATION, DIE_ELONGATION, DIE_ELONGATION, DIE_ELONGATION,
 )

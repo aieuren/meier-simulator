@@ -117,7 +117,7 @@ def pct(value: float) -> str:
 
 
 def describe_params(risk: float, press: float, reading: float) -> str:
-    """En spelares **egen** karaktär i klartext, med siffrorna i parentes.
+    """En spelares **egna profil** i klartext, med siffrorna i parentes.
 
     Används i spelarlistan. Detta är spelarens kända inställning, till skillnad
     från :meth:`OpponentProfile.describe`, som är en *gissning* om någon annan.

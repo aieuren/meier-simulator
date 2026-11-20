@@ -168,12 +168,24 @@ def test_om_meier_describes_the_machine_not_its_results():
     for claim in ("vinner mest", "vinner minst", "förlorade nästan varje"):
         assert claim not in flat, f"Om Meier drar en slutsats om utfall: {claim!r}"
 
-    # Procenttal får bara stå i konstruktionsbeskrivningar.
-    allowed = ("avlång", "vanlig kub", "hur mycket får läsningen väga")
+    # Procenttal får bara stå i konstruktionsbeskrivningar: tärningarnas vikter,
+    # läsningstaket och spelarnas parametrar. Utfall ur en spelad match hör inte
+    # hit. Listan är skiftlägesokänslig så att "Arean" räknas som "area".
+    allowed = (
+        "avlång",
+        "vanlig kub",
+        "hur mycket får läsningen väga",
+        "rymdvinkel",
+        "area",
+        "vikt",
+        "risk",
+        "press",
+    )
     for line in text.splitlines():
         if "%" not in line:
             continue
-        ok = line.strip().startswith("|") or any(ctx in line for ctx in allowed)
+        low = line.lower()
+        ok = line.strip().startswith("|") or any(ctx in low for ctx in allowed)
         assert ok, f"procenttal utan konstruktionssammanhang: {line!r}"
 
 

@@ -1,6 +1,6 @@
 """Grundklass för LLM-baserade agenter.
 
-En agent har en roll (personlighet/strategi) och en systemprompt. Den får ett
+En agent har en roll (profil/strategi) och en systemprompt. Den får ett
 sammanhang och ska svara med strukturerad data. Alla agenter är oberoende: de
 delar ingen intern state och kommunicerar bara via de meddelanden de får.
 """

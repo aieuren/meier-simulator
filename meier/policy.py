@@ -137,8 +137,8 @@ class AgentParams:
                 raise ValueError(f"{name} måste vara mellan 0 och 1, fick {v}")
 
 
-#: De fyra spelarna och deras personligheter bor i ``meier/agents/roster.py``.
-#: Parametrarna (risk/press/reading) är den enda platsen personligheten får bo —
+#: De fyra spelarna och deras egna profiler bor i ``meier/agents/roster.py``.
+#: Parametrarna (risk/press/reading) är den enda platsen profilen får bo —
 #: inte i ett namn. Se registret för värdena och motiveringen.
 
 

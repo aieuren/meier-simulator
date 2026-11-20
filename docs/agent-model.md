@@ -8,7 +8,7 @@ fas och ingår inte här.
 ## BASE i korthet
 
 BASE är spelets fasta måttstock — en motståndare som alltid spelar likadant:
-lugn, nykter och utan minne. Hon har ingen personlighet, läser ingen enskild
+lugn, nykter och utan minne. Hon har ingen egen profil, läser ingen enskild
 spelare och ändrar sig aldrig. Hon har bara en enda fast gissning om hur ofta
 folk i allmänhet bluffar.
 
@@ -36,7 +36,7 @@ resultat, och därför kan de andra agenterna jämföras mot henne och veta att
 skillnaden beror på dem.
 
 Hon är inte bäst, och det är meningen. Hon är en fast mätsticka som de andra
-slår genom att lägga till sådant hon inte har: personlighet, läsning av
+slår genom att lägga till sådant hon inte har: en egen profil, läsning av
 motståndare och anpassning.
 
 ---
@@ -131,6 +131,41 @@ använder förväntade liv, vilket är monotont relaterat till överlevnad.
 
 Tärningarna är avlånga. `rules.FACE_WEIGHTS` ger vikten per sida 1–6:
 långsidorna 3–6 har vikten `DIE_ELONGATION` = 1,3 och ändsidorna 1–2 vikten 1,0.
+
+### 3.0 Varför arean, och vad den kostar
+
+`DIE_ELONGATION` är tärningens **längd delad med dess bredd**. Vikterna sätts
+sedan som sidans area: ändytan har arean `w·w`, långytan `w·L`. Därför blir
+viktförhållandet exakt `L/w` = 1,3. Modellen är alltså internt konsistent — den
+gör vad den säger.
+
+Men area är ett **val**, inte en fysikalisk lag. För en kropp som kastas
+slumpmässigt och landar på en sida är den vanligaste modellen att sidans chans
+följer dess **rymdvinkel** från masscentrum. Sidorna ligger på olika avstånd
+från centrum, och en yta längre bort täcker en mindre rymdvinkel. För `L/w` =
+1,3 ger rymdvinkelmodellen ett viktförhållande på **1,562**, inte 1,300.
+
+Räknat på de två modellerna:
+
+| Modell | Vikt 3–6 / 1–2 | P(21 Meier) |
+|---|---:|---:|
+| Kub | 1,000 | 5,56 % |
+| Area (koden) | 1,300 | 3,86 % |
+| Rymdvinkel, `L/w` = 1,3 | 1,562 | 2,94 % |
+
+Skillnaden mellan area och rymdvinkel flyttar P(21) med ungefär en procentenhet.
+Den är liten jämfört med steget från en kub, men den är större än
+avrundningsfel.
+
+Om man i stället vill att koden ska betyda "viktförhållande 1,3" och inte
+"`L/w` = 1,3", är det ofarligt: då är 1,3 rätt tal, och formen är i stället
+`L/w` ≈ 1,169. De två tolkningarna kan inte skiljas utan att mäta en riktig
+tärning.
+
+**Vad vi inte vet:** vilken modell som gäller för Meiers faktiska tärningar.
+Area är vald för att den är enkel att förklara och kontrollera. Byter man modell
+ska `FACE_WEIGHTS` ändras på ett ställe — `meier/rules.py` — och testerna i
+`tests/test_session.py` säger till vad som går sönder.
 
 Sannolikheten för ett utfall `v` (ett av de 21 talen) är
 
@@ -634,10 +669,10 @@ explicita parametrar, aldrig av namnet.
 den fasta mätstickan — de andra jämförs mot honom, och han får förlora ofta. Han
 är avsiktligt "good enough", inte optimerad.
 
-De tre LLM-spelarna är samma policykärna med **milda** personligheter ovanpå.
+De tre LLM-spelarna är samma policykärna med **milda** profiler ovanpå.
 Ingen av dem är så extrem som de gamla rollerna var. De historiska loggarna
 visade att en extremt pressande profil (`press` ≈ 0,9) förlorade nästan varje
-match, eftersom hög press bluffar in i synar. Personligheterna grundas i
+match, eftersom hög press bluffar in i synar. Profilerna grundas i
 logganalysen (avsnitt 8): vinnaren skickar vidare oftare och synar sällan men
 träffsäkert — därför ligger `press` lågt och `reading` högt hos de som ska läsa
 spelet.
