@@ -25,41 +25,24 @@ fråga. Vad den sedan visar är en senare fråga.
 
 ---
 
-## Spelet, på en minut
+## Spelet
 
 Två tärningar i en bägare med lock. Tärningarna läses som ett tal med den
-högsta först **först**: 2 och 5 blir **52**.
+högsta först: 2 och 5 blir **52**. **21 kallas Meier och är högst.** Sedan
+faller ordningen, och **par slår singlar** – 44 slår alltså 65.
 
-**21 kallas Meier och är högst.** Sedan faller ordningen:
+En **runda** går från första budet till dess att någon **synar**.
+En **match** är många rundor i följd. Varje spelare har tre liv, och den som
+mist sina liv är ute. Sist kvar vinner matchen.
 
-> 21, 11, 22, 33, 44, 55, 66, 65, 64, 63, 62, 61, 54, 53, 52, 51, 43, 42, 41, 32, 31
-
-Lägg märke till att 11 är näst bäst och 31 sämst. **Par slår singlar** – 44 slår
-alltså 65. Det är med flit förvirrande, och det är hela charmen.
-
-En **runda** är från första budet till dess att någon **synar**. Så här går
-den, i korthet:
-
-1. Du skakar bägaren, tittar **i smyg**, och säger ett resultat: sant, högre
-   eller lägre.
-2. Nästa spelare **slår** (höjer blint), **synar** (lyfter locket) eller
-   **skickar vidare** (samma bud, samma tärningar, men du tar över ansvaret).
-   Den som skickar vidare tittar inte – att lyfta locket är att syna.
-3. **Meier kostar dubbelt** – både som bud och som visat resultat vid syn.
-
-En **match** är många rundor i följd. Varje spelare har tre liv. När man mist
-sina tre liv är man ute. Sist kvar vinner matchen.
-
-Den fullständiga regeltexten, med undantagen om Meier-varvet och vem som
-förlorar liv vid syn, står i [`docs/regler/meier-regler.md`](regler/meier-regler.md).
-Den filen är den kanoniska versionen. Avviker den här sammanfattningen från den
-har den här fel.
+Den fullständiga regeltexten står i
+[`docs/regler/meier-regler.md`](regler/meier-regler.md). Den filen är den
+kanoniska versionen.
 
 ### Tärningarna är inte kubiska
 
-Det här är en finurlighet som många inte känner till: tärningarna är
-**avlånga**. Ändytorna (1 och 2) är kvadratiska, långytorna (3–6) är längre.
-Längden är ungefär 1,3 gånger bredden.
+Tärningarna är **avlånga**. Ändytorna (1 och 2) är kvadratiska, långytorna
+(3–6) är längre. Längden är ungefär 1,3 gånger bredden.
 
 **Maskinen antar** att chansen för en sida följer sidans area. Då blir 3–6
 exakt 1,3 gånger så sannolika som 1–2, eftersom långytan har arean bredd gånger
@@ -94,8 +77,8 @@ Spelarens **egen profil** sitter i tre parametrar, inte i namnet. Varje paramete
 går från 0 till 1.
 
 - **`risk`** – riskbenägenhet: hur gärna spelaren synar och tar en chans
-- **`press`** – press: hur ofta spelaren bluffar, och hur högt den lägger det
-  blinda budet
+- **`press`** – press: hur ofta spelaren bluffar, och hur högt hen bjuder när
+  hen slår
 - **`reading`** – läsförmåga: hur mycket spelaren låter information om andras
   tidigare spel styra
 
@@ -107,12 +90,11 @@ går från 0 till 1.
 | **David** | 0,65 | 0,60 | 0,35 | ja | Djärv. Pressar budet högre. |
 
 **Axel är referensen.** Han har ingen språkmodell alls, spelar alltid likadant
-och ändrar sig aldrig. **Han deltar i matcherna – jämförelsenivån sitter alltså
-i spelet, inte på en hylla.** De andras resultat mäts mot hans. Han är byggd för
-att vara "tillräckligt bra", inte optimerad. Hans uppsättning kallas
+och ändrar sig aldrig. De andras resultat mäts mot hans. Han är byggd för att
+vara "tillräckligt bra", inte optimerad. Hans uppsättning kallas
 **grundtaktik**.
 
-Tre begrepp som är lätta att blanda ihop:
+Tre begrepp:
 
 | Begrepp | Vad det är |
 |---|---|
@@ -127,16 +109,13 @@ gissningen kan vara fel. Det är skillnaden mellan profil och motståndarprofil.
 
 ## Hur en spelare tänker
 
-Det här är den intressanta delen.
-
 ### Spelaren ser inte allt
 
 En spelare vet bara tre saker: sina egna tärningar, vad som sagts högt, och vad
 som hänt tidigare i matchen. Den vet **inte** vad motståndaren har i bägaren.
 Allt den tror om andra är en gissning byggd på offentligt beteende.
 
-Det låter självklart, men det är hela spelet. Om spelaren fick se allt skulle
-det inte finnas något att bluffa om.
+Om spelaren fick se allt skulle det inte finnas något att bluffa om.
 
 ### Spelaren väger risk mot vinst
 
@@ -151,13 +130,12 @@ Att bjuda högre är en bluff. Blir du synad **förlorar du ett liv** (två om b
 dig alltså ingenting.
 
 Så vad köper en bluff? Att motståndaren får ett **svårare beslut**. Hen måste
-antingen syna ett bud hen misstror, eller slå blint till något ännu högre – och
-då ta över risken själv. En bluff är inte "värd mer". Den flyttar risken över
+antingen syna ett bud hen misstror, eller slå om bägaren till något ännu
+högre – och då ta över risken själv. En bluff är inte "värd mer". Den flyttar risken över
 till motståndaren, och den lönar sig bara när motståndaren hellre avstår från
 att syna än tar den chansen.
 
-Här är det lätt att tro att det finns en enda regel, men maskinen fattar **två
-olika slags höjningar**, och de fungerar olika.
+Maskinen fattar **två olika slags höjningar**, och de fungerar olika.
 
 **När spelaren har sett sina tärningar** och bluffar över det hen såg, väljer
 hen den **minsta möjliga höjningen**. Ett högre bud synas nämligen oftare: en
@@ -166,22 +144,20 @@ då oftare är lägre än budet. Att höja längre ökar alltså bara risken att
 dit, utan att ge något tillbaka. Här höjs det därför bara ett enda steg, aldrig
 flera.
 
-**När spelaren slår blint** vet hen inte alls vad tärningarna visar. Då finns
+**När spelaren slår** skakar hen om bägaren och tittar inte. Då finns
 ingen "sann" nivå att lägga sig strax över, och då är kalkylen en annan. Här
 bestämmer `press` hur högt budet läggs: låg press lägger sig nära minimum, hög
 press tar ett språng uppåt för att sätta motståndaren i ett dyrare läge. Det är
 ett medvetet val i modellen, inte en sanning om spelet – ett språng är farligare
 om det blir synat, men svårare att värja sig mot.
 
-Så: **minsta höjning gäller bluffen över sedda tärningar.** Den blinda
-höjningen styrs av `press`. Det är två skilda beslut i koden
+Så: **minsta höjning gäller bluffen över sedda tärningar.** Höjningen vid slag
+styrs av `press`. Det är två skilda beslut i koden
 (`decide_bid` respektive `decide_raise`).
 
 ### Spelaren bluffar med flit
 
-En vanlig missuppfattning är att en AI-spelare "ljuger" när den råkar säga fel.
-Så är det inte här. Bluffen är ett **aktivt val**, och hur ofta spelaren
-bluffar styrs av `press`.
+Bluffen är ett **aktivt val**, och hur ofta spelaren bluffar styrs av `press`.
 
 En spelare med låg `press` bjuder oftast sanningen. En spelare med hög `press`
 tar chansen oftare. Parametern styr hur ofta, inte vilken strategi som är bäst.
@@ -209,16 +185,13 @@ aldrig kan spela sämre för att modellen skriver en dålig mening.
 
 ### Spelaren litar inte fullt på sin egen läsförmåga
 
-Det här är den nyaste delen, och den är värd att förklara.
-
 En språkmodell är väldigt säker på sin sak, även när den knappt har något att
 gå på. Fråga den efter en enda syn och den svarar "jag är helt säker". Det är
 en risk: en spelare som agerar på en tunn gissning som vore den ett faktum
 låter brus styra spelet.
 
 Därför har läsförmågan ett **tak, och taket sätts av bordet — inte av modellen
-och inte av den enskilda motståndaren**. Här är det lätt att blanda ihop två
-saker:
+och inte av den enskilda motståndaren**. Två saker skiljer sig:
 
 - **Motståndarprofilen** gäller **en** motståndare i taget. Den byggs bara på
   vad just den spelaren gjort.
@@ -253,7 +226,6 @@ friare fram; mot en som synar ofta lönar sig bara de bud som är nästan säkra
 
 - **Spelarna** – de fyra spelarna och deras profiler.
 - **Enskild spelare** – skriv in två tärningar och se vad en spelare svarar.
-  Det här är det enklaste sättet att se bluffandet i aktion.
 - **Fyra spelare** – fyra spelare spelar mot varandra, ett steg i taget eller
   hela matchen. Loggen visar varje bud, varje syn och vem som förlorade liv.
 - **Matchserie** – kör många matcher och få statistik.
@@ -282,9 +254,7 @@ spelet.
 
 En viktig varning: **enstaka matcher säger nästan ingenting.** Meier har hög
 slump i sig, och fyra spelare med liv som tar slut gör att en enskild match kan
-vända på en enda syn. Det är mönstret över många matcher som är intressant. Kör
-hellre flera hundra än tio, och titta på hela bilden i stället för att jaga
-förklaringar till en enskild förlust.
+vända på en enda syn. Kör hellre flera hundra matcher än tio.
 
 ---
 
