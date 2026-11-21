@@ -1,9 +1,7 @@
 """LLM-klient för Meier-agenterna.
 
-Klienten använder ett riktigt Anthropic-konto (Claude) via ``ANTHROPIC_API_KEY``
-eller Google Gemini via ``GEMINI_API_KEY``. Båda talar OpenAI-liknande
-``/v1/chat/completions``, men Anthropic används via sin egen SDK när nyckeln
-finns.
+Klienten använder Google Gemini via ``GEMINI_API_KEY``, som talar
+OpenAI-liknande ``/v1/chat/completions`` på ``/v1beta/openai``.
 
 Det finns **ingen** återfallsväg till OpenHands agent-server. Den proxyn är en
 shim som startar en hel OpenHands-konversation per anrop, vilket fyllde
@@ -146,7 +144,7 @@ def _is_transient_exc(exc: Exception) -> bool:
 class LLMConfig:
     """Konfiguration för en LLM-anslutning."""
 
-    provider: str  # "anthropic" eller "gemini"
+    provider: str  # alltid "gemini"
     model: str
     api_key: str = ""
     base_url: str = ""
@@ -168,11 +166,10 @@ class LLMConfig:
     def from_env(cls) -> "LLMConfig":
         """Välj anslutning utifrån miljövariabler.
 
-        Prioritet:
-        1. Anthropic (Claude-kontot) via ``ANTHROPIC_API_KEY``.
-        2. Google Gemini via ``GEMINI_API_KEY`` eller ``GOOGLE_API_KEY``.
+        Bara Google Gemini stöds. Nyckeln läses från ``GEMINI_API_KEY`` eller
+        ``GOOGLE_API_KEY``, annars från ``$MEIER_SECRETS_DIR/gemini.key``.
 
-        Saknas båda nycklarna höjs ett fel. Det finns ingen återfallsväg till
+        Saknas nyckeln höjs ett fel. Det finns ingen återfallsväg till
         OpenHands agent-server, eftersom varje anrop där startar en egen
         konversation.
         """
@@ -183,25 +180,12 @@ class LLMConfig:
         cfg.timeout = _env_float("MEIER_TIMEOUT", cfg.timeout)
         cfg.max_retries = _env_int("MEIER_RETRIES", cfg.max_retries)
         # Håll anropen under leverantörens kvot. MEIER_MAX_RPM=0 stänger av.
-        if cfg.provider == "gemini":
-            cfg.max_rpm = _env_float("MEIER_MAX_RPM", cfg.max_rpm or 15.0)
-        else:
-            cfg.max_rpm = _env_float("MEIER_MAX_RPM", cfg.max_rpm)
+        cfg.max_rpm = _env_float("MEIER_MAX_RPM", cfg.max_rpm or 15.0)
         return cfg
 
     @classmethod
     def _from_provider_env(cls) -> "LLMConfig":
-        anthropic_key = _read_secret("anthropic.key", ("ANTHROPIC_API_KEY",))
-        if anthropic_key:
-            return cls(
-                provider="anthropic",
-                model=os.environ.get("MEIER_MODEL", "claude-sonnet-4-5"),
-                api_key=anthropic_key,
-                base_url=os.environ.get("ANTHROPIC_BASE_URL", ""),
-            )
-
-        # Gemini talar OpenAI-format på /v1beta/openai, så samma kodväg som
-        # Anthropic använder via HTTP.
+        # Gemini talar OpenAI-format på /v1beta/openai.
         gemini_key = _read_secret("gemini.key", ("GEMINI_API_KEY", "GOOGLE_API_KEY"))
         if gemini_key:
             return cls(
@@ -215,11 +199,10 @@ class LLMConfig:
             )
 
         raise LLMError(
-            "Ingen LLM-nyckel hittades. Sätt ANTHROPIC_API_KEY eller "
-            "GEMINI_API_KEY, eller lägg nyckeln i "
+            "Ingen LLM-nyckel hittades. Sätt GEMINI_API_KEY, eller lägg nyckeln i "
             f"{os.environ.get('MEIER_SECRETS_DIR', '/workspace/meier-secrets')}"
-            "/{anthropic,gemini}.key. Anrop mot OpenHands agent-server används "
-            "medvetet inte: varje anrop där startar en egen konversation."
+            "/gemini.key. Anrop mot OpenHands agent-server används medvetet inte: "
+            "varje anrop där startar en egen konversation."
         )
 
 
@@ -255,9 +238,7 @@ class LLMClient:
 
     def complete(self, system: str, user: str, *, json_mode: bool = False) -> str:
         return self._with_retries(
-            lambda: self._complete_anthropic(system, user)
-            if self.config.provider == "anthropic"
-            else self._complete_http(system, user, json_mode=json_mode)
+            lambda: self._complete_http(system, user, json_mode=json_mode)
         )
 
     def _with_retries(self, call):
@@ -288,42 +269,6 @@ class LLMClient:
                     delay = max(delay, self.config.rate_limit_backoff * (attempt + 1))
                 time.sleep(delay)
         raise LLMError(f"Kunde inte nå LLM efter {attempts} försök: {last}") from last
-
-    # -- Anthropic (Claude-kontot) ------------------------------------------
-    def _complete_anthropic(self, system: str, user: str) -> str:
-        try:
-            import anthropic
-        except ImportError as exc:  # pragma: no cover
-            raise LLMError("anthropic-paketet saknas: pip install anthropic") from exc
-
-        kwargs: dict[str, Any] = {"api_key": self.config.api_key}
-        if self.config.base_url:
-            kwargs["base_url"] = self.config.base_url
-
-        client = anthropic.Anthropic(**kwargs)
-        try:
-            resp = client.messages.create(
-                model=self.config.model,
-                max_tokens=self.config.max_tokens,
-                temperature=self.config.temperature,
-                system=system,
-                messages=[{"role": "user", "content": user}],
-            )
-        except Exception as exc:  # pragma: no cover - nätverksberoende
-            if _is_transient_exc(exc):
-                raise _Transient(f"Anthropic-anropet avbröts tillfälligt: {exc}") from exc
-            raise LLMError(f"Anthropic-anrop misslyckades: {exc}") from exc
-
-        parts = [block.text for block in resp.content if getattr(block, "type", "") == "text"]
-        usage = getattr(resp, "usage", None)
-        if usage is not None:
-            self._record_usage(
-                {
-                    "prompt_tokens": getattr(usage, "input_tokens", 0) or 0,
-                    "completion_tokens": getattr(usage, "output_tokens", 0) or 0,
-                }
-            )
-        return "".join(parts).strip()
 
     # -- Gemini via OpenAI-kompatibelt HTTP --------------------------------
     def _complete_http(self, system: str, user: str, *, json_mode: bool) -> str:

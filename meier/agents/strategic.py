@@ -238,7 +238,7 @@ class StrategicAgent(Agent):
             shown=shown,
             bid=bid,
             truth=bid == shown,
-            line=self._say(context, bid),
+            line=self._say(bid),
             reasoning=reason,
             role=self.role.key,
             proposed=bid,
@@ -310,7 +310,7 @@ class StrategicAgent(Agent):
             shown=shown,
             bid=bid,
             truth=bid == shown,
-            line=self._say(context, bid),
+            line=self._say(bid),
             reasoning=reason,
             role=self.role.key,
             proposed=bid,
@@ -431,48 +431,22 @@ class StrategicAgent(Agent):
         return ActionDecision(
             action=action,
             bid=None,
-            line=self._say_action(context, action, bid),
+            line=self._say_action(action, bid),
             reasoning=reason,
             role=self.role.key,
         )
 
-    def _say_action(self, context: str, action: str, bid: int) -> str:
-        """Repliken som hör till svaret på ett bud — inte till ett bud."""
+    def _say_action(self, action: str, bid: int) -> str:
+        """Repliken som hör till svaret på ett bud — inte till ett bud.
+
+        Byggs ur draget, av samma skäl som :meth:`_say`.
+        """
         fallbacks = {
             "syna": f"Jag synar {rules.name(bid)}.",
             "skicka": f"Jag skickar vidare {rules.name(bid)}.",
             "slå": f"Jag slår och bjuder högre än {rules.name(bid)}.",
         }
-        fallback = fallbacks.get(action, f"Jag säger {rules.name(bid)}.")
-        if self.llm is None:
-            return fallback
-        # Vid slag är budet ännu inte satt. Repliken får då inte lova en siffra,
-        # för nästa steg kan välja en annan.
-        no_number = (
-            " Nämn inget siffrigt bud, för du har inte bestämt det än."
-            if action == "slå"
-            else ""
-        )
-        prompt = (
-            f"{context}\n\n"
-            f"Ditt drag är redan bestämt: du väljer {action}.\n"
-            "Formulera bara en kort, naturlig replik på svenska (högst en mening) "
-            f"som du säger högt. Den får inte motsäga draget.{no_number}\n"
-            'Svara med JSON: {"line": "<replik>"}'
-        )
-        return self._narrate(prompt, fallback)
-
-    def _narrate(self, prompt: str, fallback: str) -> str:
-        """Ett LLM-anrop för repliken, med en omgång om svaret inte gick att läsa."""
-        for _ in range(2):
-            try:
-                raw = self.llm.complete(self.system_prompt(), prompt, json_mode=True)
-                line = str(parse_json_object(raw).get("line") or "").strip()
-                if line:
-                    return line
-            except Exception:  # noqa: BLE001 - repliken är kosmetisk, aldrig kritisk
-                continue
-        return fallback
+        return fallbacks.get(action, f"Jag säger {rules.name(bid)}.")
 
     @staticmethod
     def _parse_response(data: dict, choices: list[str]) -> tuple[str | None, str]:
@@ -513,20 +487,13 @@ class StrategicAgent(Agent):
         )
 
     # -- Repliken ----------------------------------------------------------
-    def _say(self, context: str, bid: int) -> str:
-        """Formulera repliken som hör till ett bud.
+    @staticmethod
+    def _say(bid: int) -> str:
+        """Repliken som hör till ett bud.
 
-        Repliken är kosmetisk. Går den inte att få fram används en mekanisk rad,
-        för en trasig modell får aldrig fälla en match.
+        Den byggs ur draget, inte ur ett eget modellanrop. Repliken är kosmetisk
+        och styrs inte av spelarens parametrar, så ett extra anrop per drag vore
+        bara kostnad utan inverkan på spelet. Det som styr hur spelaren *spelar*
+        är motiveringen och budet, och de kommer från beslutsanropet.
         """
-        fallback = f"Jag säger {rules.name(bid)}."
-        if self.llm is None:
-            return fallback
-        prompt = (
-            f"{context}\n\n"
-            f"Draget är redan bestämt: du säger {rules.name(bid)}.\n"
-            "Formulera bara en kort, naturlig replik på svenska (högst en mening) "
-            "som du säger högt. Den får inte motsäga draget.\n"
-            'Svara med JSON: {"line": "<replik>"}'
-        )
-        return self._narrate(prompt, fallback)
+        return f"Jag säger {rules.name(bid)}."

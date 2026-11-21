@@ -147,6 +147,41 @@ def test_forced_raise_over_meier_is_not_a_choice():
         agent.announce_forced((3, 3), previous_bid=rules.MEIER)
 
 
+# -- Ett anrop per beslut --------------------------------------------------
+
+
+def test_each_decision_costs_exactly_one_llm_call():
+    """Repliken får inte kosta ett eget modellanrop.
+
+    Den formuleras ur draget i stället. Ett extra anrop per drag dubblade
+    kostnaden och sänkte antalet matcher per kvot, utan att påverka spelet.
+    """
+    for label, reply, act in (
+        ("bud", '{"bid": 62, "reasoning": "x"}',
+         lambda a: a.announce((1, 1), previous_bid=61)),
+        ("svar", '{"action": "syna", "reasoning": "x"}', lambda a: a.decide(61)),
+        ("blint", '{"bid": 62, "reasoning": "x"}',
+         lambda a: a.announce_blind((1, 1), previous_bid=61)),
+    ):
+        llm = ScriptedLLM([reply])
+        agent = StrategicAgent(
+            Role(key="test", name="Test", description="", style=""),
+            AgentParams(),
+            llm=llm,
+        )
+        act(agent)
+        assert llm.calls == 1, f"{label} kostade {llm.calls} anrop, inte 1"
+
+
+def test_line_does_not_need_an_llm():
+    """Repliken ska gå att bygga utan modell, eftersom den inte är ett beslut."""
+    agent = StrategicAgent(
+        Role(key="test", name="Test", description="", style=""), AgentParams()
+    )
+    assert agent._say(62) == "Jag säger 62."
+    assert agent._say_action("syna", 61) == "Jag synar 61."
+
+
 # -- Utan LLM: deterministisk referens ------------------------------------
 
 

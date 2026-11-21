@@ -387,22 +387,18 @@ curl http://localhost:12000/api/matches/status
 
 ## LLM-konfiguration
 
-Agenterna använder ditt **Anthropic-konto (Claude)** eller **Google Gemini**.
-Sätt nyckeln och kör:
+Agenterna använder **Google Gemini**. Sätt nyckeln och kör:
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...      # Claude (föredras om satt)
-# eller
 export GEMINI_API_KEY=...                # Google Gemini
-export MEIER_MODEL=claude-sonnet-4-5     # valfritt
+export MEIER_MODEL=gemini-3.1-flash-lite # valfritt
 python -m uvicorn meier.web.app:app --port 12000
 ```
 
-Nyckeln kan också ligga i en fil: `$MEIER_SECRETS_DIR/anthropic.key` eller
-`$MEIER_SECRETS_DIR/gemini.key` (standard `MEIER_SECRETS_DIR` är
-`/workspace/meier-secrets`). Det är så `run.sh` gör.
+Nyckeln kan också ligga i en fil: `$MEIER_SECRETS_DIR/gemini.key` (standard
+`MEIER_SECRETS_DIR` är `/workspace/meier-secrets`). Det är så `run.sh` gör.
 
-Saknas båda nycklarna avbryts anropet med ett tydligt fel. Det finns **ingen**
+Saknas nyckeln avbryts anropet med ett tydligt fel. Det finns **ingen**
 återfallsväg till OpenHands agent-servern: varje anrop där startar en egen
 konversation, vilket fyllde konversationskatalogen under en match.
 
@@ -410,13 +406,11 @@ Miljövariabler:
 
 | Variabel | Betydelse |
 |---|---|
-| `ANTHROPIC_API_KEY` | Claude-nyckel (föredras om satt) |
-| `ANTHROPIC_BASE_URL` | Egen Anthropic-bas-URL (valfritt) |
 | `GEMINI_API_KEY` / `GOOGLE_API_KEY` | Gemini-nyckel |
 | `MEIER_MODEL` | Modellnamn |
-| `MEIER_BASE_URL` | Egen bas-URL för Gemini/OpenAI-kompatibelt HTTP |
-| `MEIER_SECRETS_DIR` | Katalog med nyckelfilerna `anthropic.key` / `gemini.key` |
-| `MEIER_MAX_RPM` | Tak för anrop/minut (0 = av; standard 15 för Gemini) |
+| `MEIER_BASE_URL` | Egen bas-URL för det OpenAI-kompatibla HTTP-anropet |
+| `MEIER_SECRETS_DIR` | Katalog med nyckelfilen `gemini.key` |
+| `MEIER_MAX_RPM` | Tak för anrop/minut (0 = av; standard 15) |
 
 > **Obs (Agent Canvas):** startas miljön om försvinner de globalt installerade
 > paketen – kör `pip install -r requirements.txt` igen.
@@ -444,7 +438,7 @@ dubbelt) och agentens logik med en fejkad LLM – inga riktiga modellanrop behö
 ```
 meier/
   rules.py            Regler: poängordning, jämförelse, syn, slumpat slag
-  llm.py              LLM-klient (Anthropic/Claude + Google Gemini)
+  llm.py              LLM-klient (Google Gemini)
   game.py             Spelmotor för flera oberoende agenter
   session.py          Interaktiv session: fullt flöde och logg
   match.py            Batchkörning av många matcher + statistik (JSONL)

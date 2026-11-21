@@ -643,8 +643,9 @@ konkret exempel på varför frysning + färsk kalibrering är ett krav.
 - **Saknad motståndardata:** med för få observationer faller den läsande agenten
   tillbaka på `CALL_PRIOR`. `reading` skalar hur snabbt profilen får genomslag.
 - **Tom historik (första rundan):** alla agenter spelar som BASE tills data finns.
-- **LLM otillgänglig:** policyn kör ändå; endast replik/`reasoning` saknas. Draget
-  är oförändrat, eftersom policyn äger beslutet.
+- **LLM otillgänglig:** reservpolicyn tar över och väljer bland samma lagliga
+  drag. Repliken blir mekanisk ("Jag säger 62."), och `corrected` sätts så att
+  loggen visar att modellen inte svarade.
 
 ### 8.1 Fall: livelock när ingen synade
 
@@ -756,7 +757,7 @@ publicerad text; Suspicion-Agent = Guo et al., 2023.)*
 | Fas | Innehåll | LLM behövs? |
 |---|---|---|
 | **1** | Exakt sannolikhetsmodell, BASE, parametrar + presets, läckagefri motståndarmodell | Nej |
-| 2 | LLM-lager: persona, replik, `reasoning`, A1–A4 i prompten | Ja |
+| 2 | LLM-lager: persona, `reasoning`, A1–A4 i prompten; LLM:en väljer draget | Ja |
 | 3 | Batchkörning + statistik per parameter (fixerade seeds, roterande start) | Nej |
 | 4 | Web-UI för de nya profilerna | Nej |
 | 5 | Kalibrering av presets och `q` mot färsk serie | Nej |

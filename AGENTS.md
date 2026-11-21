@@ -19,10 +19,10 @@ lower bid). Multiple agents with distinct roles can also play full games.
   weighting by solid angle from the centre of mass gives 1.56 for the same
   shape. See `docs/agent-model.md` §3.0. Odd and even stay equally likely
   either way, since 1/2 sit on the ends (one odd, one even).
-- `meier/llm.py` – LLM client. Provider priority: Anthropic (Claude) via
-  `ANTHROPIC_API_KEY`, then Google Gemini via `GEMINI_API_KEY`/`GOOGLE_API_KEY`
-  (or the key files under `MEIER_SECRETS_DIR`). Both are real endpoints; there
-  is **no** fallback to the OpenHands agent-server. Gemini uses the
+- `meier/llm.py` – LLM client, **Gemini only**. Key via
+  `GEMINI_API_KEY`/`GOOGLE_API_KEY` (or `$MEIER_SECRETS_DIR/gemini.key`).
+  Anthropic/Claude support was removed 2026-11-08 at the user's request.
+  There is **no** fallback to the OpenHands agent-server. Gemini uses the
   OpenAI-compatible endpoint
   `https://generativelanguage.googleapis.com/v1beta/openai`.
   `LLMClient.last_usage` holds the token count from the last call. Without a
@@ -203,8 +203,8 @@ Earlier the app could fall back to the local agent-server proxy
 (`http://127.0.0.1:60000/v1/chat/completions`, model `openhands_<profile>`).
 **That path is deleted.** Every request there started a whole OpenHands
 conversation, so a match filled `/var/openhands/conversations` with hundreds of
-conversations. `LLMConfig._from_provider_env()` now accepts only `anthropic` or
-`gemini` and raises `LLMError` when no key exists.
+conversations. `LLMConfig._from_provider_env()` now accepts only `gemini` and
+raises `LLMError` when no key exists.
 
 Consequences to keep in mind:
 
@@ -281,9 +281,8 @@ the `openhands` provider, whose base URL is the local agent-server shim — and
 every call became a conversation.
 
 Fix (two steps): `_read_secret()` now reads the persistent key file
-(`MEIER_SECRETS_DIR`, default `/workspace/meier-secrets`) for both
-`gemini.key` and `anthropic.key`, so provider selection is the same no matter
-how the process starts. Then the `openhands` fallback was **deleted
+(`MEIER_SECRETS_DIR`, default `/workspace/meier-secrets`) for
+`gemini.key`, so key selection is the same no matter how the process starts. Then the `openhands` fallback was **deleted
 entirely**: without a key the client raises `LLMError` instead of starting a
 conversation. Verified: a decision made with no key in the environment creates
 **zero** new conversations, and the app reports `provider: gemini`.
@@ -426,12 +425,11 @@ Three rules that keep the companion doc honest:
 
 ## Environment notes
 
-- In the Agent Canvas runtime the app talks straight to Gemini (or Anthropic),
+- In the Agent Canvas runtime the app talks straight to Gemini,
   **not** to the local agent-server. The old proxy path
   (`http://127.0.0.1:60000`, model `openhands_Default`, header
   `X-Session-API-Key`) is removed: every request there started an OpenHands
-  conversation. Claude models are not reachable through the managed proxy key;
-  set `ANTHROPIC_API_KEY` to use a real Claude account.
+  conversation.
 - **Gemini free tier** (verified 2026-11-15): the free tier allows ~10k
   requests/day, which covers ~94 matches (a match is ~106 calls / ~80k tokens).
   Model `gemini-2.5-flash` is closed to new users; use `gemini-3.1-flash-lite`
@@ -764,9 +762,9 @@ The roster was rebuilt. The old roles (`arling`/`trygg`/`kalkyl`/`rackar`) are
   every reading player the same tracker (one shared view of the table).
 - **Monkeypatch seam:** `play_match` builds agents through `match._new_agents`
   (LLM on) or `match._new_agents_no_llm` (LLM off). Tests patch `_new_agents`.
-- **Provider:** Anthropic Claude if `ANTHROPIC_API_KEY` is set, otherwise Gemini
-  via `GEMINI_API_KEY`. In this sandbox only the Gemini key is present, so the
-  fallback is what runs. `LLMConfig.from_env()` reports which is active.
+- **Provider:** Gemini only, via `GEMINI_API_KEY` or
+  `$MEIER_SECRETS_DIR/gemini.key`. `LLMConfig.from_env()` raises `LLMError`
+  without a key.
 - **The Gemini proxy hits a 429 quota.** When it does, `LLMError` surfaces after
   three retries and a full LLM round can hang for many minutes. Do not use a live
   session to verify model wiring while the quota is exhausted — a session-level

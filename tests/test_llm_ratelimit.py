@@ -41,7 +41,7 @@ def test_from_env_raises_without_any_key(tmp_path, monkeypatch):
     from meier.llm import LLMError
 
     monkeypatch.setenv("MEIER_SECRETS_DIR", str(tmp_path))
-    for name in ("GEMINI_API_KEY", "GOOGLE_API_KEY", "ANTHROPIC_API_KEY"):
+    for name in ("GEMINI_API_KEY", "GOOGLE_API_KEY"):
         monkeypatch.delenv(name, raising=False)
     with pytest.raises(LLMError) as exc:
         LLMConfig.from_env()
@@ -64,7 +64,7 @@ def test_from_env_reads_gemini_key_from_file(tmp_path, monkeypatch):
     """Utan nyckel i miljön ska nyckelfilen ge gemini-providern."""
     (tmp_path / "gemini.key").write_text("filnyckel")
     monkeypatch.setenv("MEIER_SECRETS_DIR", str(tmp_path))
-    for name in ("GEMINI_API_KEY", "GOOGLE_API_KEY", "ANTHROPIC_API_KEY"):
+    for name in ("GEMINI_API_KEY", "GOOGLE_API_KEY"):
         monkeypatch.delenv(name, raising=False)
     cfg = LLMConfig.from_env()
     assert cfg.provider == "gemini"
@@ -75,7 +75,6 @@ def test_from_env_reads_gemini_key_from_file(tmp_path, monkeypatch):
 def test_max_rpm_can_be_disabled(tmp_path, monkeypatch):
     (tmp_path / "gemini.key").write_text("filnyckel")
     monkeypatch.setenv("MEIER_SECRETS_DIR", str(tmp_path))
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setenv("MEIER_MAX_RPM", "0")
     assert LLMConfig.from_env().max_rpm == 0.0
 
