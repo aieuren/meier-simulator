@@ -37,12 +37,32 @@ def make_agent(payload, role="kalkyl"):
 
 
 def test_announce_parses_valid_bid():
-    agent = make_agent({"bid": 52, "line": "Jag säger 52.", "reasoning": "lagom"})
+    agent = make_agent({"bid": 52, "reasoning": "lagom"})
     ann = agent.announce((2, 5))
     assert ann.shown == 52
     assert ann.bid == 52
     assert ann.truth is True
     assert ann.line == "Jag säger 52."
+
+
+def test_announce_ignores_line_from_model():
+    """Modellen ska bara ta fram påståendet, inte formulera repliken."""
+    agent = make_agent({"bid": 52, "line": "MITT EGET BUD", "reasoning": "lagom"})
+    ann = agent.announce((2, 5))
+    assert ann.line == "Jag säger 52."
+    assert "MITT EGET BUD" not in ann.line
+
+
+def test_prompts_do_not_ask_for_line():
+    """Promptarna ska inte be modellen skriva en replik."""
+    agent = make_agent({})
+    for context in (
+        agent._announce_context((2, 5), 52, None, []),
+        agent._blind_announce_context(52, [54, 53]),
+        agent._forced_choice_context(52, [54, 53]),
+        agent._decide_context(52, [54, 53], 3),
+    ):
+        assert "\"line\"" not in context
 
 
 def test_announce_detects_lie():

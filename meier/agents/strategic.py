@@ -98,7 +98,7 @@ class StrategicAgent(Agent):
             f"{personality.describe(self.params)}\n\n"
             "REGLER\n"
             f"{_RULES}\n\n"
-            "Terminologi: säg alltid 'påstående' (aldrig 'bud') när du talar om "
+            "Terminologi: säg alltid 'påstående' när du talar om "
             "det du säger.\n\n"
             "Du fattar själv alla beslut. Du får bara välja bland de lagliga "
             "alternativ som anges i uppgiften. Svara alltid med JSON."
@@ -365,7 +365,11 @@ class StrategicAgent(Agent):
             ann = self.announce_blind(dice, previous_bid=previous_bid, opponent=opponent)
         else:
             ann = self.announce(dice, previous_bid=previous_bid, opponent=opponent)
-        return replace(ann, choice_line=reason, choice_reasoning=reason)
+        return replace(
+            ann,
+            choice_line="Jag påstår blint." if blind else "Jag tittar på tärningarna.",
+            choice_reasoning=reason,
+        )
 
     @staticmethod
     def _parse_forced(data: dict) -> tuple[bool | None, str]:

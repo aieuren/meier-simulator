@@ -109,7 +109,7 @@ class MeierPlayerAgent(Agent):
             "Visar de samma eller högre förlorar den som synade ett liv.\n"
             "- Meier kostar dubbelt: om påståendet är Meier, eller om tärningarna visar Meier när "
             "någon synar, förlorar man två liv.\n\n"
-            "Terminologi: säg alltid 'påstående' (aldrig 'bud') när du talar om det du säger.\n\n"
+            "Terminologi: säg alltid 'påstående' när du talar om det du säger.\n\n"
             "Du svarar ALLTID med ett JSON-objekt och inget annat."
         )
 
@@ -136,7 +136,6 @@ class MeierPlayerAgent(Agent):
 
         proposed = self._raw_bid(data.get("bid"))
         bid = self._coerce_bid(data.get("bid"), shown, previous_bid, higher)
-        line = str(data.get("line") or self._default_line(bid, shown)).strip()
         reasoning = str(data.get("reasoning") or "").strip()
 
         return Announcement(
@@ -144,7 +143,7 @@ class MeierPlayerAgent(Agent):
             shown=shown,
             bid=bid,
             truth=bid == shown,
-            line=line,
+            line=self._default_line(bid),
             reasoning=reasoning,
             role=self.role.key,
             proposed=proposed,
@@ -171,7 +170,6 @@ class MeierPlayerAgent(Agent):
 
         proposed = self._raw_bid(data.get("bid"))
         bid = self._coerce_blind_bid(data.get("bid"), previous_bid, higher)
-        line = str(data.get("line") or self._default_line(bid, shown)).strip()
         reasoning = str(data.get("reasoning") or "").strip()
 
         return Announcement(
@@ -179,7 +177,7 @@ class MeierPlayerAgent(Agent):
             shown=shown,
             bid=bid,
             truth=bid == shown,
-            line=line,
+            line=self._default_line(bid),
             reasoning=reasoning,
             role=self.role.key,
             proposed=proposed,
@@ -226,7 +224,7 @@ class MeierPlayerAgent(Agent):
         return ActionDecision(
             action="blint" if blind else "titta",
             bid=None,
-            line=str(data.get("line") or "").strip(),
+            line="Jag påstår blint." if blind else "Jag tittar på tärningarna.",
             reasoning=str(data.get("reasoning") or "").strip(),
             role=self.role.key,
         )
@@ -246,7 +244,6 @@ class MeierPlayerAgent(Agent):
                 "",
                 "Svara med JSON:",
                 '{"blind": <true om du påstår utan att titta, false om du tittar>, '
-                '"line": "<kort replik>", '
                 '"reasoning": "<kort motivering>"}',
             ]
         )
@@ -278,7 +275,6 @@ class MeierPlayerAgent(Agent):
                 "",
                 "Svara med JSON:",
                 '{"bid": <heltal, ett giltigt utfall högre än det förra>, '
-                '"line": "<repliken du säger>", '
                 '"reasoning": "<kort motivering>"}',
             ]
         )
@@ -344,7 +340,6 @@ class MeierPlayerAgent(Agent):
             "",
             "Svara med JSON:",
             '{"bid": <heltal, ett giltigt utfall>, '
-            '"line": "<repliken du säger>", '
             '"reasoning": "<kort motivering>"}',
         ]
         return "\n".join(lines)
@@ -375,8 +370,16 @@ class MeierPlayerAgent(Agent):
             bid = min(options, key=lambda v: abs(rules.rank(v) - rules.rank(shown)))
         return bid
 
-    def _default_line(self, bid: int, shown: int) -> str:
+    def _default_line(self, bid: int) -> str:
         return f"Jag säger {rules.name(bid)}."
+
+    def _say_action(self, action: str, bid: int) -> str:
+        fallbacks = {
+            "syna": f"Jag synar {rules.name(bid)}.",
+            "skicka": f"Jag skickar vidare {rules.name(bid)}.",
+            "slå": f"Jag slår och påstår högre än {rules.name(bid)}.",
+        }
+        return fallbacks.get(action, f"Jag säger {rules.name(bid)}.")
 
     # -- Beslut mot ett påstående: Slå, Syna eller Skicka vidare -------------
     def decide(self, bid: int, *, lives: int = 3, opponent: str | None = None) -> ActionDecision:
@@ -404,11 +407,14 @@ class MeierPlayerAgent(Agent):
                 new_bid = self._coerce_bid(data.get("bid"), higher[-1], bid, higher)
                 if not rules.is_higher(new_bid, bid):
                     new_bid = higher[-1]
-        line = str(data.get("line") or "").strip()
         reasoning = str(data.get("reasoning") or "").strip()
 
         return ActionDecision(
-            action=action, bid=new_bid, line=line, reasoning=reasoning, role=self.role.key
+            action=action,
+            bid=new_bid,
+            line=self._say_action(action, bid),
+            reasoning=reasoning,
+            role=self.role.key,
         )
 
     def _decide_context(self, bid: int, higher: list[int], lives: int) -> str:
@@ -429,7 +435,6 @@ class MeierPlayerAgent(Agent):
                 "Svara med JSON:",
                 '{"action": "slå" | "syna" | "skicka", '
                 '"bid": <heltal eller null, endast om du slår>, '
-                '"line": "<repliken du säger>", '
                 '"reasoning": "<kort motivering>"}',
             ]
         )

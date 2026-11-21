@@ -192,7 +192,7 @@ def _clamp01(value: float) -> float:
 class OpponentStats:
     """Vad vi vet om en motståndare, allt ur offentlig information.
 
-    ``visible_bids``       – antal icke-blinda *frivilliga* påstående (initialbud) vi sett.
+    ``visible_bids``       – antal icke-blinda *frivilliga* påståenden (första påståendet) vi sett.
     ``forced_bids``        – antal tvingade höjningar (mekaniska, säger inget om personen).
     ``revealed``           – hur många frivilliga påståenden som avslöjats genom en syn.
     ``revealed_bluffs``    – hur många av de avslöjade som var lögner.
@@ -504,7 +504,7 @@ class OpponentTracker:
         Skild från :meth:`profile_factor`, som handlar om hur ofta motståndaren
         *ljuger*. Den här handlar om hur ofta den *synar*. Skillnaden spelar
         roll: en ärlig spelare kan vara synbenägen, och en lögnare kan vara
-        feg. Faktorn är kring 1,0 och multipliceras på ``p_called`` i budbeslutet.
+        feg. Faktorn är kring 1,0 och multipliceras på ``p_called`` i påståendebeslutet.
 
         ``risk = 0,5`` (neutralt) ger 1,0. En motståndare som bedöms syna
         dubbelt så ofta ger 2,0. Faktorn dämpas av konfidensen, precis som

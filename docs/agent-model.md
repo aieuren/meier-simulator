@@ -95,6 +95,12 @@ Tre saker hålls isär:
    att spela som, inte en tabell att räkna ur.
 3. **Beslutet** — vad spelaren gör. Det är modellens.
 
+Repliken — raden spelaren "säger" — är däremot **inte** modellens. Den byggs
+lokalt ur draget (`StrategicAgent._say` och `_say_action`), så att modellen bara
+behöver ta fram påståendet eller svaret. Modellen får alltså aldrig hitta på vad
+spelaren säger, och ett JSON-svar med `"line"` ignoreras. Det håller repliken
+kort, förutsägbar och fri från påhittade termer.
+
 Konsekvensen är praktisk: en match kan köras **utan LLM** (`--no-llm`). Då faller
 varje spelare tillbaka på `BasePolicy`, som väljer bland samma lagliga drag. Det
 läget är deterministiskt och används av `axel` (den fasta mätstickan) samt av

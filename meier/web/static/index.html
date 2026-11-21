@@ -28,8 +28,9 @@
       <p class="hint">
         Fyra oberoende AI-agenter spelar mot varandra. Var och en har sin egen
         profil och spelstil, och ser bara den information en riktig spelare
-        skulle ha. Tre av dem använder en språkmodell för replikerna; Axel är
-        grundtaktiken. Rollerna är desamma i alla flikar.
+        skulle ha. Tre av dem fattar sina beslut med en språkmodell; Axel är
+        grundtaktiken. Repliken byggs alltid lokalt ur draget. Rollerna är
+        desamma i alla flikar.
       </p>
       <div id="playerList" class="players"></div>
     </section>
@@ -41,10 +42,10 @@
       <h2>1. Tärningsslaget</h2>
       <p class="hint">Två tärningar, 1–6. Läses med den högsta först (2 och 5 blir 52).</p>
       <div class="dice-row">
-        <label>Die 1
+        <label>Tärning 1
           <select id="die1"></select>
         </label>
-        <label>Die 2
+        <label>Tärning 2
           <select id="die2"></select>
         </label>
         <div class="dice-preview" id="dicePreview">–</div>

@@ -15,8 +15,10 @@ Fyra profiler:
   extrem som de gamla rollerna var — de historiska loggarna visade att en
   extremt pressande profil (``press`` ≈ 0,9) förlorade varje match.
 
-Alla fyra drivs av samma :class:`~meier.policy.BasePolicy`. LLM:en, när den
-finns, formulerar bara repliken; draget ägs av policyn.
+Alla fyra går genom samma :class:`~meier.agents.strategic.StrategicAgent`. LLM:en,
+när den finns, äger draget. Repliken byggs i stället lokalt ur draget, så att
+modellen aldrig behöver hitta på vad spelaren säger. Utan LLM faller agenten
+tillbaka på :class:`~meier.policy.BasePolicy`.
 """
 
 from __future__ import annotations
@@ -90,9 +92,9 @@ def get_profile(key: str) -> Profile:
 def make_player(key: str, *, llm=None):
     """Bygg spelaren för ``key`` som en strategisk agent.
 
-    ``llm`` är valfri. Utan den formulerar agenten en mekanisk replik; med den
-    får LLM:en formulera repliken (aldrig draget). Axel får aldrig en LLM — han
-    är den deterministiska referensen.
+    ``llm`` är valfri. Med den äger LLM:en draget; utan den spelar agenten enligt
+    ``BasePolicy``. Repliken byggs alltid lokalt ur draget. Axel får aldrig en LLM
+    — han är den deterministiska referensen.
     """
     from .strategic import StrategicAgent
 

@@ -174,7 +174,8 @@ def test_syna_keeps_the_callers_reasoning():
 
     assert entry.action == "syna"
     assert entry.reasoning == "test"
-    assert entry.line == "Jag gör så."
+    # Repliken byggs lokalt ur draget; modellens egen "line" används aldrig.
+    assert entry.line == "Jag synar 66."
     # Samma motivering finns i synresultatet (som frontend visar).
     assert session.result is not None
     assert session.result.reasoning == "test"
@@ -273,7 +274,8 @@ def test_forced_raise_keeps_the_look_or_blind_reasoning():
     assert entry.action == "höja"
     assert entry.blind is True
     assert entry.choice_reasoning == "test"
-    assert entry.choice_line == "Jag höjer."
+    # Repliken beskriver valet och byggs lokalt; motiveringen kommer från modellen.
+    assert entry.choice_line == "Jag påstår blint."
     assert entry.to_dict()["choice_reasoning"] == "test"
 
 

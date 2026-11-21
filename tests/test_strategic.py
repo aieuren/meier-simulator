@@ -180,3 +180,52 @@ def test_non_reader_never_builds_a_profile():
     assert axel.opponent_profile("bluffare") is None
     assert axel._opponent_prior(61, "bluffare") is None
     assert axel.profiles == {}
+
+
+class _TalkingLLM:
+    """LLM som försöker lägga ord i spelarens mun.
+
+    Den svarar med både draget och en egen replik, för att bevisa att repliken
+    aldrig kommer från modellen.
+    """
+
+    def __init__(self, payload):
+        self.payload = payload
+        self.prompts = []
+
+    def complete(self, system, user, *, json_mode=False):
+        import json
+
+        self.prompts.append(user)
+        return json.dumps(self.payload)
+
+
+def test_line_is_built_locally_never_from_the_model():
+    llm = _TalkingLLM({"bid": 54, "line": "MITT EGET BUD", "reasoning": "motiv"})
+    agent = make("cecilia", ROSTER["cecilia"].params, OpponentTracker())
+    agent.llm = llm
+    ann = agent.announce((5, 2))
+    assert ann.bid == 54
+    assert ann.line == "Jag säger 54."
+    assert "MITT EGET BUD" not in ann.line
+
+
+def test_no_prompt_asks_the_model_for_a_reply():
+    llm = _TalkingLLM({"bid": 54, "action": "skicka", "blind": False, "reasoning": "motiv"})
+    agent = make("cecilia", ROSTER["cecilia"].params, OpponentTracker())
+    agent.llm = llm
+    agent.announce((5, 2))
+    agent.decide(52)
+    agent.announce_forced((5, 2), previous_bid=52)
+    assert llm.prompts
+    for prompt in llm.prompts:
+        assert '"line"' not in prompt
+
+
+def test_forced_choice_line_is_local_but_reasoning_is_kept():
+    llm = _TalkingLLM({"bid": 54, "blind": True, "reasoning": "kör på känsla"})
+    agent = make("cecilia", ROSTER["cecilia"].params, OpponentTracker())
+    agent.llm = llm
+    ann = agent.announce_forced((5, 2), previous_bid=52)
+    assert ann.choice_line == "Jag påstår blint."
+    assert ann.choice_reasoning == "kör på känsla"

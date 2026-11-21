@@ -171,10 +171,26 @@ and a later syna blames the wrong player. A forced raise is `blind=True` only
 when the bidder chose to bid blind. (`höja` is still a bid, so it counts in
 `BID_ACTIONS`; blind raises count as `blinds`, not bluffs.)
 
+## The `line` is built locally, never written by the model
+
+The model only produces the move (`bid`, `action`, `blind`). The spoken `line`
+is assembled in code from the move: `StrategicAgent._say` for a bid,
+`_say_action` for syna/skicka/slå, and a fixed string for the look-or-blind
+choice. No prompt asks for `"line"` any more, and any `"line"` in a model reply
+is ignored.
+
+This keeps the line short and predictable, and it stops the model from inventing
+wording (it used to slip back to "bud" even after the rename). When you add a
+new decision path, build its line the same way — do not add `"line"` to the
+prompt. `tests/test_strategic.py` has three tests that lock this down: one feeds
+a reply containing `"line"` and asserts it is dropped, one asserts no prompt
+mentions `"line"`, and one checks `choice_line` stays local while
+`choice_reasoning` keeps the model's text.
+
 ## Reasoning is logged for every decision (for later analysis)
 
-The model's free-text `reasoning` (and `line`) is stored on every logged
-decision, so it can be mined later (e.g. by an LLM). Two gaps used to exist and
+The model's free-text `reasoning` is stored on every logged decision, so it can
+be mined later (e.g. by an LLM). Two gaps used to exist and
 are now closed:
 
 - **syna** was logged with empty `line`/`reasoning`. `Session._resolve_call`

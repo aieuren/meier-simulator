@@ -167,7 +167,7 @@ class Decision:
 #: avslöjats. Kalibrerad mot en färsk strategisk serie (300 matcher, 0,715).
 #:
 #: Notera att detta **inte** är samma tal som andelen överbud bland alla synliga
-#: påstående (0,586). Skillnaden är de tvingade höjningarna: de är mekaniska (~78 %
+#: påståenden (0,586). Skillnaden är de tvingade höjningarna: de är mekaniska (~78 %
 #: "överbud" för alla) och räknas därför bort ur profilen. Använder man 0,586 som
 #: nämnare får varje normal spelare ratio > 1,0 och en läsande agent synar i
 #: onödan.
@@ -411,7 +411,7 @@ class BasePolicy:
         """Värdet av att påstå ``bid`` när tärningarna visar ``shown``.
 
         Behålls som en enkel, läsbar poängsättning för analys och tester. Det
-        faktiska budvalet görs i :meth:`decide_bid`, som jämför sanning mot bästa
+        faktiska påståendevalet görs i :meth:`decide_bid`, som jämför sanning mot bästa
         bluff direkt.
         """
         cmp = rules.compare(bid, shown)
