@@ -110,7 +110,7 @@ def rank(value: int) -> int:
 
 
 def compare(a: int, b: int) -> int:
-    """Jämför två bud/utfall.
+    """Jämför två påståenden/utfall.
 
     Returnerar 1 om ``a`` är högre än ``b``, -1 om lägre och 0 om lika.
     """
@@ -150,11 +150,11 @@ def format_dice(a: int, b: int) -> str:
 
 @dataclass(frozen=True)
 class CallResult:
-    """Resultatet av att någon synar ett bud."""
+    """Resultatet av att någon synar ett påstående."""
 
     bid: int
     shown: int
-    caller_loses: bool  # True om den som synade förlorar, annars budgivaren
+    caller_loses: bool  # True om den som synade förlorar, annars den som påstod
     lives: int  # antal liv som förloras (1 eller 2)
 
     @property
@@ -162,9 +162,9 @@ class CallResult:
         return "caller" if self.caller_loses else "bidder"
 
     def describe(self) -> str:
-        who = "den som synade" if self.caller_loses else "budgivaren"
+        who = "den som synade" if self.caller_loses else "den som påstod"
         return (
-            f"Tärningarna visar {name(self.shown)} mot budet {name(self.bid)}. "
+            f"Tärningarna visar {name(self.shown)} mot påståendet {name(self.bid)}. "
             f"{who.capitalize()} förlorar {self.lives} liv."
         )
 
@@ -172,17 +172,17 @@ class CallResult:
 def resolve_call(bid: int, shown: int) -> CallResult:
     """Avgör en syn (ett "call").
 
-    - Visar tärningarna lägre än det sagda förlorar föregående spelare (budgivaren).
+    - Visar tärningarna lägre än det sagda förlorar föregående spelare (den som påstod).
     - Är värdet samma eller högre förlorar den som synade.
-    - Meier kostar dubbelt: om budet är Meier, eller om tärningarna visar Meier
+    - Meier kostar dubbelt: om påståendet är Meier, eller om tärningarna visar Meier
       när någon synar, förloras två liv i stället för ett.
     """
     if not is_valid_value(bid):
-        raise ValueError(f"{bid} är inte ett giltigt bud")
+        raise ValueError(f"{bid} är inte ett giltigt påstående")
     if not is_valid_value(shown):
         raise ValueError(f"{shown} är inte ett giltigt utfall")
 
-    # Lägre visat värde än budet -> budgivaren förlorar.
+    # Lägre visat värde än påståendet -> den som påstod förlorar.
     caller_loses = compare(shown, bid) >= 0
 
     double = is_meier(bid) or is_meier(shown)

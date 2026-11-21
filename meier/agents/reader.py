@@ -3,7 +3,7 @@
 Ansvarsfördelningen är medvetet skarp:
 
 - **Sekreteraren** (:class:`~meier.opponents.OpponentTracker`) bokför vad som
-  hänt vid bordet — antal bud, hur många som avslöjats, hur många av dem som var
+  hänt vid bordet — antal påstående, hur många som avslöjats, hur många av dem som var
   lögner, hur spelaren svarat. Rena siffror, ingen tolkning.
 - **Läsaren** (denna modul) tolkar siffrorna och avgör **helt själv** vad de
   betyder: "den här spelaren bluffar ofta", "den ger upp under press". Det är
@@ -30,8 +30,8 @@ from ..opponents import OpponentProfile, OpponentTracker, _clamp01
 _RULES = (
     "Meier spelas med två tärningar. Tärningarna läses med högsta först (2 och 5 "
     "blir 52). 21 kallas Meier och är högst, 31 lägst. Vid en syn: visar "
-    "tärningarna lägre än budet förlorar budgivaren ett liv, annars synaren. "
-    "Meier kostar dubbelt. Att 'skicka vidare' betyder att man ger upp budet."
+    "tärningarna lägre än påståendet förlorar den som påstod ett liv, annars synaren. "
+    "Meier kostar dubbelt. Att 'skicka vidare' betyder att man ger upp påståendet."
 )
 
 _SYSTEM = (
@@ -43,7 +43,7 @@ _SYSTEM = (
     "dess interna inställningar. Gissa utifrån beteendet.\n"
     "Bedöm på en skala 0–1:\n"
     "  estimated_risk: hur gärna motståndaren tar en osäker chans (synar).\n"
-    "  estimated_press: hur ofta motståndaren bluffar och pressar budet.\n"
+    "  estimated_press: hur ofta motståndaren bluffar och pressar påståendet.\n"
     "  estimated_predictability: hur förutsägbar motståndaren är.\n"
     "  confidence: hur säker du är, givet hur mycket data som finns. Lite data "
     "ger låg confidence.\n"
@@ -62,18 +62,18 @@ def _summarise(player: str, ev: dict, *, table_reveals: int, strength: float) ->
     """Gör sekreterarens siffror till en läsbar sammanställning för modellen."""
     lines = [
         f"Motståndare: {player}",
-        f"Synliga (frivilliga) bud: {ev['visible_bids']}",
-        f"Avslöjade bud (efter syn): {ev['revealed']}",
+        f"Synliga (frivilliga) påståenden: {ev['visible_bids']}",
+        f"Avslöjade påståenden (efter syn): {ev['revealed']}",
         f"Därav lögner: {ev['revealed_bluffs']}",
         f"Bluff-frekvens bland avslöjade: {_fmt_rate(ev['bluff_rate'])}",
-        f"Svar på bud: {ev['decisions']} totalt",
+        f"Svar på påståenden: {ev['decisions']} totalt",
         f"  skickade vidare: {ev['passes']} (frekvens {_fmt_rate(ev['pass_rate'])})",
         f"  slog högre: {ev['raises']}",
         f"  synade: {ev['calls']} (frekvens {_fmt_rate(ev['call_rate'])})",
         f"  synen gick hem: {ev['calls_won']}",
         "",
         "JÄMFÖRELSE: en vanlig Meier-spelare synar ungefär 19 % av gångerna och "
-        "bluffar ofta (runt 70 % av de avslöjade buden). Bedöm motståndaren "
+        "bluffar ofta (runt 70 % av de avslöjade påståendena). Bedöm motståndaren "
         "RELATIVT det — inte som om 0 vore normalt.",
         "",
         f"Synar som avgjorts vid bordet hittills (alla spelare): {table_reveals}",

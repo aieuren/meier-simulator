@@ -8,12 +8,12 @@ Flödet följer reglerna:
 
 1. Första spelaren slår och **tittar i smyg** – säger sanningen, ett högre eller
    ett lägre resultat.
-2. Nästa spelare väljer **Slå** (skakar bägaren på nytt och säger ett högre bud),
-   **Syna** (lyfter locket) eller **Skicka vidare** (samma bud).
-3. När bägaren kommer ett helt varv tillbaka till budgivaren måste denne höja.
-   Är budet Meier får spelaren i stället slå om och börja en ny runda.
-4. Vid en syn lyfts locket: visar tärningarna lägre än budet förlorar den
-   spelare som ansvarar för budet (den som sa det senast, eller skickade vidare
+2. Nästa spelare väljer **Slå** (skakar bägaren på nytt och säger ett högre påstående),
+   **Syna** (lyfter locket) eller **Skicka vidare** (samma påstående).
+3. När bägaren kommer ett helt varv tillbaka till den som påstod måste denne höja.
+   Är påståendet Meier får spelaren i stället slå om och börja en ny runda.
+4. Vid en syn lyfts locket: visar tärningarna lägre än påståendet förlorar den
+   spelare som ansvarar för påståendet (den som sa det senast, eller skickade vidare
    och därmed tog över ansvaret) ett liv, annars den som synade. Meier kostar
    dubbelt. Den som förlorar livet loggas som en egen rad.
 
@@ -41,7 +41,7 @@ class LogEntry:
 
     - ``kind == "roll"``: ett tärningsutfall (indata). Ingen spelare har svarat
       än. Detta är steget där OK-knappen hör hemma.
-    - ``kind == "action"``: en spelares svar – ett bud, en blind höjning, en
+    - ``kind == "action"``: en spelares svar – ett påstående, en blind höjning, en
       syn eller ett skickande.
     - ``kind == "life"``: någon har förlorat ett (eller två) liv efter en syn.
       Raden ligger direkt efter synen och visar hur många liv som är kvar.
@@ -56,14 +56,14 @@ class LogEntry:
     action: str = "bud"  # "bud", "slå", "skicka", "syna", "höja", "liv", "slut"
     player: str | None = None  # rollens nyckel (endast action/life)
     player_name: str | None = None
-    bid: int | None = None  # sagt bud (endast action)
+    bid: int | None = None  # sagt påstående (endast action)
     truth: bool = False
     line: str = ""
     reasoning: str = ""
     previous_bid: int | None = None
-    accepted_bid: int | None = None  # budet spelaren svarar på (slå/skicka/syna)
-    proposed: int | None = None  # rå bud från modellen
-    corrected: bool = False  # korrigerades budet?
+    accepted_bid: int | None = None  # påståendet spelaren svarar på (slå/skicka/syna)
+    proposed: int | None = None  # rått påstående från modellen
+    corrected: bool = False  # korrigerades påståendet?
     blind: bool = False  # slog spelaren bägaren på nytt (fick inte lyfta locket)?
     choice_line: str = ""  # vid tvingad höjning: replik för titta/blint-valet
     choice_reasoning: str = ""  # vid tvingad höjning: motivering för valet
@@ -72,7 +72,7 @@ class LogEntry:
     actor_lives: int | None = None  # den agerandes liv vid tillfället (analys)
     active_players: int | None = None  # antal spelare kvar vid tillfället (analys)
     caller_loses: bool | None = None  # vid syn: förlorade den som synade? (analys)
-    holder_name: str | None = None  # vid syn: den som ansvarar för budet (analys)
+    holder_name: str | None = None  # vid syn: den som ansvarar för påståendet (analys)
     winner_name: str | None = None  # vid game_over: vinnarens namn
     winner_role: str | None = None  # vid game_over: vinnarens rollnyckel
     standings: list[dict] | None = None  # livsställning direkt efter en syn (life)
@@ -125,8 +125,8 @@ class CallResult:
     bid: int
     shown: int
     caller: str
-    bidder: str  # den som satte budet
-    holder: str  # den som är ansvarig för budet (kan ha skickat vidare)
+    bidder: str  # den som satte påståendet
+    holder: str  # den som är ansvarig för påståendet (kan ha skickat vidare)
     caller_loses: bool
     loser: str  # namn på den som förlorar liv
     lives: int  # antal förlorade liv
@@ -170,17 +170,17 @@ class Session:
     # -- Steg som väntar på bekräftelse ------------------------------------
     step_kind: str = ""  # "roll", "action" eller "raise"
     pending_dice: tuple[int, int] | None = None  # det hemliga slaget (tärningar)
-    pending_bid: int | None = None  # aktuellt bud
-    bidder: int = 0  # spelarindex för den som satte budet
-    holder: int = 0  # spelarindex för den som ansvarar för budet (kan ha skickat vidare)
+    pending_bid: int | None = None  # aktuellt påstående
+    bidder: int = 0  # spelarindex för den som satte påståendet
+    holder: int = 0  # spelarindex för den som ansvarar för påståendet (kan ha skickat vidare)
     actor: int = 0  # spelarindex som ska agera
-    #: Spelarindex för den som senast *annonserade* ett bud (bud/höja/slå). Det är
-    #: den spelaren ett avslöjande attribueras till. Ett blint bud är ett svagare
+    #: Spelarindex för den som senast *annonserade* ett påstående (påstående/höja/slå). Det är
+    #: den spelaren ett avslöjande attribueras till. Ett blint påstående är ett svagare
     #: löfte, så ``bid_was_blind`` styr hur tungt avslöjandet väger.
     last_announcer: int = 0
     bid_was_blind: bool = False
-    #: Sant om det stående budet kom från en **tvingad** höjning (bägaren har gått
-    #: ett helt varv). En sådan är mekanisk — budgivaren måste höja vad tärningarna
+    #: Sant om det stående påståendet kom från en **tvingad** höjning (bägaren har gått
+    #: ett helt varv). En sådan är mekanisk — den som påstod måste höja vad tärningarna
     #: än visar — och får aldrig räknas in i motståndarprofilen.
     bid_was_forced: bool = False
 
@@ -246,7 +246,7 @@ class Session:
         return entry
 
     def _prepare_action(self, *, actor: int) -> None:
-        """Nästa spelare ska agera mot ett bud (slå/syna/skicka)."""
+        """Nästa spelare ska agera mot ett påstående (slå/syna/skicka)."""
         self.actor = actor
         self.step_kind = "action"
 
@@ -301,7 +301,7 @@ class Session:
             )
 
     def _ask_decide(self, player, bid: int):
-        """Fråga spelaren om ett bud och skicka med vem som håller det.
+        """Fråga spelaren om ett påstående och skicka med vem som håller det.
 
         Den som överväger att syna får veta *vem* den möter, så en läsande agent
         kan använda motståndarens profil. Icke-läsande agenter ignorerar det.
@@ -405,7 +405,7 @@ class Session:
         """Kör flödet fram till rundans slut.
 
         En runda tar slut när någon synar (någon förlorar ett liv) eller när
-        budet Meier går ett helt varv tillbaka och budgivaren slår om. Båda
+        påståendet Meier går ett helt varv tillbaka och den som påstod slår om. Båda
         fallen startar en ny runda, så vi kör tills rundnumret ändras – eller
         tills spelet tar slut.
         """
@@ -421,12 +421,12 @@ class Session:
                 break
         return created
 
-    # -- Steg 1: tärningsslaget (första budet) -----------------------------
+    # -- Steg 1: tärningsslaget (första påståendet) -----------------------------
     def _resolve_roll(self) -> LogEntry:
         dice = self.pending_dice
         assert dice is not None
         player = self.players[self.actor]
-        # Den som sitter näst efter är den som först får svara på budet.
+        # Den som sitter näst efter är den som först får svara på påståendet.
         ann = player.announce(dice, opponent=self.name_of(self._next_actor(self.actor)))
         self._notify_bid(player.name, blind=False)
         entry = self._log_entry(
@@ -482,7 +482,7 @@ class Session:
             self._after_bid(actor=self.actor)
             return entry
 
-        # Skicka vidare: samma bud går vidare. Spelaren tar över ansvaret för budet.
+        # Skicka vidare: samma påstående går vidare. Spelaren tar över ansvaret för påståendet.
         self._notify_decision(player.name, "skicka")
         entry = LogEntry(
             kind="action",
@@ -512,7 +512,7 @@ class Session:
         assert bid is not None
         player = self.players[self.bidder]
         # Tärningarna slås om när bägaren gått ett helt varv. Budgivaren väljer
-        # själv om den tittar på dem eller bjuder blint (som vid ett slag).
+        # själv om den tittar på dem eller påstår blint (som vid ett slag).
         dice = rules.roll(self.rng)
         self._log_roll(player=player.name, dice=dice, shown=rules.read_dice(*dice))
         ann = player.announce_forced(
@@ -542,27 +542,27 @@ class Session:
         return entry
 
     def _enforce_bid(self, ann, *, previous_bid: int):
-        """Se till att ett bud som står kvar är strikt högre än det förra.
+        """Se till att ett påstående som står kvar är strikt högre än det förra.
 
-        Spelaragenten korrigerar redan ett olagligt bud (se
-        ``MeierPlayerAgent._coerce_bid``), men budet som *står* får aldrig vara
+        Spelaragenten korrigerar redan ett olagligt påstående (se
+        ``MeierPlayerAgent._coerce_bid``), men påståendet som *står* får aldrig vara
         lägre än det förra. Minsta lagliga höjning tar över i så fall, och
-        ``corrected`` markeras så att loggen visar att budet rättades.
+        ``corrected`` markeras så att loggen visar att påståendet rättades.
         """
         if rules.is_valid_value(ann.bid) and rules.is_higher(ann.bid, previous_bid):
             return ann
         higher = rules.higher_options(previous_bid)
         if not higher:
-            # Ingen höjning finns (budet är Meier) – kan inte korrigeras här.
+            # Ingen höjning finns (påståendet är Meier) – kan inte korrigeras här.
             return ann
         return replace(ann, bid=higher[-1], truth=False, corrected=True)
 
     def _after_bid(self, *, actor: int) -> None:
-        """Efter ett bud: gå vidare till nästa spelare – eller hela varvet runt."""
+        """Efter ett påstående: gå vidare till nästa spelare – eller hela varvet runt."""
         nxt = self._next_actor(actor)
         if nxt == self.bidder:
             if rules.is_meier(self.pending_bid):
-                # Budet är Meier – budgivaren slår om och börjar en ny runda.
+                # Budet är Meier – den som påstod slår om och börjar en ny runda.
                 starter = self.bidder
                 self.round += 1
                 self._prepare_round(starter=starter)
@@ -578,9 +578,9 @@ class Session:
         assert bid is not None and dice is not None
         shown = rules.read_dice(*dice)
         caller_idx = self.actor
-        # Den som ansvarar för budet: den som sa det senast (eller skickade
+        # Den som ansvarar för påståendet: den som sa det senast (eller skickade
         # vidare och därmed tog över ansvaret). Det är den "föregående spelaren"
-        # i regeln, inte nödvändigtvis den som först satte budet.
+        # i regeln, inte nödvändigtvis den som först satte påståendet.
         holder_idx = self.holder
 
         result = rules.resolve_call(bid, shown)
@@ -625,7 +625,7 @@ class Session:
         )
 
         # Facit är nu offentligt — tärningarna ligger på bordet. Först nu får
-        # motståndarmodellen veta om det senaste budet var en bluff. Ett blint bud
+        # motståndarmodellen veta om det senaste påståendet var en bluff. Ett blint påstående
         # är inget löfte och avslöjas aldrig (se ``_notify_reveal``).
         self._notify_reveal(
             self.last_announcer,
@@ -781,7 +781,7 @@ class Session:
         """Vad varje agent tror om de andra, för insyn i webbappen.
 
         En agent har en ``profiles``-mapp (motståndarnamn → profil). Den fylls
-        när agenten svarar på ett bud. Läsande agenter listas därför i takt med
+        när agenten svarar på ett påstående. Läsande agenter listas därför i takt med
         att de får en bild; Axel (ingen läsning) får aldrig någon.
         """
         views = []

@@ -37,7 +37,7 @@ async function boot() {
     list.appendChild(div);
   });
 
-  // Tidigare bud + motståndarbud
+  // Tidigare påstående + motståndarens påstående
   for (const v of data.ranking) {
     const o1 = document.createElement("option");
     o1.value = v.value;
@@ -183,7 +183,7 @@ function renderAnnounce(data) {
     ["Spelaren säger", a.bid_name],
     ["Lögn?", a.lie ? "Ja" : "Nej"],
   ];
-  if (data.previous_bid) rows.push(["Tidigare bud", data.previous_bid]);
+  if (data.previous_bid) rows.push(["Tidigare påstående", data.previous_bid]);
   rows.forEach(([k, val]) => {
     const dt = document.createElement("dt");
     dt.textContent = k;
@@ -412,11 +412,11 @@ function placeControls(data, pending) {
 
   ctl.hidden = false;
   if (data.step_kind === "roll") {
-    what.textContent = `${textOr((data.current || {}).name, "?")} ska säga sitt bud`;
+    what.textContent = `${textOr((data.current || {}).name, "?")} ska säga sitt påstående`;
   } else if (data.step_kind === "raise") {
     what.textContent = `${textOr((data.current || {}).name, "?")} slår om och måste höja`;
   } else {
-    what.textContent = `${textOr((data.current || {}).name, "?")} ska svara på budet`;
+    what.textContent = `${textOr((data.current || {}).name, "?")} ska svara på påståendet`;
   }
   log.appendChild(ctl);
   log.scrollTop = log.scrollHeight;
@@ -445,9 +445,9 @@ function explainCall(result) {
   }
   if (rankIndex(shown) < rankIndex(bid)) {
     const why = shown === 21 ? "Meier är högst" : isPair(shown) ? `${shownName} är ett par` : `${shownName} är högre`;
-    return `${why} och slår budet ${bidName} – alltså förlorar den som synade.`;
+    return `${why} och slår påståendet ${bidName} – alltså förlorar den som synade.`;
   }
-  return `${shownName} är lägre än budet ${bidName} – alltså förlorar budgivaren.`;
+  return `${shownName} är lägre än påståendet ${bidName} – alltså förlorar den som påstod.`;
 }
 
 // Sammanfattning av en syn, placerad kronologiskt i loggen (efter liv-raden).
@@ -457,14 +457,14 @@ function callResultBlock(result) {
   const holder = result.holder || result.bidder;
   const holderLine =
     holder !== result.bidder
-      ? `<div>Ansvaret för budet hade gått vidare från ${result.bidder} till ${holder}.</div>`
+      ? `<div>Ansvaret för påståendet hade gått vidare från ${result.bidder} till ${holder}.</div>`
       : "";
   const why = result.reasoning
     ? `<div class="call-why">Motivering: ${escapeHtml(result.reasoning)}</div>`
     : "";
   box.innerHTML = `
     <div class="call-title">Syn!</div>
-    <div>Tärningarna visade <strong>${result.shown_name}</strong> mot budet
+    <div>Tärningarna visade <strong>${result.shown_name}</strong> mot påståendet
       <strong>${result.bid_name}</strong>.</div>
     <div>${result.caller} synade ${holder}.</div>
     ${holderLine}
@@ -587,13 +587,13 @@ function renderLog(entries, result) {
     // Spelarens svar: en egen rad per åtgärd.
     row.className = "log-row is-action" + (e.action === "syna" ? " is-call" : "");
     const corrected = e.corrected
-      ? `<span class="log-corrected" title="Modellen föreslog ${e.proposed}">korrigerat bud</span>`
+      ? `<span class="log-corrected" title="Modellen föreslog ${e.proposed}">korrigerat påstående</span>`
       : "";
     const who = e.player_name ? `<span class="log-player">${e.player_name}</span>` : "";
 
     let main;
     if (e.action === "syna") {
-      main = `<span class="log-action">Synar</span> <span class="log-prev">budet ${textOr(e.accepted_bid_name, "?")}</span>`;
+      main = `<span class="log-action">Synar</span> <span class="log-prev">påståendet ${textOr(e.accepted_bid_name, "?")}</span>`;
     } else if (e.action === "skicka") {
       main = `<span class="log-action">Skickar vidare</span> <strong>${textOr(e.accepted_bid_name, "?")}</strong>`;
     } else if (e.action === "slå") {
@@ -611,17 +611,17 @@ function renderLog(entries, result) {
     } else {
       main = `<span class="log-action">Säger</span> <strong>${textOr(e.bid_name, "?")}</strong>`;
     }
-    // Etiketten "sant/bluff" gäller bara bud där spelaren tittat på sina tärningar.
-    // Ett blint bud ("slå") kan inte vara en bluff – spelaren såg dem inte.
+    // Etiketten "sant/bluff" gäller bara påståenden där spelaren tittat på sina tärningar.
+    // Ett blint påstående ("slå") kan inte vara en bluff – spelaren såg dem inte.
     const showsTruth =
       (e.action === "bud" || e.action === "höja") && !e.blind;
     const truthTag = showsTruth
       ? `<span class="log-bid ${e.lie ? "lie" : "truth"}">${e.lie ? "bluff" : "sant"}</span>`
       : "";
     const blindTag = e.blind
-      ? `<span class="log-blind">blint bud – tittar inte på egna tärningarna</span>`
+      ? `<span class="log-blind">blint påstående – tittar inte på egna tärningarna</span>`
       : "";
-    // Vid tvingad höjning valde spelaren att titta eller bjuda blint; visa varför.
+    // Vid tvingad höjning valde spelaren att titta eller påstå blint; visa varför.
     const choiceTag = e.choice_reasoning
       ? `<span class="log-choice">Val: ${e.blind ? "blint" : "tittade"} – ${escapeHtml(e.choice_reasoning)}</span>`
       : "";
@@ -657,7 +657,7 @@ function matchRow(rec) {
       return (
         `<div class="match-stat-line">` +
         `<span class="ms-name">${p.name}</span>` +
-        `<span class="ms-cell">bud ${s.bids || 0}</span>` +
+        `<span class="ms-cell">påståenden ${s.bids || 0}</span>` +
         `<span class="ms-cell">bluff ${s.bluffs || 0}</span>` +
         `<span class="ms-cell">blind ${s.blinds || 0}</span>` +
         `<span class="ms-cell">syn ${s.calls || 0}</span>` +
@@ -722,7 +722,7 @@ function renderMatchSummary(summary) {
       <thead>
         <tr>
           <th>Spelare</th><th>Vinster</th><th>Vinst%</th>
-          <th>Bluff%</th><th>Blint bud%</th><th>Höj%</th><th>Syn%</th><th>Syn lyckas</th><th>Snitt liv −</th>
+          <th>Bluff%</th><th>Blint påstående%</th><th>Höj%</th><th>Syn%</th><th>Syn lyckas</th><th>Snitt liv −</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>

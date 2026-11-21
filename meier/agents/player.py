@@ -5,8 +5,8 @@ givet utfallet av ett tärningsslag med två tärningar, bestäm hur spelaren
 svarar. Spelaren har tittat i smyg på tärningarna och ska säga ett resultat till
 nästa spelare – sanningen, ett högre eller ett lägre.
 
-Agenten kan också fatta beslut när den möter ett bud från en annan spelare:
-**Slå** (skaka bägaren på nytt och säga ett högre bud), **Syna** eller
+Agenten kan också fatta beslut när den möter ett påstående från en annan spelare:
+**Slå** (skaka bägaren på nytt och säga ett högre påstående), **Syna** eller
 **Skicka vidare**.
 """
 
@@ -31,8 +31,8 @@ class Announcement:
     reasoning: str  # varför
     role: str
     proposed: int | None = None  # rå värdet modellen föreslog (kan vara ogiltigt)
-    corrected: bool = False  # behövde budet korrigeras för att följa reglerna?
-    blind: bool = False  # bjöd spelaren utan att titta på tärningarna?
+    corrected: bool = False  # behövde påståendet korrigeras för att följa reglerna?
+    blind: bool = False  # påstod spelaren utan att titta på tärningarna?
     choice_line: str = ""  # vid tvingad höjning: replik för titta/blint-valet
     choice_reasoning: str = ""  # vid tvingad höjning: motivering för valet
 
@@ -58,14 +58,14 @@ class Announcement:
 
 @dataclass
 class ActionDecision:
-    """Spelarens val när den möter ett bud: Slå, Syna eller Skicka vidare.
+    """Spelarens val när den möter ett påstående: Slå, Syna eller Skicka vidare.
 
     Används också för titta/blint-valet vid en tvingad höjning, där ``action``
     är ``"titta"`` eller ``"blint"``.
     """
 
     action: str  # "slå", "syna", "skicka" (eller "titta"/"blint" vid tvingad höjning)
-    bid: int | None  # nytt bud om spelaren slår
+    bid: int | None  # nytt påstående om spelaren slår
     line: str
     reasoning: str
     role: str
@@ -98,15 +98,18 @@ class MeierPlayerAgent(Agent):
             "- Två tärningar läses som ett tal med den högsta tärningen först: 2 och 5 blir 52.\n"
             "- 21 kallas Meier och är högst. Sedan faller ordningen:\n"
             f"  {ranking}.\n"
-            "- Du har tittat i smyg på tärningarna och ska säga ett resultat till nästa spelare: "
-            "det sanna, ett högre eller ett lägre.\n"
-            "- Nästa spelare kan Slå (säga ett högre bud), Syna (lyfta locket) eller Skicka vidare.\n"
-            "- Om bägaren går ett helt varv tillbaka till budgivaren måste denne höja. "
-            "Tärningarna slås då om, och budgivaren får själv välja att titta på dem eller bjuda blint.\n"
-            "- Om någon synar och tärningarna visar lägre än det sagda förlorar budgivaren ett liv. "
+            "- Du har tittat i smyg på tärningarna och ska säga ett påstående till nästa spelare: "
+            "att tärningarna visar minst ett visst värde. Det kan vara sant, ett högre (en bluff) "
+            "eller ett lägre (sant, men svagare).\n"
+            "- Nästa spelare kan Slå (säga ett högre påstående), Syna (lyfta locket och granska "
+            "påståendet) eller Skicka vidare (ta över ansvaret för samma påstående).\n"
+            "- Om bägaren går ett helt varv tillbaka till den som påstod måste denne höja. "
+            "Tärningarna slås då om, och spelaren får själv välja att titta på dem eller påstå blint.\n"
+            "- Om någon synar och tärningarna visar lägre än påståendet förlorar den som påstod ett liv. "
             "Visar de samma eller högre förlorar den som synade ett liv.\n"
-            "- Meier kostar dubbelt: om budet är Meier, eller om tärningarna visar Meier när någon synar, "
-            "förlorar man två liv.\n\n"
+            "- Meier kostar dubbelt: om påståendet är Meier, eller om tärningarna visar Meier när "
+            "någon synar, förlorar man två liv.\n\n"
+            "Terminologi: säg alltid 'påstående' (aldrig 'bud') när du talar om det du säger.\n\n"
             "Du svarar ALLTID med ett JSON-objekt och inget annat."
         )
 
@@ -118,11 +121,11 @@ class MeierPlayerAgent(Agent):
         previous_bid: int | None = None,
         opponent: str | None = None,
     ) -> Announcement:
-        """Bestäm spelarens bud givet utfallet av ett tärningsslag.
+        """Bestäm spelarens påstående givet utfallet av ett tärningsslag.
 
-        ``previous_bid`` är det senaste budet i rundan om spelaren höjer efter
-        ett helt varv och alltså redan har tittat på tärningarna. Då måste budet
-        vara strikt högre. Att **slå** mot ett bud går i stället via
+        ``previous_bid`` är det senaste påståendet i rundan om spelaren höjer efter
+        ett helt varv och alltså redan har tittat på tärningarna. Då måste påståendet
+        vara strikt högre. Att **slå** mot ett påstående går i stället via
         :meth:`announce_blind`, för då får spelaren inte titta på tärningarna.
         """
         shown = rules.read_dice(*dice)
@@ -151,15 +154,15 @@ class MeierPlayerAgent(Agent):
     def announce_blind(
         self, dice: tuple[int, int], *, previous_bid: int, opponent: str | None = None
     ) -> Announcement:
-        """Spelaren **slår** och måste säga ett strikt högre bud.
+        """Spelaren **slår** och måste säga ett strikt högre påstående.
 
         Spelaren skakar bägaren själv och får inte lyfta på locket – bägaren är
-        stängd och budet måste vara strikt högre oavsett vad tärningarna visar.
+        stängd och påståendet måste vara strikt högre oavsett vad tärningarna visar.
         Tärningarna ``dice`` är det nya slaget; de används bara för att kunna
         avgöra en eventuell syn senare.
         """
         if not rules.is_valid_value(previous_bid):
-            raise ValueError(f"{previous_bid} är inte ett giltigt bud")
+            raise ValueError(f"{previous_bid} är inte ett giltigt påstående")
         shown = rules.read_dice(*dice)
         higher = rules.higher_options(previous_bid)
 
@@ -190,29 +193,29 @@ class MeierPlayerAgent(Agent):
         """Budgivaren måste höja när bägaren gått ett helt varv.
 
         Tärningarna har redan slagits om av motorn. Spelaren får själv välja om
-        den vill titta på dem (som vid ett vanligt bud) eller bjuda blint (som
+        den vill titta på dem (som vid ett vanligt påstående) eller påstå blint (som
         vid ett slag). Båda sätten är tillåtna – valet är spelarens.
         """
         if not rules.is_valid_value(previous_bid):
-            raise ValueError(f"{previous_bid} är inte ett giltigt bud")
+            raise ValueError(f"{previous_bid} är inte ett giltigt påstående")
         higher = rules.higher_options(previous_bid)
         if not higher:
             raise ValueError(
-                f"Kan inte höja: {rules.name(previous_bid)} är högst, det finns inget högre bud"
+                f"Kan inte höja: {rules.name(previous_bid)} är högst, det finns inget högre påstående"
             )
         choice = self._wants_blind_forced(previous_bid, higher)
         if choice.action == "blint":
-            # Spelaren väljer att bjuda blint utan att titta på de nya tärningarna.
+            # Spelaren väljer att påstå blint utan att titta på de nya tärningarna.
             ann = self.announce_blind(
                 dice, previous_bid=previous_bid, opponent=opponent
             )
         else:
-            # Spelaren tittar på de nya tärningarna och höjer som vid ett vanligt bud.
+            # Spelaren tittar på de nya tärningarna och höjer som vid ett vanligt påstående.
             ann = self.announce(dice, previous_bid=previous_bid, opponent=opponent)
         return replace(ann, choice_line=choice.line, choice_reasoning=choice.reasoning)
 
     def _wants_blind_forced(self, previous_bid: int, higher: list[int]) -> ActionDecision:
-        """Fråga spelaren: titta på de nya tärningarna eller bjuda blint?
+        """Fråga spelaren: titta på de nya tärningarna eller påstå blint?
 
         Returnerar valet som en :class:`ActionDecision` så att både själva valet
         (``action == "blint"`` eller ``"titta"``) och dess motivering bevaras.
@@ -236,13 +239,13 @@ class MeierPlayerAgent(Agent):
                 f"Bägaren har gått ett helt varv och är tillbaka hos dig. Du måste höja "
                 f"över {rules.name(previous_bid)}.",
                 "Tärningarna har slagits om. Du får själv välja hur du gör:",
-                "- Titta på de nya tärningarna och säga ett bud (som vid ett vanligt bud).",
-                "- Bjuda blint utan att titta (som när man slår).",
+                "- Titta på de nya tärningarna och säga ett påstående (som vid ett vanligt påstående).",
+                "- Påstå blint utan att titta (som när man slår).",
                 "Båda sätten är tillåtna. Valet är ditt.",
-                f"Giltiga bud: {', '.join(rules.name(v) for v in higher)}.",
+                f"Giltiga påståenden: {', '.join(rules.name(v) for v in higher)}.",
                 "",
                 "Svara med JSON:",
-                '{"blind": <true om du bjuder utan att titta, false om du tittar>, '
+                '{"blind": <true om du påstår utan att titta, false om du tittar>, '
                 '"line": "<kort replik>", '
                 '"reasoning": "<kort motivering>"}',
             ]
@@ -250,7 +253,7 @@ class MeierPlayerAgent(Agent):
 
     @staticmethod
     def _coerce_blind_choice(value: object) -> bool:
-        """Tolka modellens val av titta (False) eller bjuda blint (True)."""
+        """Tolka modellens val av titta (False) eller påstå blint (True)."""
         if isinstance(value, bool):
             return value
         if isinstance(value, str):
@@ -265,13 +268,13 @@ class MeierPlayerAgent(Agent):
         return "\n".join(
             [
                 "SITUATIONEN",
-                f"Du slår bägaren och måste säga ett strikt högre bud än {rules.name(previous_bid)}.",
+                f"Du slår bägaren och måste säga ett strikt högre påstående än {rules.name(previous_bid)}.",
                 "Du skakar bägaren själv och lyfter inte på locket – du ser inte tärningarna.",
-                "Du MÅSTE säga ett strikt högre bud än det förra, vad tärningarna än visar.",
-                f"Giltiga bud: {', '.join(rules.name(v) for v in higher) or 'inga (budet är högst)'}.",
+                "Du MÅSTE säga ett strikt högre påstående än det förra, vad tärningarna än visar.",
+                f"Giltiga påståenden: {', '.join(rules.name(v) for v in higher) or 'inga (påståendet är högst)'}.",
                 "",
                 "UPPGIFT",
-                "Säg ett högre bud. Du får inte lyfta på locket.",
+                "Säg ett högre påstående. Du får inte lyfta på locket.",
                 "",
                 "Svara med JSON:",
                 '{"bid": <heltal, ett giltigt utfall högre än det förra>, '
@@ -281,10 +284,10 @@ class MeierPlayerAgent(Agent):
         )
 
     def _coerce_blind_bid(self, value: object, previous_bid: int, higher: list[int]) -> int:
-        """Se till att ett slag-bud är giltigt och strikt högre."""
+        """Se till att ett slag-påstående är giltigt och strikt högre."""
         if not higher:
             raise ValueError(
-                f"Kan inte slå: {rules.name(previous_bid)} är högst, det finns inget högre bud"
+                f"Kan inte slå: {rules.name(previous_bid)} är högst, det finns inget högre påstående"
             )
         bid: int | None = None
         if isinstance(value, int) and not isinstance(value, bool) and rules.is_valid_value(value):
@@ -295,13 +298,13 @@ class MeierPlayerAgent(Agent):
                 bid = int(digits)
 
         if bid is None or not rules.is_higher(bid, previous_bid):
-            # Minsta möjliga höjning om modellen inte gav ett giltigt högre bud.
+            # Minsta möjliga höjning om modellen inte gav ett giltigt högre påstående.
             bid = higher[-1]
         return bid
 
     @staticmethod
     def _raw_bid(value: object) -> int | None:
-        """Modellens råa bud som heltal, även om det är ogiltigt."""
+        """Modellens råa påstående som heltal, även om det är ogiltigt."""
         if isinstance(value, bool):
             return None
         if isinstance(value, int):
@@ -329,9 +332,9 @@ class MeierPlayerAgent(Agent):
             lines += [
                 "",
                 "SITUATIONEN",
-                f"Du slår efter ett bud på {rules.name(previous_bid)}.",
-                "Du MÅSTE säga ett strikt högre bud än det förra, vad tärningarna än visar.",
-                f"Giltiga bud: {', '.join(rules.name(v) for v in higher)}.",
+                f"Du slår efter ett påstående på {rules.name(previous_bid)}.",
+                "Du MÅSTE säga ett strikt högre påstående än det förra, vad tärningarna än visar.",
+                f"Giltiga påståenden: {', '.join(rules.name(v) for v in higher)}.",
             ]
         lines += [
             "",
@@ -353,7 +356,7 @@ class MeierPlayerAgent(Agent):
         previous_bid: int | None,
         higher: list[int],
     ) -> int:
-        """Se till att budet är giltigt och följer reglerna."""
+        """Se till att påståendet är giltigt och följer reglerna."""
         bid: int | None = None
         if isinstance(value, int) and rules.is_valid_value(value):
             bid = value
@@ -367,7 +370,7 @@ class MeierPlayerAgent(Agent):
             bid = shown
 
         if previous_bid is not None and not rules.is_higher(bid, previous_bid):
-            # Måste höja. Välj ett högre bud så nära det visade som möjligt.
+            # Måste höja. Välj ett högre påstående så nära det visade som möjligt.
             options = higher or [rules.RANKING[0]]
             bid = min(options, key=lambda v: abs(rules.rank(v) - rules.rank(shown)))
         return bid
@@ -375,17 +378,17 @@ class MeierPlayerAgent(Agent):
     def _default_line(self, bid: int, shown: int) -> str:
         return f"Jag säger {rules.name(bid)}."
 
-    # -- Beslut mot ett bud: Slå, Syna eller Skicka vidare ------------------
+    # -- Beslut mot ett påstående: Slå, Syna eller Skicka vidare -------------
     def decide(self, bid: int, *, lives: int = 3, opponent: str | None = None) -> ActionDecision:
         """Välj handling när en annan spelare har sagt ``bid``.
 
         Spelaren kan **Slå** (höja), **Syna** eller **Skicka vidare**.
-        ``opponent`` är namnet på den som håller budet. Den här LLM-agenten
+        ``opponent`` är namnet på den som håller påståendet. Den här LLM-agenten
         använder det inte, men tar emot det så att motorn kan behandla alla
         agenttyper lika (den strategiska agenten läser det).
         """
         if not rules.is_valid_value(bid):
-            raise ValueError(f"{bid} är inte ett giltigt bud")
+            raise ValueError(f"{bid} är inte ett giltigt påstående")
 
         higher = rules.higher_options(bid)
         context = self._decide_context(bid, higher, lives)
@@ -416,12 +419,12 @@ class MeierPlayerAgent(Agent):
                 f"Du har {lives} liv kvar.",
                 "",
                 "DITT VAL",
-                "- Slå: säg ett strikt högre bud än det förra.",
-                "- Syna: lyft locket. Visar tärningarna lägre än budet förlorar den förra spelaren ett liv. "
+                "- Slå: säg ett strikt högre påstående än det förra.",
+                "- Syna: lyft locket. Visar tärningarna lägre än påståendet förlorar den förra spelaren ett liv. "
                 "Är värdet samma eller högre förlorar du ett liv. Meier kostar dubbelt.",
-                "- Skicka vidare: skicka bägaren vidare med samma bud. Du ser inte tärningarna.",
+                "- Skicka vidare: skicka bägaren vidare med samma påstående. Du ser inte tärningarna.",
                 "",
-                f"Om du slår är giltiga bud: {', '.join(rules.name(v) for v in higher) or 'inga (budet är högst)'}.",
+                f"Om du slår är giltiga påståenden: {', '.join(rules.name(v) for v in higher) or 'inga (påståendet är högst)'}.",
                 "",
                 "Svara med JSON:",
                 '{"action": "slå" | "syna" | "skicka", '

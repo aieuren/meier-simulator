@@ -55,7 +55,7 @@ ROSTER: dict[str, Profile] = {
     "berit": Profile(
         key="berit",
         name="Berit",
-        description="Försiktig. Bjuder nära sanningen och synar sällan.",
+        description="Försiktig. Påstår nära sanningen och synar sällan.",
         params=AgentParams(risk=0.25, press=0.25, reading=0.15),
     ),
     "cecilia": Profile(
@@ -67,7 +67,7 @@ ROSTER: dict[str, Profile] = {
     "david": Profile(
         key="david",
         name="David",
-        description="Djärv. Pressar budet högre och tar fler risker än de andra.",
+        description="Djärv. Pressar påståendet högre och tar fler risker än de andra.",
         params=AgentParams(risk=0.65, press=0.60, reading=0.35),
     ),
 }

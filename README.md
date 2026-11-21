@@ -38,7 +38,7 @@ roller kan spela hela spel mot varandra.
   bluffrekvens, höjningar och synar, och ladda ner hela protokollet som JSONL.
 - **Spelmotor** – flera oberoende agenter spelar ett fullt Meier-spel mot varandra.
 - **Kommandoradsgränssnitt** – kör agenten, en session eller ett helt spel.
-- **Regelmotor** – fullständig poängordning, budjämförelse, syn-avgörande och
+- **Regelmotor** – fullständig poängordning, påståendejämförelse, syn-avgörande och
   slumpade tärningsslag.
 
 ## Regler (sammanfattning)
@@ -46,16 +46,16 @@ roller kan spela hela spel mot varandra.
 - Två tärningar läses som ett tal med den högsta tärningen först: 2 och 5 blir 52.
 - 21 kallas **Meier** och är högst. Sedan faller ordningen ner till 31 (lägst).
 - Spelaren skakar, tittar i smyg och säger ett resultat: sant, högre eller lägre.
-- Nästa spelare kan **Slå** (säga ett högre bud), **Syna** (lyfta locket) eller
-  **Skicka vidare** (samma bud).
-- Vid syn: visar tärningarna lägre än budet förlorar budgivaren ett liv. Visar de
+- Nästa spelare kan **Slå** (säga ett högre påstående), **Syna** (lyfta locket) eller
+  **Skicka vidare** (samma påstående).
+- Vid syn: visar tärningarna lägre än påståendet förlorar den som påstår ett liv. Visar de
   samma eller högre förlorar den som synade ett liv.
-- **Meier kostar dubbelt** – om budet är Meier, eller om tärningarna visar Meier
+- **Meier kostar dubbelt** – om påståendet är Meier, eller om tärningarna visar Meier
   när någon synar, förlorar man två liv.
 - När man mist tre liv är man ute. Sist kvar vinner.
-- Kommer bägaren ett helt varv tillbaka till budgivaren måste denne höja.
-  Tärningarna slås då om, och budgivaren får själv välja att titta på dem eller
-  bjuda blint. Är budet Meier får spelaren i stället slå om och börja en ny runda.
+- Kommer bägaren ett helt varv tillbaka till den som påstår måste denne höja.
+  Tärningarna slås då om, och den som påstår får själv välja att titta på dem eller
+  påstå blint. Är påståendet Meier får spelaren i stället slå om och börja en ny runda.
 
 Poängordning (högst först):
 21, 11, 22, 33, 44, 55, 66, 65, 64, 63, 62, 61, 54, 53, 52, 51, 43, 42, 41, 32, 31.
@@ -108,10 +108,10 @@ python -m uvicorn meier.web.app:app --host 0.0.0.0 --port 12000
 # Givet tärningsslaget 2 och 5: hur svarar spelaren?
 python -m meier.cli announce 2 5 --role david
 
-# Om spelaren slår efter ett tidigare bud (måste höja)
+# Om spelaren slår efter ett tidigare påstående (måste höja)
 python -m meier.cli announce 2 5 --role cecilia --previous-bid 43
 
-# Spelaren möter en motståndares bud
+# Spelaren möter en motståndares påstående
 python -m meier.cli decide 43 --role berit
 
 # Spela ett helt spel med flera oberoende agenter
@@ -135,7 +135,7 @@ Namnen på parametrarna är korta; här är vad de står för:
 | Parameter | Enkelt namn | Betydelse |
 |---|---|---|
 | `risk` | Riskbenägenhet | Hur gärna spelaren synar och tar en osäker chans |
-| `press` | Press | Hur ofta spelaren bluffar, och hur högt den lägger blinda bud |
+| `press` | Press | Hur ofta spelaren bluffar, och hur högt den lägger blinda påståenden |
 | `reading` | Läsförmåga | Hur mycket spelaren använder information om andras tidigare spel |
 
 Skilj på tre saker:
@@ -156,9 +156,9 @@ Registret (`ROSTER`) sätter värdena:
 | Nyckel | Namn | Risk | Press | Läsning | LLM | Profil |
 |---|---|---:|---:|---:|---|---|
 | `axel` | Axel | 0,50 | 0,50 | 0,00 | nej | Grundtaktiken; fast mätsticka |
-| `berit` | Berit | 0,25 | 0,25 | 0,15 | ja | Försiktig; bjuder nära sanningen |
+| `berit` | Berit | 0,25 | 0,25 | 0,15 | ja | Försiktig; påstår nära sanningen |
 | `cecilia` | Cecilia | 0,50 | 0,45 | 0,50 | ja | Kalkylerande; läser motståndaren |
-| `david` | David | 0,65 | 0,60 | 0,35 | ja | Djärv; pressar budet högre |
+| `david` | David | 0,65 | 0,60 | 0,35 | ja | Djärv; pressar påståendet högre |
 
 Samma tabell i klartext, som webbappen visar den:
 
@@ -196,15 +196,15 @@ I webbappen finns sektionen **"Fyra spelare spelar mot varandra"**:
    ny runda), **Till syn** för att spela hela vägen fram till en syn, eller
    **Hela matchen** för att spela klart tills en vinnare står kvar.
 3. Flödet följer reglerna:
-   - Den som börjar **slår och tittar i smyg**, sedan säger ett bud.
+   - Den som börjar **slår och tittar i smyg**, sedan säger ett påstående.
    - Nästa spelare **slår** (skakar sina egna tärningar på nytt, tittar inte på
-     dem och säger ett högre bud — ett *blint bud*), **synar** eller **skickar
+     dem och säger ett högre påstående — ett *blint påstående*), **synar** eller **skickar
      vidare**.
-   - Kommer bägaren ett helt varv tillbaka till budgivaren måste denne **höja**.
-     Tärningarna slås då om, och budgivaren får själv välja att titta på dem eller
-     bjuda blint. Är budet Meier slår budgivaren i stället om och börjar en ny runda.
-   - Vid en **syn** lyfts locket. Visar tärningarna lägre än budet förlorar
-     den som ansvarar för budet ett liv (den som sa det senast, eller skickade
+   - Kommer bägaren ett helt varv tillbaka till den som påstår måste denne **höja**.
+     Tärningarna slås då om, och den som påstår får själv välja att titta på dem eller
+     påstå blint. Är påståendet Meier slår den som påstår i stället om och börjar en ny runda.
+   - Vid en **syn** lyfts locket. Visar tärningarna lägre än påståendet förlorar
+     den som ansvarar för påståendet ett liv (den som sa det senast, eller skickade
      vidare och tog över ansvaret), annars den som synade. Meier kostar dubbelt.
 
 Loggen byggs **nedåt**: äldst överst, nyast nederst. Varje runda börjar med en
@@ -238,10 +238,10 @@ Protokollet är byggt för efteranalys. Varje match innehåller:
 
 - spelarna med roll och namn, spelordningen och vem som började,
 - vinnaren, antalet rundor, kvarvarande liv och utslagsordningen,
-- `events`: varje åtgärd med spelare, roll, tärningsutfall, bud, om spelaren hade
-  tittat på tärningarna (och om budet då var sant eller en bluff), tidigare bud,
+- `events`: varje åtgärd med spelare, roll, tärningsutfall, påstående, om spelaren hade
+  tittat på tärningarna (och om påståendet då var sant eller en bluff), tidigare påstående,
   livsställning och rundnummer,
-- `player_stats`: per spelare antal bud, blinda slag, bluffar, sanningar, synar,
+- `player_stats`: per spelare antal påståenden, blinda slag, bluffar, sanningar, synar,
   höjningar, förlorade liv och om spelaren slogs ut.
 
 Med ett fast basfrö blir en serie reproducerbar. JSONL-formatet (en match per rad)
@@ -292,7 +292,7 @@ så att du kan bygga en stor datamängd över tid, från flera körningar.
 
 Därefter ställer du frågor i fritext under **Ställ frågor**. Svaret
 bygger på en kompakt sammanställning av materialet – aggregerade mått per roll,
-fördelningar över bud och tärningsutfall, och en matchlista. Du kan också be om
+fördelningar över påstående och tärningsutfall, och en matchlista. Du kan också be om
 ett diagram: stapel, linje eller tabell. Diagrammen ritas som ren SVG i
 webbläsaren, utan externa bibliotek. Resultatet visas under **Resultat**.
 
@@ -317,7 +317,7 @@ Tre saker är värda att veta:
 |---|---|---|
 | GET | `/api/roles` | Roller och poängordning |
 | POST | `/api/announce` | Givet tärningsutfall: spelarens svar |
-| POST | `/api/decide` | Givet ett bud: Slå, Syna eller Skicka vidare |
+| POST | `/api/decide` | Givet ett påstående: Slå, Syna eller Skicka vidare |
 | GET | `/api/health` | Status och vald LLM-leverantör |
 | POST | `/api/session/new` | Ny session: slumpad ordning, första slaget |
 | GET | `/api/session` | Hela sessionens tillstånd och logg |
@@ -430,7 +430,7 @@ Klienten sparar tokenräkningen från senaste anropet i `LLMClient.last_usage`
 python -m pytest tests/ -q
 ```
 
-Testerna täcker regelmotorn (poängordning, budjämförelse, syn-avgörande, Meier
+Testerna täcker regelmotorn (poängordning, påståendejämförelse, syn-avgörande, Meier
 dubbelt) och agentens logik med en fejkad LLM – inga riktiga modellanrop behövs.
 
 ## Projektstruktur
@@ -445,7 +445,7 @@ meier/
   analysis.py         Analys: digest av protokoll + LLM-frågor med diagram
   cli.py              Kommandoradsgränssnitt
   opponents.py        Motståndarprofilen: statistik och klartext
-  legality.py         Reglerna: vilka bud och svar som är lagliga
+  legality.py         Reglerna: vilka påståenden och svar som är lagliga
   policy.py           Reservstrategin när ingen LLM svarar (Axels läge)
   agents/
     base.py           Agent-grundklass och roll

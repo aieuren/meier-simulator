@@ -41,17 +41,17 @@ _RISK = {
 }
 
 _PRESS = {
-    "mycket låg": "Du bjuder nästan alltid sanningen och bluffar i stort sett aldrig.",
-    "låg": "Du bjuder nära vad tärningarna visar och bluffar sällan.",
+    "mycket låg": "Du påstår nästan alltid sanningen och bluffar i stort sett aldrig.",
+    "låg": "Du påstår nära vad tärningarna visar och bluffar sällan.",
     "medel": "Du bluffar ibland, mest när det är billigt att bli synad.",
-    "hög": "Du pressar budet uppåt och bluffar ofta för att sätta press.",
-    "mycket hög": "Du bjuder hårt över tärningarna nästan varje gång.",
+    "hög": "Du pressar påståendet uppåt och bluffar ofta för att sätta press.",
+    "mycket hög": "Du påstår hårt över tärningarna nästan varje gång.",
 }
 
 _READING = {
     "mycket låg": "Du spelar ditt eget spel och struntar i vad motståndarna gör.",
     "låg": "Du spelar ditt eget spel och bryr dig föga om motståndarnas mönster.",
-    "medel": "Du lägger märke till hur motståndarna brukar bjuda och syna.",
+    "medel": "Du lägger märke till hur motståndarna brukar påstå och syna.",
     "hög": "Du följer noga hur varje motståndare beter sig och anpassar dig efter det.",
     "mycket hög": "Du väger varje drag mot allt du lärt dig om motståndarnas vanor.",
 }

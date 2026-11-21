@@ -2,7 +2,7 @@
 
 Webbappen låter dig skriva in tärningsutfallet (två tärningar) och få
 spelarens svar från en LLM-baserad agent. Du kan välja roll och ange ett
-tidigare bud om spelaren slår efter någon annan.
+tidigare påstående om spelaren slår efter någon annan.
 """
 
 from __future__ import annotations
@@ -57,12 +57,12 @@ class AnnounceRequest(BaseModel):
     die2: int = Field(..., ge=1, le=6, description="Andra tärningen")
     role: str = Field("cecilia", description="Agentens roll")
     previous_bid: int | None = Field(
-        None, description="Tidigare bud om spelaren slår efter någon annan"
+        None, description="Tidigare påstående om spelaren slår efter någon annan"
     )
 
 
 class DecideRequest(BaseModel):
-    bid: int = Field(..., description="Motståndarens bud")
+    bid: int = Field(..., description="Motståndarens påstående")
     role: str = Field("cecilia", description="Agentens roll")
     lives: int = Field(3, ge=0, le=3)
 
@@ -120,7 +120,7 @@ def announce(req: AnnounceRequest) -> dict:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if req.previous_bid is not None and not rules.is_valid_value(req.previous_bid):
-        raise HTTPException(status_code=400, detail=f"Ogiltigt tidigare bud: {req.previous_bid}")
+        raise HTTPException(status_code=400, detail=f"Ogiltigt tidigare påstående: {req.previous_bid}")
 
     agent = _get_agent(req.role)
     try:
@@ -138,11 +138,11 @@ def announce(req: AnnounceRequest) -> dict:
 
 @app.post("/api/decide")
 def decide(req: DecideRequest) -> dict:
-    """Givet en motståndares bud: slår, synar eller skickar spelaren vidare?"""
+    """Givet en motståndares påstående: slår, synar eller skickar spelaren vidare?"""
     if req.role not in ROSTER:
         raise HTTPException(status_code=400, detail=f"Okänd roll: {req.role}")
     if not rules.is_valid_value(req.bid):
-        raise HTTPException(status_code=400, detail=f"Ogiltigt bud: {req.bid}")
+        raise HTTPException(status_code=400, detail=f"Ogiltigt påstående: {req.bid}")
 
     agent = _get_agent(req.role)
     try:
@@ -154,17 +154,17 @@ def decide(req: DecideRequest) -> dict:
     if decision.action == "syna":
         # Vad som händer vid en syn beror på de dolda tärningarna; visa regeln.
         result["note"] = (
-            "Vid syn: visar tärningarna lägre än budet förlorar budgivaren, "
+            "Vid syn: visar tärningarna lägre än påståendet förlorar den som påstod, "
             "annars förlorar den som synar. Meier kostar dubbelt."
         )
     elif decision.action == "slå":
         result["note"] = (
-            "Vid slag: bägaren skakas om blint och nästa bud måste vara högre, "
+            "Vid slag: bägaren skakas om blint och nästa påstående måste vara högre, "
             "oavsett vad tärningarna visar."
         )
     else:
         result["note"] = (
-            "Vid skicka vidare: budet står kvar och spelaren tar över ansvaret "
+            "Vid skicka vidare: påståendet står kvar och spelaren tar över ansvaret "
             "för det. Bägaren går vidare utan att slås om."
         )
     return result

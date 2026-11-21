@@ -39,10 +39,10 @@ class Agent:
     def announce_forced(
         self, dice: tuple[int, int], *, previous_bid: int, opponent: str | None = None
     ):
-        """Standardbeteende för tvingad höjning: höj som vid ett vanligt bud.
+        """Standardbeteende för tvingad höjning: höj som vid ett vanligt påstående.
 
         Agenten får de omslagna tärningarna ``dice`` och måste säga ett högre
-        bud. Spelaragenter kan överskugga detta för att i stället bjuda blint.
+        påstående. Spelaragenter kan överskugga detta för att i stället påstå blint.
         """
         return self.announce(dice, previous_bid=previous_bid, opponent=opponent)
 

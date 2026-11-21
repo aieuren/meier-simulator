@@ -2,8 +2,8 @@
 
 Modulen spelar många matcher mellan LLM-baserade agenter och samlar varje
 match i ett strukturerat, JSON-serialiserbart protokoll. Protokollet är byggt
-för efteranalys: varje åtgärd sparas med spelare, roll, tärningsutfall, bud,
-om budet var sant eller en bluff, livsställning och rundnummer. Därutöver
+för efteranalys: varje åtgärd sparas med spelare, roll, tärningsutfall, påstående,
+om påståendet var sant eller en bluff, livsställning och rundnummer. Därutöver
 sammanfattas varje match och hela serien med aggregerad statistik.
 
 Poängen är att kunna köra hundratals matcher och sedan undersöka vilka
@@ -23,9 +23,9 @@ from .agents.roster import make_players
 from .llm import LLMClient
 from .session import LogEntry, Session
 
-#: Åtgärder som är spelarens eget bud (spelaren säger ett värde).
+#: Åtgärder som är spelarens eget påstående (spelaren säger ett värde).
 BID_ACTIONS = ("bud", "slå", "höja")
-#: Åtgärder där spelaren svarar på någon annans bud.
+#: Åtgärder där spelaren svarar på någon annans påstående.
 DECISION_ACTIONS = ("slå", "skicka", "syna")
 
 
@@ -77,11 +77,11 @@ def _player_stats(log: list[LogEntry], names: list[str]) -> dict[str, dict[str, 
     """Per-spelare-statistik för en enskild match, räknad ur loggen."""
     stats: dict[str, dict[str, Any]] = {
         name: {
-            "bids": 0,          # egna bud (bud/slå/höja)
-            "blinds": 0,        # egna bud efter ett blind slag (såg inte tärningarna)
-            "bluffs": 0,        # egna bud där spelaren tittat och inte sa sanningen
-            "truths": 0,        # egna bud där spelaren tittat och sa sanningen
-            "decisions": 0,     # svar på andras bud
+            "bids": 0,          # egna påståenden (bud/slå/höja)
+            "blinds": 0,        # egna påståenden efter ett blind slag (såg inte tärningarna)
+            "bluffs": 0,        # egna påståenden där spelaren tittat och inte sa sanningen
+            "truths": 0,        # egna påståenden där spelaren tittat och sa sanningen
+            "decisions": 0,     # svar på andras påståenden
             "raises": 0,        # "slå" (blind höjning)
             "passes": 0,        # "skicka"
             "calls": 0,         # "syna"

@@ -17,7 +17,7 @@ from dataclasses import dataclass
 
 from . import rules
 
-#: De tre svar en spelare kan ge på ett bud, i presentationsordning.
+#: De tre svar en spelare kan ge på ett påstående, i presentationsordning.
 RESPONSES: tuple[str, ...] = ("syna", "skicka", "slå")
 
 #: De två valen vid en tvingad höjning (bägaren har gått ett helt varv).
@@ -25,67 +25,67 @@ FORCED_CHOICES: tuple[str, ...] = ("titta", "blint")
 
 
 def response_actions(*, bid: int) -> list[str]:
-    """Vilka svar som är lagliga på budet ``bid``.
+    """Vilka svar som är lagliga på påståendet ``bid``.
 
     ``syna`` och ``skicka`` är alltid lagliga. ``slå`` kräver att det finns ett
-    högre bud att säga, så mot Meier — som är högst — faller det bort. Att erbjuda
-    ett slag utan högre bud vore att erbjuda ett drag som inte går att utföra.
+    högre påstående att säga, så mot Meier — som är högst — faller det bort. Att erbjuda
+    ett slag utan högre påstående vore att erbjuda ett drag som inte går att utföra.
     """
     if not rules.is_valid_value(bid):
-        raise ValueError(f"{bid} är inte ett giltigt bud")
+        raise ValueError(f"{bid} är inte ett giltigt påstående")
     if rules.higher_options(bid):
         return list(RESPONSES)
     return [a for a in RESPONSES if a != "slå"]
 
 
 def legal_bids(*, shown: int, previous_bid: int | None = None) -> list[int]:
-    """Alla bud spelaren får säga, givet vad tärningarna visar.
+    """Alla påståenden spelaren får säga, givet vad tärningarna visar.
 
-    ``shown`` är det spelaren ser i bägaren. ``previous_bid`` är budet som ligger
-    (``None`` vid rundans första bud). Regeln är att budet måste vara **strikt
+    ``shown`` är det spelaren ser i bägaren. ``previous_bid`` är påståendet som ligger
+    (``None`` vid rundans första påstående). Regeln är att påståendet måste vara **strikt
     högre** än det som ligger, och att det alltid måste vara ett giltigt utfall.
 
-    Vid första budet finns ingen undre gräns utöver utfallen själva, så hela
+    Vid första påståendet finns ingen undre gräns utöver utfallen själva, så hela
     rangordningen är laglig — även ``31``, det lägsta. Det är därför en spelare
-    kan bjuda under sina egna tärningar.
+    kan påstå under sina egna tärningar.
     """
     if not rules.is_valid_value(shown):
         raise ValueError(f"{shown} är inte ett giltigt utfall")
     if previous_bid is None:
         return list(rules.RANKING)
     if not rules.is_valid_value(previous_bid):
-        raise ValueError(f"{previous_bid} är inte ett giltigt bud")
+        raise ValueError(f"{previous_bid} är inte ett giltigt påstående")
     return rules.higher_options(previous_bid)
 
 
 def blind_bids(*, previous_bid: int) -> list[int]:
     """Bud som är lagliga när spelaren slår utan att titta.
 
-    Samma krav som annars: strikt högre än budet som ligger. Att spelaren inte
+    Samma krav som annars: strikt högre än påståendet som ligger. Att spelaren inte
     ser tärningarna ändrar inte vad som är lagligt, bara vad som är klokt.
     """
     if not rules.is_valid_value(previous_bid):
-        raise ValueError(f"{previous_bid} är inte ett giltigt bud")
+        raise ValueError(f"{previous_bid} är inte ett giltigt påstående")
     return rules.higher_options(previous_bid)
 
 
 def forced_choices(*, previous_bid: int) -> list[str]:
     """Vilka val som är lagliga vid en tvingad höjning.
 
-    Bägaren har gått ett helt varv tillbaka till budgivaren, som måste höja.
-    Finns ett högre bud kan spelaren välja att titta på de nya tärningarna eller
-    att bjuda blint. Är budet redan Meier finns inget högre: då slår spelaren om
+    Bägaren har gått ett helt varv tillbaka till den som påstod, som måste höja.
+    Finns ett högre påstående kan spelaren välja att titta på de nya tärningarna eller
+    att påstå blint. Är påståendet redan Meier finns inget högre: då slår spelaren om
     och börjar en ny runda, och valet faller bort.
     """
     if not rules.is_valid_value(previous_bid):
-        raise ValueError(f"{previous_bid} är inte ett giltigt bud")
+        raise ValueError(f"{previous_bid} är inte ett giltigt påstående")
     if not rules.higher_options(previous_bid):
         return []
     return list(FORCED_CHOICES)
 
 
 def is_legal_bid(bid: int, *, previous_bid: int | None = None) -> bool:
-    """Är ``bid`` ett lagligt bud att säga?"""
+    """Är ``bid`` ett lagligt påstående att säga?"""
     if not rules.is_valid_value(bid):
         return False
     if previous_bid is None:
@@ -96,7 +96,7 @@ def is_legal_bid(bid: int, *, previous_bid: int | None = None) -> bool:
 
 
 def is_legal_response(action: str, *, bid: int) -> bool:
-    """Är ``action`` ett lagligt svar på budet ``bid``?"""
+    """Är ``action`` ett lagligt svar på påståendet ``bid``?"""
     if not rules.is_valid_value(bid):
         return False
     return action in RESPONSES

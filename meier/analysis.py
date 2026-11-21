@@ -125,7 +125,7 @@ def render_digest_text(digest: dict[str, Any]) -> str:
     lines.append(
         f"Startspelaren vinner: {digest.get('starter_win_rate', 0)} av matcherna"
     )
-    lines.append(f"Blinda bud totalt: {digest.get('blind_bids', 0)}")
+    lines.append(f"Blinda påståenden totalt: {digest.get('blind_bids', 0)}")
 
     lines.append("")
     lines.append("PER ROLL")
@@ -133,8 +133,8 @@ def render_digest_text(digest: dict[str, Any]) -> str:
     for role, b in roles.items():
         lines.append(
             "- {name} ({role}): {games} matcher, {wins} vinster "
-            "(vinst% {win_rate}), bud {bids}, bluff {bluffs} (bluff% {bluff_rate}), "
-            "blint bud {blinds} (blint% {blind_rate}), höjningar {raises}, "
+            "(vinst% {win_rate}), påståenden {bids}, bluff {bluffs} (bluff% {bluff_rate}), "
+            "blint påstående {blinds} (blint% {blind_rate}), höjningar {raises}, "
             "skicka {passes}, synar {calls} (syn% {call_rate}), "
             "syn lyckas {calls_won}/{calls} ({call_success_rate}), "
             "snitt liv förlorade {avg_lives_lost}, utslagen {eliminated} ({elimination_rate})".format(
@@ -181,7 +181,7 @@ def render_digest_text(digest: dict[str, Any]) -> str:
         "'vad slogs i runda 3' går inte att besvara härifrån."
     )
     lines.append(
-        "- Inga enskilda bud per spelare och tillfälle, bara fördelningar."
+        "- Inga enskilda påståenden per spelare och tillfälle, bara fördelningar."
     )
     lines.append(
         "- Ingen information om vem som mötte vem i en viss runda, utöver "

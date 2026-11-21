@@ -19,16 +19,16 @@ liv måste vara klart bättre än alternativen för att hon ska våga.
 
 De fyra situationerna:
 
-1. **Hon ser tärningarna och bjuder.** Oftast bjuder hon precis det tärningarna
+1. **Hon ser tärningarna och påstår.** Oftast påstår hon precis det tärningarna
    visar — det är säkert, för synar någon förlorar den som synade. Bara en
    tillräckligt billig högre bluff tar hon.
 2. **Hon slår utan att titta.** Eftersom hon inte vet vad tärningarna visar tar
    hon minsta tillåtna höjning. På presshumör kan hon ta ett större kliv.
-3. **Hon svarar på ett bud.** Hon synar om chansen att vinna är tillräckligt
-   stor, annars skickar hon vidare. Budet Meier synar hon alltid, annars tar
+3. **Hon svarar på ett påstående.** Hon synar om chansen att vinna är tillräckligt
+   stor, annars skickar hon vidare. Ett Meier-påstående synar hon alltid, annars tar
    rundan aldrig slut.
-4. **Hon tvingas höja.** Hon väljer mellan att titta (och kunna bjuda nära
-   sanningen) eller bjuda blint (och dölja information).
+4. **Hon tvingas höja.** Hon väljer mellan att titta (och kunna påstå nära
+   sanningen) eller påstå blint (och dölja information).
 
 Det viktigaste: hon gör alltid exakt samma sak i samma läge. Slumpen finns bara
 i tärningarna, aldrig i hennes beslut. Därför kan en match köras om med samma
@@ -72,7 +72,7 @@ beskriver hur en människa brukar spela, och beskrivningen går in i prompten
 
 Det är en medveten ändring. En tidigare version lät `BasePolicy` räkna fram
 draget ur parametrarna och lät LLM:en formulera repliken. Då blev varje spelare
-samma algoritm med olika konstanter, och `press` styrde ett budval som modellen
+samma algoritm med olika konstanter, och `press` styrde ett påståendeval som modellen
 aldrig fick påverka. Nu är måtten ett *underlag* — något att simulera en
 verklig spelare med — och inte en dom över vad som är rätt drag.
 
@@ -88,7 +88,7 @@ verklig spelare med — och inte en dom över vad som är rätt drag.
 
 Tre saker hålls isär:
 
-1. **Reglerna** — vilka bud och svar som är lagliga. Koden äger dem, och ett
+1. **Reglerna** — vilka påståenden och svar som är lagliga. Koden äger dem, och ett
    olagligt svar från modellen når aldrig bordet. Modellen får en omfrågning
    med besked om felet; sedan tar reservpolicyn över.
 2. **Personligheten** — vem spelaren är, i ord. Parametrarna blir en människa
@@ -182,12 +182,12 @@ Detta är **exakt** (inte skattat) och räknas en gång vid import. Tabellen
 
 ### 3.1 Nyckeltabeller
 
-`P(shown ≥ B)` är sannolikheten att tärningarna visar **minst** budet `B`. Om
-någon synar budet `B` gäller: synaren förlorar när `shown ≥ B`, annars förlorar
+`P(shown ≥ B)` är sannolikheten att tärningarna visar **minst** `B`. Om
+någon synar påståendet `B` gäller: synaren förlorar när `shown ≥ B`, annars förlorar
 hållaren. `L_win(B)` / `L_lose(B)` är förväntat antal liv som förloras i vardera
 utfallet (Meier kostar dubbelt, på båda sidor).
 
-| Bud | P(shown ≥ B) | L_win(B) | L_lose(B) | q*(B) |
+| påstående | P(shown ≥ B) | L_win(B) | L_lose(B) | q*(B) |
 |---|---:|---:|---:|---:|
 | 21 – Meier | 0.0386 | 2.000 | 2.000 | 0.500 |
 | 11 | 0.0579 | 1.000 | 1.667 | 0.625 |
@@ -213,9 +213,9 @@ utfallet (Meier kostar dubbelt, på båda sidor).
 
 Två saker att lägga märke till:
 
-- **Låga bud (54 och nedåt) syns aldrig.** `L_lose` ≈ 1,04 och `q*` ≈ 0,51: en syn
+- **Låga påståenden (54 och nedåt) syns aldrig.** `L_lose` ≈ 1,04 och `q*` ≈ 0,51: en syn
   är nästan alltid förlust. Detta syns också i loggarna (0 synar av 250 beslut
-  vid bud 54 och lägre).
+  vid påstående 54 och lägre).
 - **Meier är speciellt.** `q* = 0,50` och båda sidor kostar 2 liv. Att syna Meier
   är break-even redan vid q = 0,5. Empiriskt synas Meier i 45,8 % av fallen.
 
@@ -229,14 +229,14 @@ besluten.
 
 | # | Beslut | Ser agenten sina tärningar? | Metod i koden |
 |---|---|---|---|
-| 1 | **Första budet** | **Ja** (tittat i smyg) | `announce()` |
-| 2 | **Slå** (mot ett bud) | **Nej** — nytt, stängt slag | `announce_blind()` |
+| 1 | **Första påståendet** | **Ja** (tittat i smyg) | `announce()` |
+| 2 | **Slå** (mot ett påstående) | **Nej** — nytt, stängt slag | `announce_blind()` |
 | 3 | **Syna / skicka** | **Nej** — har inte tittat | `decide()` |
 | 4 | **Tvingad höjning** | **Väljer själv**: titta eller blint | `announce_forced()` |
 
-### Beslut 1 — Första budet (ser tärningarna)
+### Beslut 1 — Första påståendet (ser tärningarna)
 
-Agenten ser `shown`. Den ska säga ett bud. Två val: säga sanningen (`shown`) eller
+Agenten ser `shown`. Den ska säga ett påstående. Två val: säga sanningen (`shown`) eller
 ljuga (högre eller lägre).
 
 Policy:
@@ -245,44 +245,44 @@ Policy:
 bästa_bud = argmax_B  V(B, shown)
 ```
 
-där `V` är värdet i avsnitt 2, utvärderat över de tillåtna buden. Ett bud är
-tillåtet om det är ett giltigt utfall (alla 21). Att bjuda **under** `shown` är
-tillåtet men oftast dåligt: budet är lätt att syna, och du blir hållare.
+där `V` är värdet i avsnitt 2, utvärderat över de tillåtna påståendena. Ett påstående är
+tillåtet om det är ett giltigt utfall (alla 21). Att påstå **under** `shown` är
+tillåtet men oftast dåligt: påståendet är lätt att syna, och du blir hållare.
 
 Parametrarna styr:
 
-- **`press`** höjer sannolikheten att bjuda över `shown` (bluffa).
+- **`press`** höjer sannolikheten att påstå över `shown` (bluffa).
 - **`risk`** avgör hur nära `shown` agenten vågar ligga (lägre risk → närmare
   sanningen).
 
 ### Beslut 2 — Slå (ser dem inte)
 
-Spelaren skakar en **ny** bägare och får inte lyfta locket. Budet måste vara
+Spelaren skakar en **ny** bägare och får inte lyfta locket. Det nya påståendet måste vara
 strikt högre än det förra. Agenten vet alltså inte vad tärningarna visar — men
 vet att **motståndaren** kommer att se dem vid en syn.
 
-Policy: `decide_raise` lägger budet på en nivå som styrs av `press`. Låg
+Policy: `decide_raise` lägger påståendet på en nivå som styrs av `press`. Låg
 `press` väljer den **minsta lagliga höjningen** — den är säkrast, eftersom
-chansen att tärningarna visar mindre än budet är som minst där. Hög `press` tar
-ett språng uppåt: ett högre bud är dyrare för motståndaren att syna, men också
+chansen att tärningarna visar mindre än påståendet är som minst där. Hög `press` tar
+ett språng uppåt: ett högre påstående är dyrare för motståndaren att syna, men också
 större risk om det blir synat.
 
 Formeln är `steps = round(press · (len(higher) − 1))`, så `press` = 1,0 kan
 hoppa ända till Meier. Det är alltså **inte** en regel om att höjningen alltid
 är ett steg — bara om att ett steg är minimum, och om att `press` väljer hur
-långt över minimum budet läggs.
+långt över det lägsta lagliga påståendet.
 
 Skilj detta från **beslut 1** (`decide_bid`), där spelaren *har* sett
 tärningarna. Där är bluffen alltid **exakt ett steg** över det visade utfallet:
 `min(higher_options(shown))`. Där finns ingen `press`-styrning, eftersom den
-kalkylen (sann budnivå + ett steg) inte har någon motsvarighet när nivån är
+kalkylen (sann påståendenivå + ett steg) inte har någon motsvarighet när nivån är
 okänd.
 
 ### Beslut 3 — Syna eller skicka (ser dem inte)
 
 Här vet agenten **inte** vad tärningarna visar. Den kan bara använda:
 
-- budet `B` som signal,
+- påståendet `B` som signal,
 - sin tro på hur ofta `B` är en bluff,
 - ställningen (egna liv, antal spelare kvar).
 
@@ -303,11 +303,11 @@ motståndarspecifika uppskattningen (avsnitt 6).
 ### Beslut 4 — Tvingad höjning (väljer själv)
 
 Bägaren har gått ett helt varv. Tärningarna slås om. Agenten får titta eller
-bjuda blint.
+påstå blint.
 
 Policy: jämför de två vägarna och välj den med högst `V`.
 
-- **Titta** är bättre när de nya tärningarna är starka (du kan bjuda nära
+- **Titta** är bättre när de nya tärningarna är starka (du kan påstå nära
   sanningen och slippa risken).
 - **Blint** är bättre när du ändå måste höja högt och tärningarna sannolikt är
   svaga — då slipper du ljuga med vetskap, och motståndaren får ingen
@@ -321,17 +321,17 @@ regelmässigt korrekt: valet är gjort innan locket lyfts.
 ## 5. q-modellen: BASE:s fasta tro
 
 BASE är **icke-läsande**: den bygger ingen modell av enskilda motståndare. Men en
-agent som överväger att syna måste anta **något** om sannolikheten att budet är
+agent som överväger att syna måste anta **något** om sannolikheten att påståendet är
 en bluff. Två ytterligheter är oanvändbara:
 
-- Anta alltid ärlig budgivare → syn förlorar alltid → BASE synar aldrig →
+- Anta alltid en ärlig motståndare → syn förlorar alltid → BASE synar aldrig →
   matcher tar aldrig slut via syn.
-- Anta slumpade tärningar → BASE synar allt över bud 62 → naivt mot en bluffare.
+- Anta slumpade tärningar → BASE synar allt över 62 → naivt mot en bluffare.
 
 Nyckeln är att sannolikheten att en **syn vinner** inte är en enda siffra — den
-**beror starkt på budnivån**. Mätt ur en färsk strategisk serie (500 matcher):
+**beror starkt på påståendenivån**. Mätt ur en färsk strategisk serie (500 matcher):
 
-| Bud | P(synaren vinner) | | Bud | P(synaren vinner) |
+| påstående | P(synaren vinner) | | påstående | P(synaren vinner) |
 |---|---|---|---|---|
 | 66 | 0,19 | | 54 | 0,20 |
 | 65 | 0,47 | | 44 | 0,21 |
@@ -340,12 +340,12 @@ Nyckeln är att sannolikheten att en **syn vinner** inte är en enda siffra — 
 | 21 (Meier) | 0,31 | | 32 | 0,04 |
 
 Att bara ha en global `q` (ett enda tal) är därför **för grovt**: det gör att
-BASE synar låga bud (där en syn nästan alltid förlorar) och skickar vidare höga
+BASE synar låga påståenden (där en syn nästan alltid förlorar) och skickar vidare höga
 (där en syn nästan går jämnt upp). BASE har därför **en fryst tabell `CALL_PRIOR`
-per budnivå**:
+per påståendenivå**:
 
 ```
-CALL_PRIOR[B] = P(synaren vinner | bud = B)
+CALL_PRIOR[B] = P(synaren vinner | påstående = B)
 ```
 
 - Tabellen är **global** — samma för alla motståndare (uppfyller "icke-läsande").
@@ -358,20 +358,20 @@ CALL_PRIOR[B] = P(synaren vinner | bud = B)
 `CALL_PRIOR[B]` skattas ur empirin som
 
 ```
-P(vinst | B) ≈ antal bud på nivå B som var överbud / antal synliga bud på nivå B
+P(vinst | B) ≈ antal påståenden på nivå B som var falska / antal synliga påståenden på nivå B
 ```
 
-där **synliga bud** = `bud` och `höja` som inte är blinda (blinda bud är inga
+där **synliga påståenden** = `påstående` och `höja` som inte är blinda (blinda påståenden är inga
 löften och räknas aldrig som bluffar). Skattningen **utjämnas mot tärningarnas
-egen sannolikhet** (priorvikt 15) eftersom varje budnivå har begränsat underlag,
+egen sannolikhet** (priorvikt 15) eftersom varje påståendenivå har begränsat underlag,
 och sedan **fryses** den.
 
 Två tal hör dit:
 
-- `DEFAULT_Q = 0,586` — andelen synliga bud som är överbud över hela populationen.
+- `DEFAULT_Q = 0,586` — andelen synliga påståenden som är falska över hela populationen.
   Används som nämnare när en motståndares benägenhet mäts **relativt** populationen,
   och som förhandstro innan en spelare avslöjats.
-- `CALL_PRIOR` — den budspecifika tabellen ovan.
+- `CALL_PRIOR` — den påståendespecifika tabellen ovan.
 
 Båda kalibrerades mot en **färsk** strategisk serie. Det gamla LLM-underlaget gav
 `q ≈ 0,52` och Meier-vinst 0,53 — men strategiska agenter är **ärligare** (Meier
@@ -383,15 +383,15 @@ förbättras medan AI-experimenten pågår, rör sig jämförelsepunkten, och "A
 bättre över tid" kan lika gärna betyda att BASE blev sämre. BASE:s taktik och
 tabellen låses därför innan profilerna mäts, och ändras inte under en serie.
 
-### 5.2 Meier — ett dyrt bud, inte ett påtvingat
+### 5.2 Meier — ett dyrt påstående, inte ett påtvingat
 
-Ett Meier-bud har en egenhet i spelets mekanik: om ingen synar går bägaren ett
-helt varv, och budgivaren får då slå om och börja en **ny runda** i stället för
+Ett Meier-påstående har en egenhet i spelets mekanik: om ingen synar går bägaren ett
+helt varv, och den som påstår får då slå om och börja en **ny runda** i stället för
 att höja. En runda kan därför ta slut utan att någon förlorat ett liv.
 
 BASE har **ingen regel** som tvingar fram en syn på Meier. Valet är ett vanligt
 EV-val bland de tre lagliga svaren. Att Meier ändå syns i praktiken beror på
-priset: att bära budet är dyrt, eftersom tärningarna oftast visar lägre och
+priset: att bära påståendet är dyrt, eftersom tärningarna oftast visar lägre och
 hållaren då förlorar två liv. Hållarvärdet för Meier ligger kring −0,92 liv.
 Att skicka vidare är alltså inte förbjudet — det är bara sämre.
 
@@ -400,7 +400,7 @@ avgörande för maskinen: en regel tar bort ett lagligt val, en konsekvens låte
 värderingen styra. Samma sak gäller de andra två svaren.
 
 **Terminering.** Utan tvångsregel måste termineringen vila på något annat.
-Den gör det: budet är monotont stigande inom en runda, och varje höjning närmar
+Den gör det: påståendet är monotont stigande inom en runda, och varje höjning närmar
 sig Meier. När Meier väl står på bordet är en syn så pass mycket bättre än att
 lägga sig att den blir vald. Uppmätt över 200 matcher (1 804 rundor) slutade
 **alla** rundor med en syn — ingen via Meier-varv. Motorn har dessutom ett
@@ -408,17 +408,18 @@ skyddsnät som tvingar fram en syn om en runda drar ut på tiden.
 
 ### 5.3 En ärlig konsekvens av designen
 
-Med den budspecifika tabellen synar BASE **selektivt**: låga bud (≤ 54) skickas
-vidare, höga bud (61–66) synas när EV går jämnt upp, och Meier syns eftersom
+Med den påståendespecifika tabellen synar BASE **selektivt**: låga påståenden (≤ 54) skickas
+vidare, höga påståenden (61–66) synas när EV går jämnt upp, och Meier syns eftersom
 priset att bära det är så högt. Detta är starkare än både "syna allt" och "syna
 aldrig", och BASE vinner ca 31 % mot de fyra preseterna (baslinje 20 %, fem
 spelare). En läsande agent (högre `reading`) kan slå BASE genom att skjuta tron
 **rätt** per motståndare.
 
-BASE svarar alltså på ett bud med **tre** lagliga val — syna, skicka vidare eller
+BASE svarar alltså på ett påstående med **tre** lagliga val — syna, skicka vidare eller
 slå — och värderar dem på samma skala (mitt förväntade livsöverskott). Vilket som
-vinner beror på budet: låga bud bjuder in till att slå, mellanbud till att skicka
-vidare, höga bud till att syna. Det är spelets egen textur, inte en pålagd regel.
+vinner beror på påståendet: låga påståenden inbjuder till att slå, mellanpåståenden till
+att skicka vidare, höga påståenden till att syna. Det är spelets egen textur, inte en
+pålagd regel.
 
 ---
 
@@ -427,7 +428,7 @@ vidare, höga bud till att syna. Det är spelets egen textur, inte en pålagd re
 `reading` avgör hur mycket agenten låter en **motståndarprofil** styra sina
 beslut. Arbetet är delat i två roller med skarp gräns:
 
-- **Sekreteraren** (`OpponentTracker`) bokför vad som hänt vid bordet: antal bud,
+- **Sekreteraren** (`OpponentTracker`) bokför vad som hänt vid bordet: antal påståenden,
   hur många som avslöjats genom en syn, hur många av dem som var lögner, hur
   spelaren svarat. Rena siffror, ingen tolkning.
 - **Läsaren** (`OpponentReader`) tolkar siffrorna och sätter profilen. Här är
@@ -500,13 +501,13 @@ Rutan växer fram när agenterna får underlag och kan ändras när matchen fort
 ### 6.0 Hur profilen får användas: relativt, aldrig absolut
 
 Detta är den subtilaste punkten i hela modellen. En läsande agent får **inte**
-byta ut den budspecifika tron `CALL_PRIOR[B]` mot motståndarens *absoluta*
+byta ut den påståendespecifika tron `CALL_PRIOR[B]` mot motståndarens *absoluta*
 bluff-frekvens. Skälet:
 
-- `CALL_PRIOR[41] ≈ 0,28`. Nästan ingen bluffar till ett lågt bud.
+- `CALL_PRIOR[41] ≈ 0,28`. Nästan ingen bluffar till ett lågt påstående.
 - En motståndare som bluffar dubbelt så ofta som normalt har frekvens ≈ 1,2 —
-  men det säger inget om **budnivån**. Sätter man in 1,2 (eller ens 0,4) som
-  `P(vinst | 41)` synar agenten bud som nästan alltid är sanna, och förlorar.
+  men det säger inget om **påståendenivån**. Sätter man in 1,2 (eller ens 0,4) som
+  `P(vinst | 41)` synar agenten påståenden som nästan alltid är sanna, och förlorar.
 
 Rätt konstruktion är en **relativ justering**: profilens benägenhet skalas in i
 tabellen som en faktor kring 1,0. Faktorn är centrerad kring `press = 0,5` och
@@ -537,11 +538,11 @@ mot henne.
 ```
 raw    = 1 + (profil.risk − 0,5) / (1 − 0,5)       # 0,5 → 1,0; 0,9 → 1,8
 faktor = 1 + profil.confidence · (raw − 1)
-P(syn | bud) = min(1, CALL_PRIOR_syn · faktor)
+P(syn | påstående) = min(1, CALL_PRIOR_syn · faktor)
 ```
 
 Faktorn går in i `BasePolicy.decide_bid(shown, opponent_factor=...)` och vidare
-till `_p_called`, som räknar ut hur sannolikt det är att budet blir synat. Ett
+till `_p_called`, som räknar ut hur sannolikt det är att påståendet blir synat. Ett
 högre `opponent_factor` gör bluffen mindre lönsam, och agenten lägger sig närmare
 sanningen.
 
@@ -561,7 +562,7 @@ Därför finns `POPULATION_CALL_RATE = 0,19` och `OpponentTracker.call_ratio()`:
 ratio 1,0 betyder "synar som folk mest". Samma fälla som för `press` — se 6.0.
 
 Båda faktorerna kan vara aktiva samtidigt. `press` justerar tron på att ett visst
-bud är sant (`_opponent_prior`), `risk` justerar chansen att budet blir synat
+påstående är sant (`_opponent_prior`), `risk` justerar chansen att påståendet blir synat
 (`_p_called`). De rör alltså olika led i samma uträkning.
 
 ### 6.1 Den läckagefria regeln (obligatorisk)
@@ -572,11 +573,11 @@ beslutstillfället. I synnerhet:
 - **Bluffar kan bara räknas ur avslutade rundor**, där en syn avslöjade
   tärningarna. Den **pågående** rundan får aldrig bidra.
 - Motståndarens **dolda tärningar** och **framtida drag** får aldrig ingå.
-- Ett **blint bud** är inget löfte och räknas aldrig som en bluff.
+- Ett **blint påstående** är inget löfte och räknas aldrig som en bluff.
 
 Anledningen är subtil men avgörande: `session.py` loggar `shown` (de faktiska
-tärningarna) för varje bud. Bygger man profilen ur hela loggen läcker framtiden
-in i nuet — agenten "vet" då att ett bud *var* en bluff, fast ingen kunde veta
+tärningarna) för varje påstående. Bygger man profilen ur hela loggen läcker framtiden
+in i nuet — agenten "vet" då att ett påstående *var* en bluff, fast ingen kunde veta
 det än. Det gör resultaten ogiltiga.
 
 Modulen är byggd så att regeln **inte kan brytas av misstag**:
@@ -598,7 +599,7 @@ information in. Testet är en del av fas 1.
 BASE är en **stark, fryst, motståndaroberoende** referens. Den:
 
 - maximerar **förväntad överlevnad/slutplacering** (avsnitt 2), inte poäng per steg,
-- har en fast budspecifik tro `CALL_PRIOR` (avsnitt 5) och läser inte enskilda
+- har en fast påståendespecifik tro `CALL_PRIOR` (avsnitt 5) och läser inte enskilda
   motståndare,
 - **deltar i matcherna** och är samtidigt jämförelsenivå för AI-agenterna.
 
@@ -614,11 +615,11 @@ aldrig bluffar vore inte en realistisk motståndare.
 ### 7.1 Kalibrering: härled, validera
 
 BASE:s *sannolikhetsmodell* härleds analytiskt ur `FACE_WEIGHTS` (avsnitt 3) — den
-är exakt och behöver ingen data. Det som kalibreras mot data är den **budospecifika
+är exakt och behöver ingen data. Det som kalibreras mot data är den **påståendespecifika
 tron `CALL_PRIOR`** och `DEFAULT_Q`. Ordningen är:
 
 1. Härled den exakta sannolikhetsmodellen (görs i kod, en gång).
-2. Kör en **färsk** serie med fixerade seeds och skatta `CALL_PRIOR[B]` per budnivå,
+2. Kör en **färsk** serie med fixerade seeds och skatta `CALL_PRIOR[B]` per påståendenivå,
    utjämnad mot tärningarnas egen sannolikhet.
 3. **Frys** `CALL_PRIOR`, `DEFAULT_Q` och BASE:s taktik.
 4. Validera att BASE vinner över de fyra befintliga rollerna. Gör den inte det
@@ -635,10 +636,10 @@ konkret exempel på varför frysning + färsk kalibrering är ett krav.
 
 ## 8. Fallback och felvägar
 
-- **Ogiltigt bud från modellen:** motorn korrigerar (`_coerce_higher`,
-  `_enforce_bid`). Policyn räknar alltid fram ett lagligt bud, så inget olagligt
-  bud kan nå bordet.
-- **Ingen höjning finns (budet är Meier):** `slå` är omöjligt. Policyn väljer
+- **Ogiltigt påstående från modellen:** motorn korrigerar (`_coerce_higher`,
+  `_enforce_bid`). Policyn räknar alltid fram ett lagligt påstående, så inget olagligt
+  påstående kan nå bordet.
+- **Ingen höjning finns (påståendet är Meier):** `slå` är omöjligt. Policyn väljer
   `syna` eller `skicka` — och synar alltid (avsnitt 5.2).
 - **Saknad motståndardata:** med för få observationer faller den läsande agenten
   tillbaka på `CALL_PRIOR`. `reading` skalar hur snabbt profilen får genomslag.
@@ -651,8 +652,8 @@ konkret exempel på varför frysning + färsk kalibrering är ett krav.
 
 Symptom: matcher med flera agenter tog aldrig slut (9 999 passningar, 1 478
 rundor) och avbröts först av en hård gräns. Orsak: med `q` strax under
-syn-tröskeln synade **ingen** agent. Budet nådde Meier, gick ett varv, och
-budgivaren slog om och började en ny runda — utan att någon förlorade liv.
+syn-tröskeln synade **ingen** agent. påståendet nådde Meier, gick ett varv, och
+den som påstår slog om och började en ny runda — utan att någon förlorade liv.
 
 Åtgärd: Meier-regeln (avsnitt 5.2). Den är inte en heuristik utan en direkt följd
 av spelets mekanik, och den gör terminering till en garanterad egenskap. Testet
@@ -661,9 +662,9 @@ av spelets mekanik, och den gör terminering till en garanterad egenskap. Testet
 ### 8.2 Fall: läsande agent blev för passiv
 
 Symptom: en agent med hög `reading` skickade vidare **allt** och synade aldrig.
-Orsak: `effective_q` kollapsade den budspecifika tron till ett enda tal. Mot en
+Orsak: `effective_q` kollapsade den påståendespecifika tron till ett enda tal. Mot en
 motståndare som bedömdes "ärlig" (låg absolut frekvens) blev `P(vinst)` djupt
-negativ för **alla** bud — även höga, där en syn i själva verket går jämnt upp.
+negativ för **alla** påstående — även höga, där en syn i själva verket går jämnt upp.
 
 Åtgärd: relativ justering (avsnitt 6.0). Motståndarens benägenhet skalas in i
 tabellen i stället för att ersätta den. Testet `test_a_reading_agent_still_calls`
@@ -672,7 +673,7 @@ låser den.
 ### 8.3 Fall: kvarglömd absolut läsning
 
 Symptom: `cecilia` och `david` (hög `risk` + läsning) förlorade nästan alltid.
-Orsak: samma absoluta läsning som 8.2 gjorde att de synade **låga** bud, där
+Orsak: samma absoluta läsning som 8.2 gjorde att de synade **låga** påstående, där
 `CALL_PRIOR ≈ 0,05` och en syn nästan alltid förlorar.
 
 Åtgärd: samma som 8.2 (relativ justering). Efter fixen ligger spelarna
@@ -691,9 +692,9 @@ explicita parametrar, aldrig av namnet.
 | Namn | Roll | Risk | Press | Läsning | LLM | Kort beskrivning |
 |---|---|---:|---:|---:|---|---|
 | Axel | `axel` | 0,50 | 0,50 | 0,00 | nej | Basmodellen; fast mätsticka |
-| Berit | `berit` | 0,25 | 0,25 | 0,15 | ja | Försiktig; bjuder nära sanningen |
+| Berit | `berit` | 0,25 | 0,25 | 0,15 | ja | Försiktig; påstår nära sanningen |
 | Cecilia | `cecilia` | 0,50 | 0,45 | 0,50 | ja | Kalkylerande; läser motståndaren |
-| David | `david` | 0,65 | 0,60 | 0,35 | ja | Djärv; pressar budet högre |
+| David | `david` | 0,65 | 0,60 | 0,35 | ja | Djärv; pressar påståendet högre |
 
 **Axel** är basmodellen (BASE): deterministisk, icke-läsande, utan LLM. Han är
 den fasta mätstickan — de andra jämförs mot honom, och han får förlora ofta. Han
@@ -718,11 +719,11 @@ gå vidare — David är svagast, vilket är väntat med högst press.
 
 Vid varje beslutspunkt får agenten:
 
-- aktuellt speltillstånd (runda, bud, hållare, antal aktiva spelare),
+- aktuellt speltillstånd (runda, påstående, hållare, antal aktiva spelare),
 - **egna tärningar endast när de är kända** (beslut 1 och 4-titta),
 - senaste annonserade värde,
 - antal aktiva spelare,
-- tillgängliga drag (lagliga bud),
+- tillgängliga drag (lagliga påståenden),
 - begränsad, läckagefri historik om motståndarnas tidigare beteende.
 
 Agenten returnerar ett strukturerat svar:

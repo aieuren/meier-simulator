@@ -11,7 +11,7 @@ Tre delar:
 
 - ``OUTCOME_P`` – exakt sannolikhet för vart och ett av de 21 utfallen, härledd
   ur ``rules.FACE_WEIGHTS`` (de avlånga tärningarna). Ingen skattning.
-- ``CallOdds`` – förväntade liv vid en syn på ett givet bud, plus tröskeln ``q*``
+- ``CallOdds`` – förväntade liv vid en syn på ett givet påstående, plus tröskeln ``q*``
   där en syn går jämnt upp.
 - ``BasePolicy`` – en stark, fryst, icke-läsande referensagent som maximerar
   förväntad överlevnad. Den har en enda global tro ``q`` på motståndarens
@@ -62,8 +62,8 @@ def lives_lost(bid: int, shown: int) -> int:
 def _strength(value: int) -> float:
     """Hur högt ett värde är i rangordningen, 0 (31) till 1 (Meier).
 
-    Proxy för hur attraktivt ett bud är att syna: ju högre bud, desto billigare
-    är synen och desto oftare syns den (empiriskt: Meier 46 %, 66 46 %, låga bud
+    Proxy för hur attraktivt ett påstående är att syna: ju högre påstående, desto billigare
+    är synen och desto oftare syns den (empiriskt: Meier 46 %, 66 46 %, låga påståenden
     aldrig).
     """
     return 1.0 - rules.rank(value) / (len(rules.RANKING) - 1)
@@ -71,17 +71,17 @@ def _strength(value: int) -> float:
 
 @dataclass(frozen=True)
 class CallOdds:
-    """Vad en syn på budet ``bid`` är värd, och när den går jämnt upp.
+    """Vad en syn på påståendet ``bid`` är värd, och när den går jämnt upp.
 
     ``l_win``  – förväntade liv som *hållaren* förlorar, givet att synaren vinner
-                 (tärningarna visar lägre än budet).
+                 (tärningarna visar lägre än påståendet).
     ``l_lose`` – förväntade liv som *synaren* förlorar, givet att synaren förlorar
-                 (tärningarna visar budet eller högre).
+                 (tärningarna visar påståendet eller högre).
     ``q_star`` – minsta bluff-sannolikhet där synen ger positivt livsöverskott.
     """
 
     bid: int
-    p_win: float  # P(tärningarna visar lägre än budet) — synaren vinner
+    p_win: float  # P(tärningarna visar lägre än påståendet) — synaren vinner
     l_win: float
     l_lose: float
 
@@ -111,7 +111,7 @@ def _call_odds(bid: int) -> CallOdds:
     return CallOdds(bid=bid, p_win=p_lo, l_win=l_win, l_lose=l_lose)
 
 
-#: CallOdds för varje giltigt bud. Beräknas en gång.
+#: CallOdds för varje giltigt påstående. Beräknas en gång.
 CALL_ODDS: dict[int, CallOdds] = {value: _call_odds(value) for value in rules.RANKING}
 
 
@@ -149,7 +149,7 @@ class Decision:
     """Ett färdigt beslut från policyn.
 
     ``action`` är en av ``"bud"``, ``"slå"``, ``"syna"``, ``"skicka"`` eller
-    ``"titta"``/``"blint"`` (vid tvingad höjning). ``bid`` är satt för bud och slå.
+    ``"titta"``/``"blint"`` (vid tvingad höjning). ``bid`` är satt för påstående och slå.
     ``reason`` är en kort maskinell motivering (LLM:en får formulera en rikare).
     """
 
@@ -161,32 +161,32 @@ class Decision:
         return {"action": self.action, "bid": self.bid, "reason": self.reason}
 
 
-#: Den typiska bluff-frekvensen i populationen, mätt på **avslöjade** bud
+#: Den typiska bluff-frekvensen i populationen, mätt på **avslöjade** påstående
 #: (frivilliga väger fullt, blinda halvt). Används som nämnare när en motståndares
 #: benägenhet mäts relativt populationen, och som förhandstro innan en spelare
 #: avslöjats. Kalibrerad mot en färsk strategisk serie (300 matcher, 0,715).
 #:
 #: Notera att detta **inte** är samma tal som andelen överbud bland alla synliga
-#: bud (0,586). Skillnaden är de tvingade höjningarna: de är mekaniska (~78 %
+#: påstående (0,586). Skillnaden är de tvingade höjningarna: de är mekaniska (~78 %
 #: "överbud" för alla) och räknas därför bort ur profilen. Använder man 0,586 som
 #: nämnare får varje normal spelare ratio > 1,0 och en läsande agent synar i
 #: onödan.
 DEFAULT_Q = 0.715
 
-#: Kalibrerad, fryst, **riskjusterad** tro på ``P(synaren vinner | budnivå)``.
+#: Kalibrerad, fryst, **riskjusterad** tro på ``P(synaren vinner | påståendenivå)``.
 #:
-#: Detta är kärnan i ``q``-modellen, men **per budnivå**. Ett enda globalt tal
-#: räcker inte: sannolikheten att en syn vinner varierar kraftigt med budet,
-#: därför att motståndare bjuder över sina tärningar när de är svaga.
+#: Detta är kärnan i ``q``-modellen, men **per påståendenivå**. Ett enda globalt tal
+#: räcker inte: sannolikheten att en syn vinner varierar kraftigt med påståendet,
+#: därför att motståndare påstår över sina tärningar när de är svaga.
 #:
 #: Tabellen är **inte** den råa sannolikheten ``P(shown < bid)``. Den är medvetet
 #: *mer försiktig* än så, och det av två skäl som hänger ihop:
 #:
-#: 1. **Livsförlusten är asymmetrisk.** Att syna ett lågt bud som 33 vinner ofta
+#: 1. **Livsförlusten är asymmetrisk.** Att syna ett lågt påstående som 33 vinner ofta
 #:    (P ≈ 0,73), men när det går fel kostar det mycket. En rå sannolikhet skulle
-#:    därför locka agenten att syna bud som har negativt *livs*överskott.
+#:    därför locka agenten att syna påstående som har negativt *livs*överskott.
 #: 2. **Synfrekvensen styr inlärningen.** Synar ingen frivilligt blir de enda
-#:    avslöjade buden tvingade höjningar — och då finns ingen data att läsa. En
+#:    avslöjade påståendena tvingade höjningar — och då finns ingen data att läsa. En
 #:    alltför försiktig tabell gör därför *läsningen* värdelös (se avsnitt 6).
 #:
 #: Tabellen är kalibrerad som en **halvvägs-sammandragning** mellan den
@@ -209,13 +209,13 @@ CALL_PRIOR: dict[int, float] = {
 CALL_INERTIA_BASE = 0.10
 CALL_INERTIA_RISK = 0.06
 
-#: Golv och lutning för ``P(budet blir synat)``. Högre bud synas oftare. Golvet
-#: hindrar att ett lågt bud ser ut att vara gratis att bluffa till.
+#: Golv och lutning för ``P(påståendet blir synat)``. Högre påståenden synas oftare. Golvet
+#: hindrar att ett lågt påstående ser ut att vara gratis att bluffa till.
 CALL_FLOOR = 0.10
 CALL_SLOPE = 0.40
 
-#: Värde av ett *säkert* bud (bid ≤ visat). Ett sådant bud kan aldrig straffa
-#: dig vid en syn — synaren förlorar. ``SAFE_POSITION`` gör ett högre säkert bud
+#: Värde av ett *säkert* påstående (bid ≤ visat). Ett sådant påstående kan aldrig straffa
+#: dig vid en syn — synaren förlorar. ``SAFE_POSITION`` gör ett högre säkert påstående
 #: (närmare det visade) mer värt, eftersom det är svårare att slå över.
 SAFE_BASE = 0.10
 SAFE_POSITION = 0.25
@@ -236,10 +236,10 @@ class BasePolicy:
     def decide_call(
         self, bid: int, *, lives: int = 3, opponent_q: float | None = None
     ) -> Decision:
-        """Ska agenten syna budet ``bid``? Agenten ser inte sina tärningar här.
+        """Ska agenten syna påståendet ``bid``? Agenten ser inte sina tärningar här.
 
         ``opponent_q`` är en motståndarspecifik bluffskattning (för läsande
-        agenter). Utan den används den **budspecifika** tron ``CALL_PRIOR[bid]``.
+        agenter). Utan den används den **påståendespecifika** tron ``CALL_PRIOR[bid]``.
 
         Synen avgörs av det förväntade livsöverskottet, med en liten
         tröghetströskel: att skicka vidare ger noll chans att vinna rundan, så
@@ -266,7 +266,7 @@ class BasePolicy:
             reason=f"P(vinst)={q:.2f}; EV={ev:+.3f} liv < −{inertia:.3f}",
         )
 
-    # -- Beslut 3b: alla tre svar på ett bud ------------------------------
+    # -- Beslut 3b: alla tre svar på ett påstående ------------------------------
     def decide_response(
         self, bid: int, *, lives: int = 3, opponent_q: float | None = None
     ) -> Decision:
@@ -278,13 +278,13 @@ class BasePolicy:
 
         - **Syna** — tärningarna avgör. Värdet är synens EV (samma som i
           :meth:`decide_call`).
-        - **Skicka vidare** — budet står kvar men ansvaret flyttas till mig.
-          Jag förlorar liv om tärningarna visar lägre än budet; annars förlorar
+        - **Skicka vidare** — påståendet står kvar men ansvaret flyttas till mig.
+          Jag förlorar liv om tärningarna visar lägre än påståendet; annars förlorar
           nästa spelare som synar. Värdet är därför nollsummespelet ovanför
-          budet, viktat med hur ofta budet synas.
-        - **Slå** — jag skakar blint och måste bjuda högre. Vilket bud det blir
-          avgör :meth:`decide_raise`; det är samma bud som motorn sedan spelar.
-          Värdet är hållarvärdet för just det budet.
+          påståendet, viktat med hur ofta påståendet synas.
+        - **Slå** — jag skakar blint och måste påstå högre. Vilket påstående det blir
+          avgör :meth:`decide_raise`; det är samma påstående som motorn sedan spelar.
+          Värdet är hållarvärdet för just det påståendet.
 
         Ingen av de tre tvingas fram. ``slå`` väljs bara när det slår båda
         andra, och ``syna`` behåller sin tröghetströskel så att en syn nära
@@ -314,10 +314,10 @@ class BasePolicy:
         return Decision(action, bid=None, reason=why)
 
     def _hold_value(self, bid: int) -> float:
-        """Mitt förväntade livsöverskott av att bära budet ``bid``.
+        """Mitt förväntade livsöverskott av att bära påståendet ``bid``.
 
         Budet synas med sannolikheten ``p_called``. Blir det synat vinner jag
-        om tärningarna visar lägre än budet — då förlorar synaren liv. Annars
+        om tärningarna visar lägre än påståendet — då förlorar synaren liv. Annars
         förlorar jag. Blir det inte synat händer ingenting i den här rundan.
         """
         odds = CALL_ODDS[bid]
@@ -328,21 +328,21 @@ class BasePolicy:
 
     # -- Beslut 2: slå (ser inte tärningarna) ---------------------------
     def decide_raise(self, bid: int) -> Decision:
-        """Vilket bud ska agenten säga när den slår (blint) över ``bid``?
+        """Vilket påstående ska agenten säga när den slår (blint) över ``bid``?
 
         Eftersom agenten inte ser sina tärningar är den minsta lagliga höjningen
-        säkrast (minst chans att tärningarna visar lägre). ``press`` driver budet
+        säkrast (minst chans att tärningarna visar lägre). ``press`` driver påståendet
         högre för att sätta motståndaren under press.
         """
         higher = rules.higher_options(bid)
         if not higher:
-            return Decision("syna", reason="Inget högre bud finns; enda svar är att syna.")
+            return Decision("syna", reason="Inget högre påstående finns; enda svar är att syna.")
         # higher[0] är högst (Meier), higher[-1] är minsta höjning.
         steps = int(round(self.params.press * (len(higher) - 1)))
         new_bid = higher[-(steps + 1)]
         return Decision("slå", bid=new_bid, reason=f"Slår till {rules.name(new_bid)}.")
 
-    # -- Beslut 1: första budet (ser tärningarna) -----------------------
+    # -- Beslut 1: första påståendet (ser tärningarna) -----------------------
     def decide_bid(
         self,
         shown: int,
@@ -350,35 +350,35 @@ class BasePolicy:
         opponent_factor: float = 1.0,
         previous_bid: int | None = None,
     ) -> Decision:
-        """Vilket bud ska agenten säga när den sett tärningarna visa ``shown``?
+        """Vilket påstående ska agenten säga när den sett tärningarna visa ``shown``?
 
-        Att bjuda ``shown`` är **säkert**: blir det synat visar tärningarna minst
-        budet, så synaren förlorar. Det är grundbudet.
+        Att påstå ``shown`` är **säkert**: blir det synat visar tärningarna minst
+        påståendet, så synaren förlorar. Det är grundpåståendet.
 
-        Ett bud **över** ``shown`` är en bluff. Den vinner bara om motståndaren
+        Ett påstående **över** ``shown`` är en bluff. Den vinner bara om motståndaren
         lägger sig (sannolikhet ``1 − p_called``) och förlorar liv om den synas.
         En bluff lönar sig därför bara när den är *billig att bli synad på* — alltså
-        på budnivåer som sällan synas. ``press`` väger vinsten av att lägga sig;
-        vid låg press bjuder agenten sanning, vid hög press tar den chansen.
+        på påståendenivåer som sällan synas. ``press`` väger vinsten av att lägga sig;
+        vid låg press påstår agenten sanning, vid hög press tar den chansen.
 
-        ``previous_bid`` är budet som ligger när spelaren måste höja. Utan det
-        valde agenten bud som om bordet var tomt, och motorn fick sedan tyst
-        skriva om budet till minsta lagliga höjning. Här väljer agenten i stället
-        bland de lagliga buden direkt, så att budet den säger är dess eget.
+        ``previous_bid`` är påståendet som ligger när spelaren måste höja. Utan det
+        valde agenten påståenden som om bordet var tomt, och motorn fick sedan tyst
+        skriva om påståendet till minsta lagliga höjning. Här väljer agenten i stället
+        bland de lagliga påståendena direkt, så att påståendet den säger är dess eget.
 
         ``opponent_factor`` är motståndarens **synbenägenhet** relativt det
         normala (1,0 = som folk mest). En motståndare som synar ofta gör varje
         bluff dyrare, och då bluffar agenten mindre. Det är läsningens inverkan
-        på budet — skild från ``press``, som är agentens egen benägenhet.
+        på påståendet — skild från ``press``, som är agentens egen benägenhet.
         """
         legal = legality.legal_bids(shown=shown, previous_bid=previous_bid)
         if not legal:
-            raise ValueError(f"Inget lagligt bud över {rules.name(previous_bid)}")
+            raise ValueError(f"Inget lagligt påstående över {rules.name(previous_bid)}")
 
         if rules.is_meier(shown):
-            return Decision("bud", bid=shown, reason="Meier — högsta möjliga, bjuder det.")
+            return Decision("bud", bid=shown, reason="Meier — högsta möjliga, påstår det.")
 
-        # Grundbudet är det högsta lagliga bud som inte är en bluff, alltså
+        # Grundpåståendet är det högsta lagliga påstående som inte är en bluff, alltså
         # ``shown`` om det är lagligt, annars minsta lagliga höjning.
         safe = shown if shown in legal else legal[-1]
 
@@ -404,11 +404,11 @@ class BasePolicy:
         return Decision(
             "bud",
             bid=safe,
-            reason=f"Visar {rules.name(shown)}; bjuder {rules.name(safe)}.",
+            reason=f"Visar {rules.name(shown)}; påstår {rules.name(safe)}.",
         )
 
     def _bid_value(self, bid: int, shown: int) -> float:
-        """Värdet av att bjuda ``bid`` när tärningarna visar ``shown``.
+        """Värdet av att påstå ``bid`` när tärningarna visar ``shown``.
 
         Behålls som en enkel, läsbar poängsättning för analys och tester. Det
         faktiska budvalet görs i :meth:`decide_bid`, som jämför sanning mot bästa
@@ -421,12 +421,12 @@ class BasePolicy:
         return (1.0 - p_called) * self.params.press - p_called * CALL_ODDS[bid].l_lose
 
     def _p_called(self, bid: int, opponent_factor: float = 1.0) -> float:
-        """Uppskattad sannolikhet att ett bud blir synat.
+        """Uppskattad sannolikhet att ett påstående blir synat.
 
-        Fryst heuristik, kalibrerad mot empirin: högre bud synas oftare eftersom
-        de är billigare att syna (synaren vinner oftare). Låga bud synas sällan
+        Fryst heuristik, kalibrerad mot empirin: högre påståenden synas oftare eftersom
+        de är billigare att syna (synaren vinner oftare). Låga påståenden synas sällan
         men aldrig *aldrig* — därför ett golv. Utan golvet ser en bluff till ett
-        lågt bud ut att vara gratis, och agenten bluffar ihjäl sig.
+        lågt påstående ut att vara gratis, och agenten bluffar ihjäl sig.
 
         ``opponent_factor`` skalar uppskattningen med motståndarens kända
         synbenägenhet (se :meth:`OpponentTracker.risk_factor`). Den som möter en
@@ -438,11 +438,11 @@ class BasePolicy:
 
     # -- Beslut 4: tvingad höjning (titta eller blint) ------------------
     def decide_forced(self, bid: int) -> Decision:
-        """Titta på de nya tärningarna eller bjuda blint? Fattas utan att titta."""
+        """Titta på de nya tärningarna eller påstå blint? Fattas utan att titta."""
         if not rules.higher_options(bid):
             return Decision("syna", reason="Meier är högst; kan inte höja.")
-        # En pressande profil bjuder hellre blint (döljer information);
-        # en försiktig profil tittar hellre (kan bjuda nära sanningen).
+        # En pressande profil påstår hellre blint (döljer information);
+        # en försiktig profil tittar hellre (kan påstå nära sanningen).
         if self.params.press > self.params.risk:
-            return Decision("blint", reason="Pressande profil: bjuder blint.")
+            return Decision("blint", reason="Pressande profil: påstår blint.")
         return Decision("titta", reason="Försiktig profil: tittar på tärningarna.")

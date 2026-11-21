@@ -7,8 +7,8 @@ tärningarna kommer in **bara** via :meth:`OpponentTracker.reveal`, som motorn
 anropar *efter* att en syn avgjorts.
 
 Varför det spelar roll: ``session.py`` loggar ``shown`` (de faktiska tärningarna)
-för varje bud. Bygger man profilen ur hela loggen läcker framtiden in i nuet —
-agenten "vet" då att ett bud *var* en bluff, fast ingen kunde veta det än. Det
+för varje påstående. Bygger man profilen ur hela loggen läcker framtiden in i nuet —
+agenten "vet" då att ett påstående *var* en bluff, fast ingen kunde veta det än. Det
 gör resultaten ogiltiga. Här kan det inte hända.
 
 En bluff kan alltså bara räknas **efter** att rundan avslöjats genom en syn.
@@ -20,11 +20,11 @@ from dataclasses import dataclass, field
 
 from .policy import DEFAULT_Q
 
-#: Styrka på förhandstron. Med ``alpha`` "låtsas" vi ha sett ``alpha`` bud som
+#: Styrka på förhandstron. Med ``alpha`` "låtsas" vi ha sett ``alpha`` påstående som
 #: betett sig som den globala tron. Högre värde = trögare inlärning.
 PRIOR_STRENGTH = 4.0
 
-#: Hur mycket ett avslöjat **blint** bud väger mot ett avslöjat frivilligt bud.
+#: Hur mycket ett avslöjat **blint** påstående väger mot ett avslöjat frivilligt påstående.
 #: Ett slag är ett svagare löfte (spelaren såg inte tärningarna), men det är
 #: fortfarande en lögn motståndarna ser, så det väger mer än noll.
 BLIND_WEIGHT = 0.5
@@ -192,11 +192,11 @@ def _clamp01(value: float) -> float:
 class OpponentStats:
     """Vad vi vet om en motståndare, allt ur offentlig information.
 
-    ``visible_bids``       – antal icke-blinda *frivilliga* bud (initialbud) vi sett.
+    ``visible_bids``       – antal icke-blinda *frivilliga* påstående (initialbud) vi sett.
     ``forced_bids``        – antal tvingade höjningar (mekaniska, säger inget om personen).
-    ``revealed``           – hur många frivilliga bud som avslöjats genom en syn.
+    ``revealed``           – hur många frivilliga påståenden som avslöjats genom en syn.
     ``revealed_bluffs``    – hur många av de avslöjade som var lögner.
-    ``decisions``          – antal svar mot ett bud (slå/skicka/syna).
+    ``decisions``          – antal svar mot ett påstående (slå/skicka/syna).
     ``passes``             – hur ofta spelaren skickade vidare (ger upp under press).
     ``raises``             – hur ofta spelaren slog (pressade tillbaka).
     ``calls``              – hur ofta spelaren synade.
@@ -237,8 +237,8 @@ class OpponentTracker:
 
     Anropas av motorn i takt med att händelser blir offentliga:
 
-    - :meth:`observe_bid` när en spelare säger ett bud (offentligt direkt).
-    - :meth:`observe_decision` när en spelare svarar på ett bud (offentligt direkt).
+    - :meth:`observe_bid` när en spelare säger ett påstående (offentligt direkt).
+    - :meth:`observe_decision` när en spelare svarar på ett påstående (offentligt direkt).
     - :meth:`reveal` **endast efter** att en syn avgjorts, med facit.
 
     Ingen metod tar emot dolda tärningar eller framtida drag.
@@ -253,24 +253,24 @@ class OpponentTracker:
 
     # -- Offentliga observationer ---------------------------------------
     def observe_bid(self, player: str, *, blind: bool, forced: bool = False) -> None:
-        """En spelare säger ett bud. Blinda bud är inga löften — räknas inte.
+        """En spelare säger ett påstående. Blinda påstående är inga löften — räknas inte.
 
         ``forced`` markerar en **tvingad höjning** (bägaren har gått ett helt
-        varv). En sådan är mekanisk: budgivaren måste höja vad tärningarna än
+        varv). En sådan är mekanisk: den som påstod måste höja vad tärningarna än
         visar, så den säger inget om personen. Räknas separat och används aldrig
         i bluffprofilen — annars dränks varje spelares profil av de ~78 %
-        tvingade bud som *alla* tvingas till, och en försiktig spelare ser ut som
+        tvingade påståenden som *alla* tvingas till, och en försiktig spelare ser ut som
         en värre bluffare än en riktig bluffare.
         """
         if forced:
             self._bucket(player).forced_bids += 1
         elif not blind:
             self._bucket(player).visible_bids += 1
-        # Ett blint bud skapar ingen profil: det är inget löfte, och en spelare
+        # Ett blint påstående skapar ingen profil: det är inget löfte, och en spelare
         # som bara har slagit ska fortfarande ligga på den globala förhandstron.
 
     def observe_decision(self, player: str, action: str) -> None:
-        """En spelare svarar på ett bud: ``slå``, ``skicka`` eller ``syna``."""
+        """En spelare svarar på ett påstående: ``slå``, ``skicka`` eller ``syna``."""
         bucket = self._bucket(player)
         bucket.decisions += 1
         if action == "skicka":
@@ -283,19 +283,19 @@ class OpponentTracker:
     def reveal(
         self, player: str, *, was_bluff: bool, blind: bool = False, forced: bool = False
     ) -> None:
-        """Facit efter en syn: var spelarens bud en bluff?
+        """Facit efter en syn: var spelarens påstående en bluff?
 
         Anropas **bara** när tärningarna redan är avslöjade och rundan är avgjord.
-        Attribueras till den som *sa* budet (den som synen gällde), inte till den
+        Attribueras till den som *sa* påståendet (den som synen gällde), inte till den
         som eventuellt skickade vidare.
 
-        En **tvingad höjning** (``forced``) räknas aldrig: budgivaren måste höja
+        En **tvingad höjning** (``forced``) räknas aldrig: den som påstod måste höja
         vad tärningarna än visar, så den säger inget om personen. Utan detta blev
-        varje spelares profil en spegel av de ~78 % tvingade bud *alla* tvingas
+        varje spelares profil en spegel av de ~78 % tvingade påståenden *alla* tvingas
         till — och en försiktig spelare såg ut som en värre bluffare än en riktig
         bluffare.
 
-        Ett **blint** bud (ett slag) räknas, men väger hälften: spelaren lovade
+        Ett **blint** påstående (ett slag) räknas, men väger hälften: spelaren lovade
         inget den kunde se, men lögnen syns för motståndarna.
         """
         if forced:
@@ -320,10 +320,10 @@ class OpponentTracker:
     def bluff_estimate(self, player: str) -> float:
         """Skattad bluff-frekvens för spelaren, eller den globala tron.
 
-        Använder bara bud som **avslöjats** genom en syn. Frivilliga bud (där
+        Använder bara påstående som **avslöjats** genom en syn. Frivilliga påstående (där
         spelaren såg tärningarna) väger tyngst; blinda slag väger hälften så
         mycket, eftersom spelaren då inte lovade något den kunde se. Finns inga
-        avslöjade bud är svaret den globala frekvensen — agenten vet inget än.
+        avslöjade påståenden är svaret den globala frekvensen — agenten vet inget än.
         """
         bucket = self.stats.get(player)
         if bucket is None:
@@ -341,13 +341,13 @@ class OpponentTracker:
     def bluff_ratio(self, player: str) -> float:
         """Spelarens bluffbenägenhet **relativt** populationen, kring 1,0.
 
-        Detta är nyckeln till läsningen. Att byta ut den budspecifika tron mot
-        spelarens *absoluta* bluff-frekvens vore ett fel: ett lågt bud (där
+        Detta är nyckeln till läsningen. Att byta ut den påståendespecifika tron mot
+        spelarens *absoluta* bluff-frekvens vore ett fel: ett lågt påstående (där
         nästan ingen bluffar, ``CALL_PRIOR[bid] ≈ 0,05``) skulle då plötsligt
-        bedömas med t.ex. 0,4 och agenten skulle syna bud som nästan alltid är
+        bedömas med t.ex. 0,4 och agenten skulle syna påståenden som nästan alltid är
         sanna. I stället skalas tron **relativt** populationens nivå: en spelare
         som bluffar dubbelt så ofta som normalt får ratio 2,0, och då dubblas
-        synsannolikheten för varje budnivå.
+        synsannolikheten för varje påståendenivå.
         """
         if self.global_q <= 0.0:
             return 1.0
@@ -398,9 +398,9 @@ class OpponentTracker:
     def evidence(self, player: str) -> dict:
         """Rå, **offentlig** sammanställning om ``player``. Ingen tolkning.
 
-        Detta är vad sekreteraren har skrivit i protokollet: antal synliga bud,
+        Detta är vad sekreteraren har skrivit i protokollet: antal synliga påståenden,
         hur många som avslöjats, hur många av dem som var lögner, hur spelaren
-        svarat på bud. Motståndarprofilen byggs ur detta — men tolkningen görs
+        svarat på påstående. Motståndarprofilen byggs ur detta — men tolkningen görs
         av LLM:en, inte här. Alla tal är sådana en åskådare vid bordet hade
         kunnat räkna upp; inga dolda tärningar ingår.
         """
@@ -487,7 +487,7 @@ class OpponentTracker:
     def profile_factor(self, profile: OpponentProfile) -> float:
         """Översätt en motståndarprofils ``press`` till en **relativ** faktor.
 
-        Faktorn är kring 1,0 och multipliceras på den budspecifika tron, precis
+        Faktorn är kring 1,0 och multipliceras på den påståendespecifika tron, precis
         som :meth:`bluff_ratio`. ``press = 0,5`` (neutralt) ger 1,0; en spelare
         som bedöms bluffa dubbelt så ofta ger 2,0. Faktorn dämpas av profilens
         konfidens, så en osäker gissning inte får slå över populationstron.

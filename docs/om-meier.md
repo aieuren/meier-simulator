@@ -31,7 +31,7 @@ Två tärningar i en bägare med lock. Tärningarna läses som ett tal med den
 högsta först: 2 och 5 blir **52**. **21 kallas Meier och är högst.** Sedan
 faller ordningen, och **par slår singlar** – 44 slår alltså 65.
 
-En **runda** går från första budet till dess att någon **synar**.
+En **runda** går från första påståendet till dess att någon **synar**.
 En **match** är många rundor i följd. Varje spelare har tre liv, och den som
 mist sina liv är ute. Sist kvar vinner matchen.
 
@@ -77,7 +77,7 @@ Spelarens **egen profil** sitter i tre parametrar, inte i namnet. Varje paramete
 går från 0 till 1.
 
 - **`risk`** – riskbenägenhet: hur gärna spelaren synar och tar en chans
-- **`press`** – press: hur ofta spelaren bluffar, och hur högt hen bjuder när
+- **`press`** – press: hur ofta spelaren bluffar, och hur högt hen påstår när
   hen slår
 - **`reading`** – läsförmåga: hur mycket spelaren låter information om andras
   tidigare spel styra
@@ -85,9 +85,9 @@ går från 0 till 1.
 | Spelare | risk | press | läsförmåga | LLM | Profil |
 |---|---:|---:|---:|---|---|
 | **Axel** | 0,50 | 0,50 | 0,00 | nej | Grundtaktik. Fast mätsticka. |
-| **Berit** | 0,25 | 0,25 | 0,15 | ja | Försiktig. Bjuder nära sanningen. |
+| **Berit** | 0,25 | 0,25 | 0,15 | ja | Försiktig. Påstår nära sanningen. |
 | **Cecilia** | 0,50 | 0,45 | 0,50 | ja | Kalkylerande. Läser motståndaren. |
-| **David** | 0,65 | 0,60 | 0,35 | ja | Djärv. Pressar budet högre. |
+| **David** | 0,65 | 0,60 | 0,35 | ja | Djärv. Pressar påståendet högre. |
 
 **Axel är referensen.** Han har ingen språkmodell alls, spelar alltid likadant
 och ändrar sig aldrig. De andras resultat mäts mot hans. Han är byggd för att
@@ -122,15 +122,15 @@ Om spelaren fick se allt skulle det inte finnas något att bluffa om.
 Varje beslut är en avvägning mellan två saker: **chansen att slippa bli synad**
 och **vad det kostar om du blir synad**.
 
-Att bjuda exakt det tärningarna visar är **säkert**. Blir du synad vinner du
-rundan, för tärningarna visar då minst budet.
+Att påstå exakt det tärningarna visar är **säkert**. Blir du synad vinner du
+rundan, för tärningarna visar då minst påståendet.
 
-Att bjuda högre är en bluff. Blir du synad **förlorar du ett liv** (två om budet
+Att påstå högre är en bluff. Blir du synad **förlorar du ett liv** (två om påståendet
 är Meier), för tärningarna visar då mindre än du sa. En bluff som avslöjas ger
 dig alltså ingenting.
 
 Så vad köper en bluff? Att motståndaren får ett **svårare beslut**. Hen måste
-antingen syna ett bud hen misstror, eller slå om bägaren till något ännu
+antingen syna ett påstående hen misstror, eller slå om bägaren till något ännu
 högre – och då ta över risken själv. En bluff är inte "värd mer". Den flyttar risken över
 till motståndaren, och den lönar sig bara när motståndaren hellre avstår från
 att syna än tar den chansen.
@@ -138,15 +138,15 @@ att syna än tar den chansen.
 Maskinen fattar **två olika slags höjningar**, och de fungerar olika.
 
 **När spelaren har sett sina tärningar** och bluffar över det hen såg, väljer
-hen den **minsta möjliga höjningen**. Ett högre bud synas nämligen oftare: en
+hen den **minsta möjliga höjningen**. Ett högre påstående synas nämligen oftare: en
 syn på 66 är billigare för motståndaren än en syn på 51, eftersom tärningarna
-då oftare är lägre än budet. Att höja längre ökar alltså bara risken att åka
+då oftare är lägre än påståendet. Att höja längre ökar alltså bara risken att åka
 dit, utan att ge något tillbaka. Här höjs det därför bara ett enda steg, aldrig
 flera.
 
 **När spelaren slår** skakar hen om bägaren och tittar inte. Då finns
 ingen "sann" nivå att lägga sig strax över, och då är kalkylen en annan. Här
-bestämmer `press` hur högt budet läggs: låg press lägger sig nära minimum, hög
+bestämmer `press` hur högt påståendet läggs: låg press lägger sig nära minimum, hög
 press tar ett språng uppåt för att sätta motståndaren i ett dyrare läge. Det är
 ett medvetet val i modellen, inte en sanning om spelet – ett språng är farligare
 om det blir synat, men svårare att värja sig mot.
@@ -159,7 +159,7 @@ styrs av `press`. Det är två skilda beslut i koden
 
 Bluffen är ett **aktivt val**, och hur ofta spelaren bluffar styrs av `press`.
 
-En spelare med låg `press` bjuder oftast sanningen. En spelare med hög `press`
+En spelare med låg `press` påstår oftast sanningen. En spelare med hög `press`
 tar chansen oftare. Parametern styr hur ofta, inte vilken strategi som är bäst.
 
 ### Spelaren läser sina motståndare
@@ -217,8 +217,8 @@ enda syn väger en fjärdedel av en mogen bild.
 
 Samma princip gäller åt andra hållet: en motståndare som synar ofta gör varje
 bluff dyrare, så spelaren bluffar mindre mot hen. Maskinen räknar med
-motståndarens synfrekvens när den väljer bud. Mot en som sällan synar är det
-friare fram; mot en som synar ofta lönar sig bara de bud som är nästan säkra.
+motståndarens synfrekvens när den väljer påstående. Mot en som sällan synar är det
+friare fram; mot en som synar ofta lönar sig bara de påståenden som är nästan säkra.
 
 ---
 
@@ -227,7 +227,7 @@ friare fram; mot en som synar ofta lönar sig bara de bud som är nästan säkra
 - **Spelarna** – de fyra spelarna och deras profiler.
 - **Enskild spelare** – skriv in två tärningar och se vad en spelare svarar.
 - **Fyra spelare** – fyra spelare spelar mot varandra, ett steg i taget eller
-  hela matchen. Loggen visar varje bud, varje syn och vem som förlorade liv.
+  hela matchen. Loggen visar varje påstående, varje syn och vem som förlorade liv.
 - **Matchserie** – kör många matcher och få statistik.
 - **Analys** – ladda upp loggarna och ställ frågor om materialet. Svaren kommer
   från en språkmodell och kan innehålla diagram.
@@ -265,5 +265,5 @@ spelare svarar på samma slag. Samma tärningar, samma regler, olika profil – 
 är själva poängen med maskinen.
 
 Prova samma slag med flera spelare och jämför. Prova också att köra en hel
-match och läsa loggen: varje bud, varje syn och vem som förlorade liv står
+match och läsa loggen: varje påstående, varje syn och vem som förlorade liv står
 med.

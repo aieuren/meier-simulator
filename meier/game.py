@@ -1,6 +1,6 @@
 """Spelmotor för Meier.
 
-Motorn håller ordning på spelare, liv, bud och turen, och låter oberoende
+Motorn håller ordning på spelare, liv, påståenden och turen, och låter oberoende
 agenter spela mot varandra. Varje agent får bara den information en riktig
 spelare skulle ha; ingen agent ser de andra agenternas hemliga tärningar.
 """
@@ -35,7 +35,7 @@ class PlayerState:
 
 @dataclass
 class Turn:
-    """En spelares tur: de slår och säger ett bud."""
+    """En spelares tur: de slår och säger ett påstående."""
 
     player_index: int
     dice: tuple[int, int]
@@ -92,8 +92,8 @@ class Game:
         """Spela en runda. Returnera index för nästa startspelare.
 
         Turen går i sittordning bland de spelare som är kvar. Den som sätter
-        budet ("budgivaren") slår och säger ett bud. När bägaren kommer tillbaka
-        till budgivaren ett helt varv senare måste denne höja – eller, om budet
+        påståendet ("den som påstod") slår och säger ett påstående. När bägaren kommer tillbaka
+        till den som påstod ett helt varv senare måste denne höja – eller, om påståendet
         är Meier, slå om och börja en ny runda.
         """
         active_idx = [i for i, p in enumerate(self.players) if not p.out]
@@ -104,10 +104,10 @@ class Game:
         order = active_idx[pos0:] + active_idx[:pos0]
 
         bidder = order[0]
-        holder = order[0]  # ansvarig för budet (byter vid skicka vidare)
+        holder = order[0]  # ansvarig för påståendet (byter vid skicka vidare)
         dice = self.roll()
         shown = rules.read_dice(*dice)
-        # Den som sitter näst efter budgivaren är den som först får svara.
+        # Den som sitter näst efter den som påstod är den som först får svara.
         nxt = order[1 % len(order)]
         ann = self.players[bidder].agent.announce(
             dice, opponent=self.players[nxt].name
@@ -141,14 +141,14 @@ class Game:
 
             idx = order[pos % len(order)]
             if idx == bidder:
-                # Bägaren har gått ett helt varv tillbaka till budgivaren.
+                # Bägaren har gått ett helt varv tillbaka till den som påstod.
                 if rules.is_meier(bid):
                     self._record(
                         f"  Bägaren tillbaka hos {self.players[bidder].name} med Meier "
                         "– slår om och börjar ny runda."
                     )
                     return bidder
-                # Tärningarna slås om; budgivaren väljer att titta eller bjuda blint.
+                # Tärningarna slås om; den som påstod väljer att titta eller påstå blint.
                 dice = self.roll()
                 shown = rules.read_dice(*dice)
                 responder = order[(order.index(bidder) + 1) % len(order)]
@@ -158,7 +158,7 @@ class Game:
                     opponent=self.players[responder].name,
                 )
                 bid = forced.bid
-                holder = bidder  # budgivaren ansvarar nu för det nya budet
+                holder = bidder  # den som påstod ansvarar nu för det nya påståendet
                 blind_note = " (blint)" if forced.blind else ""
                 why = f" [{forced.choice_reasoning}]" if forced.choice_reasoning else ""
                 self._record(
@@ -195,7 +195,7 @@ class Game:
                 bidder = idx
                 holder = idx
             elif decision.action == "skicka":
-                # Spelaren tar över ansvaret för budet.
+                # Spelaren tar över ansvaret för påståendet.
                 holder = idx
 
             pos += 1

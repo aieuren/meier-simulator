@@ -11,7 +11,7 @@ Uppdelningen är hela poängen:
 
 En tidigare version gjorde tvärtom: :class:`~meier.policy.BasePolicy` räknade
 fram draget och LLM:en formulerade bara repliken. Då blev varje spelare samma
-algoritm med olika konstanter, och ``press`` styrde ett budval som modellen
+algoritm med olika konstanter, och ``press`` styrde ett påståendeval som modellen
 aldrig fick påverka.
 
 Utan LLM-klient faller agenten tillbaka på :class:`~meier.policy.BasePolicy`.
@@ -40,18 +40,18 @@ Två tärningar läses som ett tal med den högsta tärningen först: 2 och 5 bl
 {rang}.
 
 Ett varv:
-1. Spelaren med bägaren skakar, tittar i smyg och säger ett resultat: det sanna,
-   ett högre eller ett lägre.
+1. Spelaren med bägaren skakar, tittar i smyg och säger ett påstående: det sanna,
+   ett högre (en bluff) eller ett lägre.
 2. Nästa spelare väljer ett av tre:
-   - Slå: skaka bägaren utan att titta och säga ett strikt högre bud.
-   - Syna: lyft locket. Visar tärningarna lägre än det sagda förlorar budgivaren
+   - Slå: skaka bägaren utan att titta och säga ett strikt högre påstående.
+   - Syna: lyft locket. Visar tärningarna lägre än påståendet förlorar den som påstod
      ett liv. Visar de samma eller högre förlorar den som synade ett liv.
-   - Skicka vidare: skicka bägaren vidare med samma bud. Du tar då över ansvaret
-     för budet.
-3. Den som slår måste alltid säga ett strikt högre bud, vad tärningarna än visar.
-4. Kommer bägaren ett helt varv tillbaka till budgivaren måste denne höja. Är
-   budet Meier slår budgivaren i stället om och börjar en ny runda.
-5. Meier kostar dubbelt: om budet är Meier, eller om tärningarna visar Meier vid
+   - Skicka vidare: skicka bägaren vidare med samma påstående. Du tar då över
+     ansvaret för påståendet.
+3. Den som slår måste alltid säga ett strikt högre påstående, vad tärningarna än visar.
+4. Kommer bägaren ett helt varv tillbaka till den som påstod måste denne höja. Är
+   påståendet Meier slår spelaren i stället om och börjar en ny runda.
+5. Meier kostar dubbelt: om påståendet är Meier, eller om tärningarna visar Meier vid
    en syn, förlorar man två liv i stället för ett.
 6. När någon förlorat ett liv går bägaren till föregående spelare, som slår och
    börjar en ny runda. Den som först mist tre liv är ute. Sist kvar vinner.""".format(
@@ -98,6 +98,8 @@ class StrategicAgent(Agent):
             f"{personality.describe(self.params)}\n\n"
             "REGLER\n"
             f"{_RULES}\n\n"
+            "Terminologi: säg alltid 'påstående' (aldrig 'bud') när du talar om "
+            "det du säger.\n\n"
             "Du fattar själv alla beslut. Du får bara välja bland de lagliga "
             "alternativ som anges i uppgiften. Svara alltid med JSON."
         )
@@ -183,7 +185,7 @@ class StrategicAgent(Agent):
 
     @staticmethod
     def _as_bid(value: object) -> int | None:
-        """Tolka ett bud ur modellens svar, som heltal eller siffror i text."""
+        """Tolka ett påstående ur modellens svar, som heltal eller siffror i text."""
         if isinstance(value, bool):
             return None
         if isinstance(value, int):
@@ -197,15 +199,15 @@ class StrategicAgent(Agent):
     def _parse_bid(self, data: dict, legal: list[int]) -> tuple[int | None, str]:
         bid = self._as_bid(data.get("bid"))
         if bid is None:
-            return None, "Du angav inget bud."
+            return None, "Du angav inget påstående."
         if bid not in legal:
             return None, (
-                f"{bid} är inte lagligt här. Lagliga bud: "
+                f"{bid} är inte lagligt här. Lagliga påståenden: "
                 f"{', '.join(rules.name(v) for v in legal)}."
             )
         return bid, str(data.get("reasoning") or "").strip()
 
-    # -- Beslut 1: budet (spelaren ser tärningarna) ------------------------
+    # -- Beslut 1: påståendet (spelaren ser tärningarna) -------------------
     def announce(
         self,
         dice: tuple[int, int],
@@ -213,7 +215,7 @@ class StrategicAgent(Agent):
         previous_bid: int | None = None,
         opponent: str | None = None,
     ) -> Announcement:
-        """Vilket bud säger spelaren, givet vad tärningarna visar?"""
+        """Vilket påstående säger spelaren, givet vad tärningarna visar?"""
         shown = rules.read_dice(*dice)
         legal = legality.legal_bids(shown=shown, previous_bid=previous_bid)
         context = self._bid_context(dice, shown, previous_bid, legal, opponent)
@@ -221,7 +223,7 @@ class StrategicAgent(Agent):
 
         corrected = False
         if bid is None:
-            # Reservpolicyn väljer bland samma lagliga bud, så budet är spelarens
+            # Reservpolicyn väljer bland samma lagliga påståenden, så valet är spelarens
             # eget även här. ``corrected`` betyder att LLM:en inte kunde svara.
             decision = self.policy.decide_bid(
                 shown,
@@ -270,12 +272,12 @@ class StrategicAgent(Agent):
             ]
         lines += [
             "",
-            "LAGLIGA BUD",
+            "LAGLIGA PÅSTÅENDEN",
             ", ".join(rules.name(v) for v in legal),
             "",
-            "Du får säga sanningen, ett högre eller ett lägre resultat. Tänk på vad "
-            "du tjänar på: ett bud under dina tärningar kan ingen syna utan att "
-            "förlora, ett bud över är en bluff.",
+            "Du får säga sanningen, ett högre (en bluff) eller ett lägre. Tänk på vad "
+            "du tjänar på: ett påstående under dina tärningar kan ingen syna utan att "
+            "förlora, ett påstående över är en bluff.",
             "",
             "Svara med JSON:",
             '{"bid": <heltal ur listan ovan>, "reasoning": "<kort motivering>"}',
@@ -286,13 +288,13 @@ class StrategicAgent(Agent):
     def announce_blind(
         self, dice: tuple[int, int], *, previous_bid: int, opponent: str | None = None
     ) -> Announcement:
-        """Spelaren slår: bägaren är stängd och budet måste vara strikt högre."""
+        """Spelaren slår: bägaren är stängd och påståendet måste vara strikt högre."""
         if not rules.is_valid_value(previous_bid):
-            raise ValueError(f"{previous_bid} är inte ett giltigt bud")
+            raise ValueError(f"{previous_bid} är inte ett giltigt påstående")
         legal = legality.blind_bids(previous_bid=previous_bid)
         if not legal:
             raise ValueError(
-                f"Kan inte slå: {rules.name(previous_bid)} är högst, det finns inget högre bud"
+                f"Kan inte slå: {rules.name(previous_bid)} är högst, det finns inget högre påstående"
             )
         shown = rules.read_dice(*dice)
         context = self._blind_context(previous_bid, legal, opponent)
@@ -325,32 +327,32 @@ class StrategicAgent(Agent):
             [
                 "DU SLÅR",
                 "Du skakar bägaren själv och lyfter inte på locket. Du ser inte tärningarna.",
-                f"Du måste säga ett strikt högre bud än {rules.name(previous_bid)}.",
+                f"Du måste säga ett strikt högre påstående än {rules.name(previous_bid)}.",
                 self._opponent_note(opponent),
                 "",
-                "LAGLIGA BUD",
+                "LAGLIGA PÅSTÅENDEN",
                 ", ".join(rules.name(v) for v in legal),
                 "",
-                "Ett lågt bud är svårare för nästa spelare att slå över. Ett högt bud "
-                "sätter press men synas oftare.",
+                "Ett lågt påstående är svårare för nästa spelare att slå över. Ett högt "
+                "påstående sätter press men synas oftare.",
                 "",
                 "Svara med JSON:",
                 '{"bid": <heltal ur listan ovan>, "reasoning": "<kort motivering>"}',
             ]
         )
 
-    # -- Beslut 3: titta eller bjuda blint vid tvingad höjning -------------
+    # -- Beslut 3: titta eller påstå blint vid tvingad höjning -------------
     def announce_forced(
         self, dice: tuple[int, int], *, previous_bid: int, opponent: str | None = None
     ) -> Announcement:
-        """Bägaren har gått ett helt varv: titta på de nya tärningarna eller bjuda blint?"""
+        """Bägaren har gått ett helt varv: titta på de nya tärningarna eller påstå blint?"""
         if not rules.is_valid_value(previous_bid):
-            raise ValueError(f"{previous_bid} är inte ett giltigt bud")
+            raise ValueError(f"{previous_bid} är inte ett giltigt påstående")
         choices = legality.forced_choices(previous_bid=previous_bid)
         if not choices:
             # Budet är Meier. Motorn slår om och börjar en ny runda i stället.
             raise ValueError(
-                f"Kan inte höja: {rules.name(previous_bid)} är högst, det finns inget högre bud"
+                f"Kan inte höja: {rules.name(previous_bid)} är högst, det finns inget högre påstående"
             )
         context = self._forced_context(previous_bid, choices, opponent)
         blind, reason = self._ask(context, self._parse_forced)
@@ -391,8 +393,8 @@ class StrategicAgent(Agent):
                 self._opponent_note(opponent),
                 "",
                 f"LAGLIGA VAL: {', '.join(choices)}",
-                "- titta: lyft locket och säg ett bud som du ser tärningarna.",
-                "- blint: bjud utan att titta, som när man slår.",
+                "- titta: lyft locket och säg ett påstående som du ser tärningarna.",
+                "- blint: påstå utan att titta, som när man slår.",
                 "",
                 "Svara med JSON:",
                 '{"blind": true | false, "reasoning": "<kort motivering>"}',
@@ -403,9 +405,9 @@ class StrategicAgent(Agent):
     def decide(
         self, bid: int, *, lives: int = 3, opponent: str | None = None
     ) -> ActionDecision:
-        """Svara på ett bud. Spelaren ser inte sina egna tärningar här."""
+        """Svara på ett påstående. Spelaren ser inte sina egna tärningar här."""
         if not rules.is_valid_value(bid):
-            raise ValueError(f"{bid} är inte ett giltigt bud")
+            raise ValueError(f"{bid} är inte ett giltigt påstående")
         choices = legality.response_actions(bid=bid)
         context = self._response_context(bid, lives, choices, opponent)
         action, reason = self._ask(context, lambda d: self._parse_response(d, choices))
@@ -437,14 +439,14 @@ class StrategicAgent(Agent):
         )
 
     def _say_action(self, action: str, bid: int) -> str:
-        """Repliken som hör till svaret på ett bud — inte till ett bud.
+        """Repliken som hör till svaret på ett påstående — inte till ett eget påstående.
 
         Byggs ur draget, av samma skäl som :meth:`_say`.
         """
         fallbacks = {
             "syna": f"Jag synar {rules.name(bid)}.",
             "skicka": f"Jag skickar vidare {rules.name(bid)}.",
-            "slå": f"Jag slår och bjuder högre än {rules.name(bid)}.",
+            "slå": f"Jag slår och påstår högre än {rules.name(bid)}.",
         }
         return fallbacks.get(action, f"Jag säger {rules.name(bid)}.")
 
@@ -476,10 +478,10 @@ class StrategicAgent(Agent):
                 self._opponent_note(opponent),
                 "",
                 f"LAGLIGA VAL: {', '.join(choices)}",
-                "- slå: skaka bägaren utan att titta och säga ett strikt högre bud.",
-                "- syna: lyft locket. Visar tärningarna lägre än budet förlorar "
-                "budgivaren ett liv, annars förlorar du ett. Meier kostar två.",
-                "- skicka: skicka bägaren vidare med samma bud och ta över ansvaret för det.",
+                "- slå: skaka bägaren utan att titta och säga ett strikt högre påstående.",
+                "- syna: lyft locket. Visar tärningarna lägre än påståendet förlorar "
+                "den som påstod ett liv, annars förlorar du ett. Meier kostar två.",
+                "- skicka: skicka bägaren vidare med samma påstående och ta över ansvaret för det.",
                 "",
                 "Svara med JSON:",
                 '{"action": "slå" | "syna" | "skicka", "reasoning": "<kort motivering>"}',
@@ -489,11 +491,11 @@ class StrategicAgent(Agent):
     # -- Repliken ----------------------------------------------------------
     @staticmethod
     def _say(bid: int) -> str:
-        """Repliken som hör till ett bud.
+        """Repliken som hör till ett påstående.
 
         Den byggs ur draget, inte ur ett eget modellanrop. Repliken är kosmetisk
         och styrs inte av spelarens parametrar, så ett extra anrop per drag vore
         bara kostnad utan inverkan på spelet. Det som styr hur spelaren *spelar*
-        är motiveringen och budet, och de kommer från beslutsanropet.
+        är motiveringen och påståendet, och de kommer från beslutsanropet.
         """
         return f"Jag säger {rules.name(bid)}."

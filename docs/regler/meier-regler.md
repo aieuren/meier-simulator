@@ -46,6 +46,14 @@ PDF:en.
 PDF:ens poängordning ligger som en bild. Den är avläst och verifierad mot
 `rules.RANKING`: alla 21 rader stämmer.
 
+### Om ordet "påstående"
+
+PDF:en säger **bud** om det en spelare säger om tärningarna. Resten av repot
+säger **påstående**, eftersom det ligger närmare vad handlingen faktiskt är: ett
+påstående om vad tärningarna visar, som kan vara sant eller falskt. Citatet ovan
+behåller PDF:ens ordalydelse. I koden heter fältet fortfarande `bid`, och
+loggarna använder `"bud"` som åtgärdsnamn.
+
 ---
 
 ## Spelet i korthet
@@ -96,7 +104,7 @@ alltså 65. Det är den vanligaste källan till förvirring när man läser kod 
 
 ## En runda
 
-En runda börjar med ett bud och slutar när någon **synar**. Rundan kan inte ta
+En runda börjar med ett påstående och slutar när någon **synar**. Rundan kan inte ta
 slut på något annat sätt (se undantaget om Meier nedan).
 
 1. **Första spelaren** skakar två tärningar i bägaren, tittar **i smyg**, och
@@ -105,27 +113,27 @@ slut på något annat sätt (se undantaget om Meier nedan).
    - ett **högre**, eller
    - ett **lägre**.
 
-   Det är alltså tillåtet att bjuda under det tärningarna visar. Bluffen går åt
+   Det är alltså tillåtet att påstå under det tärningarna visar. Bluffen går åt
    båda hållen.
 
 2. **Nästa spelare** väljer ett av tre:
 
    - **Slå** – skakar *utan att titta* på förra slaget och säger ett **högre**
-     resultat. Den som slår **måste alltid** säga ett högre bud än det förra,
+     resultat. Den som slår **måste alltid** säga ett högre påstående än det förra,
      vad tärningarna än visar.
    - **Syna** – lyfter locket.
      - Visar tärningarna **lägre** än det sagda: **föregående spelare** (den som
-       ansvarar för budet) förlorar ett liv.
+       ansvarar för påståendet) förlorar ett liv.
      - Visar tärningarna **samma eller högre**: **den som synade** förlorar ett
        liv.
-   - **Skicka vidare** – skickar bägaren **utan att slå**, med **samma bud och
-     samma tärningar**. Spelaren tar då över ansvaret för budet.
+   - **Skicka vidare** – skickar bägaren **utan att slå**, med **samma påstående och
+     samma tärningar**. Spelaren tar då över ansvaret för påståendet.
 
      Den som skickar vidare **tittar inte på tärningarna**. Att lyfta på locket
      är att syna, och det är en annan handling. Spelaren vet alltså bara vad
-     budet säger, inte vad tärningarna visar.
+     påståendet säger, inte vad tärningarna visar.
 
-3. **Meier kostar dubbelt.** Om budet är Meier, **eller** om tärningarna visar
+3. **Meier kostar dubbelt.** Om påståendet är Meier, **eller** om tärningarna visar
    Meier när någon synar, förlorar man **två liv** i stället för ett.
 
 ## Efter en livsförlust
@@ -137,12 +145,12 @@ före i sittordningen.
 
 ## Helt varv tillbaka
 
-Kommer bägaren ett **helt varv** tillbaka till den som satte budet, **måste**
+Kommer bägaren ett **helt varv** tillbaka till den som satte påståendet, **måste**
 den spelaren **höja**.
 
-- Är budet inte Meier: tärningarna slås om, och spelaren väljer att titta på dem
-  eller bjuda blint.
-- Är budet **Meier**: det går inte att höja. Spelaren slår i stället **om** och
+- Är påståendet inte Meier: tärningarna slås om, och spelaren väljer att titta på dem
+  eller påstå blint.
+- Är påståendet **Meier**: det går inte att höja. Spelaren slår i stället **om** och
   börjar en **ny runda**. Ingen förlorar liv.
 
 ## Vad som INTE står i reglerna
@@ -150,8 +158,8 @@ den spelaren **höja**.
 Detta är inte regler, utan simulatorns egna val. De får ändras utan att
 regeltexten ändras:
 
-- Att en blind höjning ("slå") alltid läggs på ett högre bud än det förra – det
-  *är* en regel, men *vilket* högre bud som väljs är ett strategival.
+- Att en blind höjning ("slå") alltid läggs på ett högre påstående än det förra – det
+  *är* en regel, men *vilket* högre påstående som väljs är ett strategival.
 - Hur ofta en agent bluffar, synar eller skickar vidare.
 - Att tärningarnas exakta form modelleras som `DIE_ELONGATION = 1.3`.
 
@@ -163,8 +171,8 @@ på locket **är** att syna. Kunde man titta och sedan skicka vidare skulle
 "skicka vidare" vara en gratis syn, och syna-alternativet vore meningslöst.
 Därför gäller:
 
-> Den som skickar vidare ser **inte** tärningarna. Spelaren vet bara vad budet
+> Den som skickar vidare ser **inte** tärningarna. Spelaren vet bara vad påståendet
 > säger.
 
-Motorn följer detta: den som ska välja handling får **budet** och sitt
+Motorn följer detta: den som ska välja handling får **påståendet** och sitt
 **livsantal**, aldrig tärningsvärdet. Se `docs/regler/granskning.md`, punkt 19.
