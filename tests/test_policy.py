@@ -5,7 +5,8 @@ bjuder, hur den höjer och när den synar. Testerna låser de egenskaper som
 motorn och analysen bygger på, särskilt de som höll på att gå förlorade:
 
 - budet är alltid lagligt och strikt högre vid höjning,
-- Meier synas alltid (annars tar rundan aldrig slut),
+- svaret på ett bud har tre lagliga val (syna, skicka, slå) och ingen av dem
+  tvingas fram av en regel — bara av värderingen,
 - ``press`` ger distinkt bluffbenägenhet mellan rollerna,
 - den budspecifika tron följer den frysta tabellen.
 """
@@ -81,7 +82,10 @@ def test_raise_at_meier_has_no_option_but_call(base):
 
 # -- Syn (beslut 3) --------------------------------------------------------
 
-def test_meier_is_always_called(base):
+def test_meier_call_ev_never_forbids_calling(base):
+    # Meier är det dyraste budet att bära, så synen är alltid värd att ta i
+    # tvåvägsvalet. Det är en egenskap hos EV-kurvan, inte en påtvingad regel:
+    # spelaren får skicka vidare (se test_response_meier_can_be_passed_on).
     decision = base.decide_call(rules.MEIER)
     assert decision.action == "syna"
 
@@ -105,6 +109,57 @@ def test_opponent_prior_can_shift_the_call(base):
     greedy = base.decide_call(bid, opponent_q=0.9)
     assert normal.action == "skicka"
     assert greedy.action == "syna"
+
+
+# -- Svar: syna, skicka eller slå (beslut 3b) -----------------------------
+
+def test_response_offers_all_three_actions():
+    # Alla tre åtgärderna måste vara nåbara. Vilken som väljs beror på profilen,
+    # så svepet går över parametrarna i stället för att kräva alla tre hos en.
+    seen = set()
+    for press in (0.0, 0.25, 0.5, 0.75, 1.0):
+        for risk in (0.0, 0.5, 1.0):
+            policy = BasePolicy(AgentParams(risk=risk, press=press, reading=0.0))
+            seen |= {policy.decide_response(bid).action for bid in rules.RANKING}
+    assert seen == {"syna", "skicka", "slå"}
+
+
+def test_response_can_shake_when_shaking_is_best():
+    # Låg press: blindslaget blir det minsta lagliga höjningen, och då är
+    # hållarvärdet bättre än att skicka vidare 31.
+    calm = BasePolicy(AgentParams(risk=0.5, press=0.0, reading=0.0))
+    assert calm.decide_response(31).action == "slå"
+
+
+def test_response_meier_is_not_forced_to_call():
+    # Meier synas i praktiken, men av ett skäl: att bära budet är dyrt
+    # (hållarvärde −0,92 liv). Ingen regel hindrar att det skickas vidare.
+    # Om hållarvärdet vore högt ska valet falla på "skicka" — det bevisar att
+    # tvånget är borta och att bara EV-kurvan styr.
+    class GenerousHold(BasePolicy):
+        def _hold_value(self, bid: int) -> float:
+            return 1.0
+
+    assert GenerousHold(AgentParams(0.5, 0.5, 0.0)).decide_response(rules.MEIER).action == "skicka"
+    assert BasePolicy(AgentParams(0.5, 0.5, 0.0)).decide_response(rules.MEIER).action == "syna"
+
+
+def test_response_never_invents_a_bid(base):
+    for bid in rules.RANKING:
+        decision = base.decide_response(bid)
+        assert decision.action in {"syna", "skicka", "slå"}
+        assert decision.bid is None
+
+
+def test_response_picks_the_best_available_option(base):
+    # Slå får bara väljas när det faktiskt är bäst av de tre.
+    for bid in rules.RANKING:
+        decision = base.decide_response(bid)
+        hold = base._hold_value(bid)
+        if decision.action == "slå":
+            raise_bid = base.decide_raise(bid)
+            assert raise_bid.action == "slå"
+            assert base._hold_value(raise_bid.bid) >= hold
 
 
 # -- Tvingad höjning (beslut 4) -------------------------------------------

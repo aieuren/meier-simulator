@@ -222,6 +222,12 @@ async function doDecide() {
       r.textContent = "Motivering: " + data.reasoning;
       out.appendChild(r);
     }
+    if (data.note) {
+      const n = document.createElement("div");
+      n.className = "reasoning";
+      n.textContent = data.note;
+      out.appendChild(n);
+    }
   } catch (err) {
     out.textContent = "Fel: " + err.message;
     out.className = "verdict error";

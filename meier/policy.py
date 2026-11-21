@@ -241,21 +241,15 @@ class BasePolicy:
         ``opponent_q`` är en motståndarspecifik bluffskattning (för läsande
         agenter). Utan den används den **budspecifika** tron ``CALL_PRIOR[bid]``.
 
-        Synen avgörs av det förväntade livsöverskottet. Två regler håller spelet
-        levande:
+        Synen avgörs av det förväntade livsöverskottet, med en liten
+        tröghetströskel: att skicka vidare ger noll chans att vinna rundan, så
+        en syn som nästan går jämnt upp är värd att ta.
 
-        - **Meier synas alltid.** När budet är Meier och ingen synar går bägaren
-          ett helt varv, varefter budgivaren slår om och börjar en ny runda —
-          rundan tar då aldrig slut. Att skicka vidare ett Meier-bud är därför
-          bevisbart sämre än att syna. Regeln garanterar också att varje match
-          terminerar, eftersom budet är monotont stigande och alltid når Meier.
-        - **En liten tröghetströskel** annars: att skicka vidare ger noll chans att
-          vinna rundan, så en syn som nästan går jämnt upp är värd att ta.
+        Den här metoden ser bara två val. Spelaren har tre — se
+        :meth:`decide_response`, som även väger in att slå.
         """
         odds = CALL_ODDS[bid]
         q = CALL_PRIOR[bid] if opponent_q is None else opponent_q
-        if rules.is_meier(bid):
-            return Decision("syna", reason="Meier synas alltid — annars går rundan i oändlig omslagsserie.")
         ev = odds.ev_call(q)
         # En syn är bara värd att ta om livsöverskottet är klart positivt. En syn
         # som ligger nära break-even är ett lotteri om livet, och i Meier är det
@@ -271,6 +265,66 @@ class BasePolicy:
             "skicka",
             reason=f"P(vinst)={q:.2f}; EV={ev:+.3f} liv < −{inertia:.3f}",
         )
+
+    # -- Beslut 3b: alla tre svar på ett bud ------------------------------
+    def decide_response(
+        self, bid: int, *, lives: int = 3, opponent_q: float | None = None
+    ) -> Decision:
+        """Välj mellan att syna, skicka vidare och slå.
+
+        Alla tre värderas som **mitt** förväntade livsöverskott, så att de går
+        att jämföra direkt. Det är skillnaden mot :meth:`decide_call`, som bara
+        väger synen mot att lägga sig.
+
+        - **Syna** — tärningarna avgör. Värdet är synens EV (samma som i
+          :meth:`decide_call`).
+        - **Skicka vidare** — budet står kvar men ansvaret flyttas till mig.
+          Jag förlorar liv om tärningarna visar lägre än budet; annars förlorar
+          nästa spelare som synar. Värdet är därför nollsummespelet ovanför
+          budet, viktat med hur ofta budet synas.
+        - **Slå** — jag skakar blint och måste bjuda högre. Vilket bud det blir
+          avgör :meth:`decide_raise`; det är samma bud som motorn sedan spelar.
+          Värdet är hållarvärdet för just det budet.
+
+        Ingen av de tre tvingas fram. ``slå`` väljs bara när det slår båda
+        andra, och ``syna`` behåller sin tröghetströskel så att en syn nära
+        break-even inte blir ett lotteri om livet.
+        """
+        odds = CALL_ODDS[bid]
+        q = CALL_PRIOR[bid] if opponent_q is None else opponent_q
+
+        call_ev = odds.ev_call(q)
+        inertia = CALL_INERTIA_BASE + CALL_INERTIA_RISK * self.params.risk
+
+        hold_ev = self._hold_value(bid)
+
+        options: list[tuple[str, float, str]] = [
+            ("syna", call_ev + inertia, f"EV={call_ev:+.3f} liv (tröskel −{inertia:.3f})"),
+            ("skicka", hold_ev, f"hållarvärde={hold_ev:+.3f} liv"),
+        ]
+
+        shake = self.decide_raise(bid)
+        if shake.action == "slå" and shake.bid is not None:
+            shake_ev = self._hold_value(shake.bid)
+            options.append(
+                ("slå", shake_ev, f"slå till {rules.name(shake.bid)}: {shake_ev:+.3f} liv")
+            )
+
+        action, _, why = max(options, key=lambda opt: opt[1])
+        return Decision(action, bid=None, reason=why)
+
+    def _hold_value(self, bid: int) -> float:
+        """Mitt förväntade livsöverskott av att bära budet ``bid``.
+
+        Budet synas med sannolikheten ``p_called``. Blir det synat vinner jag
+        om tärningarna visar lägre än budet — då förlorar synaren liv. Annars
+        förlorar jag. Blir det inte synat händer ingenting i den här rundan.
+        """
+        odds = CALL_ODDS[bid]
+        p_called = self._p_called(bid)
+        win = (1.0 - odds.p_win) * odds.l_lose
+        lose = odds.p_win * odds.l_win
+        return p_called * (win - lose)
 
     # -- Beslut 2: slå (ser inte tärningarna) ---------------------------
     def decide_raise(self, bid: int) -> Decision:

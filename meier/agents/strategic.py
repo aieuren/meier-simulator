@@ -233,24 +233,30 @@ class StrategicAgent(Agent):
             choice_reasoning=choice.reason,
         )
 
-    # -- Beslut 3: syna eller skicka ------------------------------------
+    # -- Beslut 3: syna, skicka eller slå --------------------------------
     def decide(self, bid: int, *, lives: int = 3, opponent: str | None = None) -> ActionDecision:
         """Svara på ett bud. Agenten ser inte sina egna tärningar här."""
         if not rules.is_valid_value(bid):
             raise ValueError(f"{bid} är inte ett giltigt bud")
         profile = self.opponent_profile(opponent)
-        decision = self.policy.decide_call(
+        decision = self.policy.decide_response(
             bid, lives=lives, opponent_q=self._opponent_prior(bid, opponent)
         )
         reason = decision.reason
         if profile is not None:
             reason = f"{reason} | bild av {opponent}: {profile.kind} (press {profile.press:.2f}, konf {profile.confidence:.2f})"
-        verb = "syna budet" if decision.action == "syna" else "skicka vidare"
-        situation = f"Motståndaren bjöd {rules.name(bid)}. Din strategi säger att du ska {verb}."
+
         if decision.action == "syna":
+            verb = "syna budet"
             fallback = f"Jag synar {rules.name(bid)}."
+        elif decision.action == "slå":
+            verb = "slå bägaren och bjuda högre"
+            fallback = f"Jag slår och bjuder högre än {rules.name(bid)}."
         else:
+            verb = "skicka vidare"
             fallback = f"Jag skickar vidare {rules.name(bid)}."
+
+        situation = f"Motståndaren bjöd {rules.name(bid)}. Din strategi säger att du ska {verb}."
         return ActionDecision(
             action=decision.action,
             bid=None,

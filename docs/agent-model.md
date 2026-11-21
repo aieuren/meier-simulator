@@ -379,28 +379,42 @@ förbättras medan AI-experimenten pågår, rör sig jämförelsepunkten, och "A
 bättre över tid" kan lika gärna betyda att BASE blev sämre. BASE:s taktik och
 tabellen låses därför innan profilerna mäts, och ändras inte under en serie.
 
-### 5.2 Meier synas alltid — terminering
+### 5.2 Meier — ett dyrt bud, inte ett påtvingat
 
-Det finns ett undantag från ren EV-värdering, och det är **obligatoriskt**: ett
-**Meier-bud synas alltid**. Skälet är spelets egen mekanik. Om ingen synar ett
-Meier-bud går bägaren ett helt varv, vardera spelaren tvingas höja — men Meier är
-högst, så budgivaren får i stället slå om och börja en **ny runda**. Rundan tar då
-aldrig slut. Att skicka vidare ett Meier-bud är alltså bevisbart sämre än att
-syna, oavsett EV.
+Ett Meier-bud har en egenhet i spelets mekanik: om ingen synar går bägaren ett
+helt varv, och budgivaren får då slå om och börja en **ny runda** i stället för
+att höja. En runda kan därför ta slut utan att någon förlorat ett liv.
 
-Regeln har en andra, avgörande effekt: den **garanterar att varje match
-terminerar**. Budet är monotont stigande inom en runda och når förr eller senare
-Meier; när det gör det syns det, någon förlorar ett liv, och spelet går vidare.
+BASE har **ingen regel** som tvingar fram en syn på Meier. Valet är ett vanligt
+EV-val bland de tre lagliga svaren. Att Meier ändå syns i praktiken beror på
+priset: att bära budet är dyrt, eftersom tärningarna oftast visar lägre och
+hållaren då förlorar två liv. Hållarvärdet för Meier ligger kring −0,92 liv.
+Att skicka vidare är alltså inte förbjudet — det är bara sämre.
 
-Utan regeln uppstod en livelock i praktiken (se avsnitt 8.3).
+Det är skillnaden mellan en **regel** och en **konsekvens**, och den är
+avgörande för maskinen: en regel tar bort ett lagligt val, en konsekvens låter
+värderingen styra. Samma sak gäller de andra två svaren.
+
+**Terminering.** Utan tvångsregel måste termineringen vila på något annat.
+Den gör det: budet är monotont stigande inom en runda, och varje höjning närmar
+sig Meier. När Meier väl står på bordet är en syn så pass mycket bättre än att
+lägga sig att den blir vald. Uppmätt över 200 matcher (1 804 rundor) slutade
+**alla** rundor med en syn — ingen via Meier-varv. Motorn har dessutom ett
+skyddsnät som tvingar fram en syn om en runda drar ut på tiden.
 
 ### 5.3 En ärlig konsekvens av designen
 
 Med den budspecifika tabellen synar BASE **selektivt**: låga bud (≤ 54) skickas
-vidare, höga bud (61–66) synas när EV går jämnt upp, och Meier synas alltid.
-Detta är starkare än både "syna allt" och "syna aldrig", och BASE vinner ca 31 %
-mot de fyra preseterna (baslinje 20 %, fem spelare). En läsande agent (högre
-`reading`) kan slå BASE genom att skjuta tron **rätt** per motståndare.
+vidare, höga bud (61–66) synas när EV går jämnt upp, och Meier syns eftersom
+priset att bära det är så högt. Detta är starkare än både "syna allt" och "syna
+aldrig", och BASE vinner ca 31 % mot de fyra preseterna (baslinje 20 %, fem
+spelare). En läsande agent (högre `reading`) kan slå BASE genom att skjuta tron
+**rätt** per motståndare.
+
+BASE svarar alltså på ett bud med **tre** lagliga val — syna, skicka vidare eller
+slå — och värderar dem på samma skala (mitt förväntade livsöverskott). Vilket som
+vinner beror på budet: låga bud bjuder in till att slå, mellanbud till att skicka
+vidare, höga bud till att syna. Det är spelets egen textur, inte en pålagd regel.
 
 ---
 

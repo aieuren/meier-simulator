@@ -94,6 +94,7 @@ def test_readme_links_to_the_full_model():
 # -- docs/om-meier.md: kompisversionen --------------------------------------
 
 OM_MEIER = README.parent / "docs" / "om-meier.md"
+AGENT_MODEL = README.parent / "docs" / "agent-model.md"
 
 
 def _om() -> str:
@@ -397,3 +398,30 @@ def test_om_meier_does_not_claim_raises_are_always_one_step():
             f"Om Meier påstår {claim!r}. Minsta höjning gäller bluffen över sedda "
             "tärningar; blind höjning styrs av press."
         )
+
+
+def test_agent_model_has_no_forced_meier_call_rule():
+    """Agentmodellen får inte beskriva synen på Meier som en påtvingad regel.
+
+    Meier syns för att det är dyrt att bära budet, inte för att en regel säger
+    det. Dokumentet måste skilja på regel och konsekvens.
+    """
+    text = AGENT_MODEL.read_text(encoding="utf-8")
+    flat = " ".join(text.split()).lower()
+    for claim in (
+        "meier synas alltid",
+        "ett meier-bud synas alltid",
+        "**obligatoriskt**",
+    ):
+        assert claim not in flat, (
+            f"agent-model.md påstår {claim!r}. Ingen regel tvingar fram en syn på "
+            "Meier; valet styrs av hållarvärdet."
+        )
+
+
+def test_agent_model_describes_three_legal_responses():
+    """Dokumentet ska räkna upp alla tre lagliga svar på ett bud."""
+    text = AGENT_MODEL.read_text(encoding="utf-8")
+    flat = " ".join(text.split()).lower()
+    for word in ("syna", "skicka vidare", "slå"):
+        assert word in flat

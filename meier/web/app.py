@@ -157,6 +157,16 @@ def decide(req: DecideRequest) -> dict:
             "Vid syn: visar tärningarna lägre än budet förlorar budgivaren, "
             "annars förlorar den som synar. Meier kostar dubbelt."
         )
+    elif decision.action == "slå":
+        result["note"] = (
+            "Vid slag: bägaren skakas om blint och nästa bud måste vara högre, "
+            "oavsett vad tärningarna visar."
+        )
+    else:
+        result["note"] = (
+            "Vid skicka vidare: budet står kvar och spelaren tar över ansvaret "
+            "för det. Bägaren går vidare utan att slås om."
+        )
     return result
 
 

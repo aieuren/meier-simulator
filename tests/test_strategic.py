@@ -50,6 +50,30 @@ def test_matches_always_terminate(seed):
     assert session.round < 200
 
 
+def test_shaking_is_a_real_choice_in_matches():
+    """``slå`` ska kunna spelas i en hel match, inte bara finnas i koden.
+
+    En lagpressprofil väljer det minsta lagliga budet, och då är hållarvärdet
+    bättre än att skicka vidare. Över flera matcher ska ``slå`` därför dyka upp
+    i loggen — annars är det tredje valet död kod igen.
+
+    En enskild match kan sakna ``slå`` beroende på vem som börjar, så svepet går
+    över flera frön.
+    """
+    calm = AgentParams(risk=0.5, press=0.0, reading=0.0)
+    actions: set[str] = set()
+    for seed in range(10):
+        tracker = OpponentTracker()
+        players = [make(n, calm, tracker) for n in ("axel", "berit", "cecilia", "david")]
+        session = Session.new(players, seed=seed, lives=3)
+        session.tracker = tracker
+        session.play_to_end()
+        assert session.finished
+        actions |= {e.action for e in session.log if e.kind == "action"}
+
+    assert "slå" in actions
+
+
 def test_every_action_in_log_is_legal():
     session, _ = play(["axel", "berit", "cecilia", "david"], seed=3)
     for entry in session.log:
