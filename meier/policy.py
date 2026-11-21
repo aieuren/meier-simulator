@@ -26,7 +26,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from itertools import product
 
-from . import rules
+from . import legality, rules
 
 # -- Exakt sannolikhetsmodell ------------------------------------------------
 
@@ -343,7 +343,13 @@ class BasePolicy:
         return Decision("slå", bid=new_bid, reason=f"Slår till {rules.name(new_bid)}.")
 
     # -- Beslut 1: första budet (ser tärningarna) -----------------------
-    def decide_bid(self, shown: int, *, opponent_factor: float = 1.0) -> Decision:
+    def decide_bid(
+        self,
+        shown: int,
+        *,
+        opponent_factor: float = 1.0,
+        previous_bid: int | None = None,
+    ) -> Decision:
         """Vilket bud ska agenten säga när den sett tärningarna visa ``shown``?
 
         Att bjuda ``shown`` är **säkert**: blir det synat visar tärningarna minst
@@ -355,17 +361,32 @@ class BasePolicy:
         på budnivåer som sällan synas. ``press`` väger vinsten av att lägga sig;
         vid låg press bjuder agenten sanning, vid hög press tar den chansen.
 
+        ``previous_bid`` är budet som ligger när spelaren måste höja. Utan det
+        valde agenten bud som om bordet var tomt, och motorn fick sedan tyst
+        skriva om budet till minsta lagliga höjning. Här väljer agenten i stället
+        bland de lagliga buden direkt, så att budet den säger är dess eget.
+
         ``opponent_factor`` är motståndarens **synbenägenhet** relativt det
         normala (1,0 = som folk mest). En motståndare som synar ofta gör varje
         bluff dyrare, och då bluffar agenten mindre. Det är läsningens inverkan
         på budet — skild från ``press``, som är agentens egen benägenhet.
         """
+        legal = legality.legal_bids(shown=shown, previous_bid=previous_bid)
+        if not legal:
+            raise ValueError(f"Inget lagligt bud över {rules.name(previous_bid)}")
+
         if rules.is_meier(shown):
             return Decision("bud", bid=shown, reason="Meier — högsta möjliga, bjuder det.")
 
+        # Grundbudet är det högsta lagliga bud som inte är en bluff, alltså
+        # ``shown`` om det är lagligt, annars minsta lagliga höjning.
+        safe = shown if shown in legal else legal[-1]
+
         best_bluff: int | None = None
         best_gain = 0.0
-        for cand in rules.higher_options(shown):  # strikt högre än visat
+        for cand in legal:
+            if rules.compare(cand, shown) <= 0:
+                continue
             p_called = self._p_called(cand, opponent_factor)
             gain = (1.0 - p_called) * self.params.press - p_called * CALL_ODDS[cand].l_lose
             if gain > best_gain:
@@ -382,8 +403,8 @@ class BasePolicy:
             )
         return Decision(
             "bud",
-            bid=shown,
-            reason=f"Visar {rules.name(shown)}; bjuder sanning.",
+            bid=safe,
+            reason=f"Visar {rules.name(shown)}; bjuder {rules.name(safe)}.",
         )
 
     def _bid_value(self, bid: int, shown: int) -> float:

@@ -425,3 +425,29 @@ def test_agent_model_describes_three_legal_responses():
     flat = " ".join(text.split()).lower()
     for word in ("syna", "skicka vidare", "slå"):
         assert word in flat
+
+
+def test_agent_model_does_not_claim_the_policy_makes_the_decisions():
+    """Dokumentet får inte påstå att draget ägs av policyn.
+
+    Arkitekturen är att LLM:en väljer bland de lagliga dragen och att koden bara
+    avgör legaliteten. Ett dokument som säger motsatsen beskriver en äldre
+    version och lurar den som läser.
+    """
+    text = AGENT_MODEL.read_text(encoding="utf-8")
+    flat = " ".join(text.split()).lower()
+    for claim in (
+        "draget ägs helt av policyn",
+        "draget som spelas ägs av policyn",
+        "llm:en är persona och motivering, inte den som avgör draget",
+    ):
+        assert claim not in flat, (
+            f"agent-model.md påstår {claim!r}. LLM:en fattar besluten; koden äger "
+            "bara reglerna."
+        )
+
+
+def test_agent_model_names_the_legality_layer():
+    """Dokumentet ska peka ut var reglerna bor."""
+    text = AGENT_MODEL.read_text(encoding="utf-8")
+    assert "meier/legality.py" in text

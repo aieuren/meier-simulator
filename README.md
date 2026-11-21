@@ -27,8 +27,9 @@ roller kan spela hela spel mot varandra.
   - **Matchserie** – kör många matcher och få statistik + ett JSONL-protokoll för analys.
   - **Analys** – ladda upp en eller flera JSONL-filer och ställ frågor mot materialet.
     Svaren kommer från en LLM och kan innehålla diagram (stapel, linje eller tabell).
-- **Fyra spelare** – Axel, Berit, Cecilia och David. Axel är grundtaktiken; de
-  andra är samma policy med milda profiler ovanpå.
+- **Fyra spelare** – Axel, Berit, Cecilia och David. Berit, Cecilia och David är
+  LLM-agenter som fattar sina egna beslut inom spelets regler. Axel är den
+  deterministiska referensen utan LLM.
 - **Interaktiv spelsession** – fyra spelare spelar mot varandra i ett fullt flöde
   fram till en syn. Slumpen avgör ordningen och vem som börjar. Varje steg
   bekräftas med **Ett drag**, eller så körs flödet vidare med **Till syn**
@@ -172,8 +173,15 @@ Samma tabell i klartext, som webbappen visar den:
 
 Klartexten **räknas fram** ur siffrorna av `describe_params()`. Den är en
 presentation av tabellen, inte en egen sanning: ändrar du en parameter ändras
-meningen. Axel har ingen LLM med flit — han är den deterministiska referensen
-som de andra mäts mot.
+meningen.
+
+Siffrorna är ett **underlag för en personlighet**, inte en formel. De beskriver
+hur en människa brukar spela, och beskrivningen går in i LLM:ens prompt
+(`meier/agents/personality.py`). Modellen väljer sedan själv bland de lagliga
+dragen. Reglerna ägs av koden (`meier/legality.py`); taktiken ägs av modellen.
+
+Axel har ingen LLM med flit — han är den deterministiska referensen som de
+andra mäts mot.
 
 Hela modellen, med formler och mätvärden, står i
 [`docs/agent-model.md`](docs/agent-model.md).
@@ -443,11 +451,13 @@ meier/
   analysis.py         Analys: digest av protokoll + LLM-frågor med diagram
   cli.py              Kommandoradsgränssnitt
   opponents.py        Motståndarprofilen: statistik och klartext
-  policy.py           Besluten: bud, slå, syna, tvingad höjning
+  legality.py         Reglerna: vilka bud och svar som är lagliga
+  policy.py           Reservstrategin när ingen LLM svarar (Axels läge)
   agents/
     base.py           Agent-grundklass och roll
     roster.py         De fyra spelarna och deras parametrar
-    strategic.py      Spelaren som knyter ihop policy, läsning och replik
+    strategic.py      Spelaren: LLM:en väljer bland lagliga drag
+    personality.py    Spelarprofilen som text till prompten
     reader.py         Läser motståndarna med LLM
     player.py         Meier-spelaragenten (enkelt gränssnitt)
   web/

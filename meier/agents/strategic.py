@@ -1,48 +1,73 @@
-"""Strategisk spelaragent: deterministisk policy + läckagefri motståndarmodell.
+"""Spelaragent där **LLM:en fattar besluten** och koden bara dömer.
 
-Till skillnad från :class:`~meier.agents.player.MeierPlayerAgent` avgörs draget
-här av :class:`~meier.policy.BasePolicy`, inte av LLM:en. LLM:en är valfri och
-används bara för repliken — den kan **föreslå en formulering** men aldrig ändra
-draget. Motiveringen som sparas är alltid policyns maskinella skäl, så det går
-att se *varför* ett drag togs. Det är förutsättningen för att kunna mäta vilka
-parametrar som vinner (se ``docs/agent-model.md``).
+Uppdelningen är hela poängen:
 
-Agenten implementerar samma gränssnitt som motorn använder
-(``announce``, ``announce_blind``, ``announce_forced``, ``decide``) och returnerar
-motorns egna typer, så den kan sättas in i ``Session`` utan andra ändringar.
+- :mod:`meier.agents.legality` äger reglerna. Den räknar upp vilka drag som är
+  lagliga i ett givet läge.
+- :mod:`meier.agents.personality` beskriver spelaren i ord, så att ``risk``,
+  ``press`` och ``reading`` blir en människa att spela som — inte tal i en formel.
+- LLM:en väljer drag bland de lagliga. Den får aldrig bryta mot reglerna, men
+  den bestämmer själv vad den vill göra.
+
+En tidigare version gjorde tvärtom: :class:`~meier.policy.BasePolicy` räknade
+fram draget och LLM:en formulerade bara repliken. Då blev varje spelare samma
+algoritm med olika konstanter, och ``press`` styrde ett budval som modellen
+aldrig fick påverka.
+
+Utan LLM-klient faller agenten tillbaka på :class:`~meier.policy.BasePolicy`.
+Det läget är deterministiskt och används av ``axel`` (den fasta mätstickan) samt
+av tester som ska gå på millisekunder utan nätverk.
 """
 
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import Any, Callable
 
 from .. import rules
 from ..llm import LLMClient, parse_json_object
 from ..opponents import OpponentProfile, OpponentTracker
 from ..policy import AgentParams, BasePolicy
+from .. import legality
+from . import personality
 from .base import Agent, Role
 from .player import ActionDecision, Announcement
 from .reader import OpponentReader
 
-#: Kompakt regeltext för replikprompten. Den påverkar inte draget.
-_RULES = (
-    "Två tärningar läses med högsta först (2 och 5 blir 52). 21 kallas Meier och "
-    "är högst, sedan faller ordningen ner till 31. Vid en syn: visar tärningarna "
-    "lägre än budet förlorar budgivaren ett liv, annars synaren. Meier kostar "
-    "dubbelt."
+_RULES = """\
+Två tärningar läses som ett tal med den högsta tärningen först: 2 och 5 blir 52.
+21 kallas Meier och är högst. Sedan faller ordningen:
+{rang}.
+
+Ett varv:
+1. Spelaren med bägaren skakar, tittar i smyg och säger ett resultat: det sanna,
+   ett högre eller ett lägre.
+2. Nästa spelare väljer ett av tre:
+   - Slå: skaka bägaren utan att titta och säga ett strikt högre bud.
+   - Syna: lyft locket. Visar tärningarna lägre än det sagda förlorar budgivaren
+     ett liv. Visar de samma eller högre förlorar den som synade ett liv.
+   - Skicka vidare: skicka bägaren vidare med samma bud. Du tar då över ansvaret
+     för budet.
+3. Den som slår måste alltid säga ett strikt högre bud, vad tärningarna än visar.
+4. Kommer bägaren ett helt varv tillbaka till budgivaren måste denne höja. Är
+   budet Meier slår budgivaren i stället om och börjar en ny runda.
+5. Meier kostar dubbelt: om budet är Meier, eller om tärningarna visar Meier vid
+   en syn, förlorar man två liv i stället för ett.
+6. När någon förlorat ett liv går bägaren till föregående spelare, som slår och
+   börjar en ny runda. Den som först mist tre liv är ute. Sist kvar vinner.""".format(
+    rang=", ".join(rules.name(v) for v in rules.RANKING)
 )
 
 
 class StrategicAgent(Agent):
-    """En Meier-spelare som styrs av en deterministisk policy.
+    """En Meier-spelare som låter LLM:en fatta alla beslut.
 
-    ``tracker`` är valfri. Utan den läser agenten ingen motståndare och faller
-    tillbaka på policyns globala ``q``. Med en tracker används motståndarnas
-    avslöjade beteende, skalat av parametern ``reading``.
+    ``tracker`` är valfri och ger agenten en bild av motståndarna. Bilden
+    beskrivs i ord för modellen; den matas aldrig in i en formel.
 
-    ``llm`` är valfri och används **endast** för att formulera repliken. Saknas
-    den blir repliken mekanisk (``"Jag säger 52."``), vilket är vad utvärderingen
-    kör med — då går en match på millisekunder i stället för minuter.
+    ``llm`` är valfri. Utan den spelar agenten enligt
+    :class:`~meier.policy.BasePolicy`, vilket är deterministiskt och
+    nätverksfritt. Det är ``axel``s läge.
     """
 
     def __init__(
@@ -55,56 +80,34 @@ class StrategicAgent(Agent):
         llm: LLMClient | None = None,
         reader: OpponentReader | None = None,
     ):
-        # Ingen LLM-klient skapas om ingen ges: agenten kan spela utan nätverk.
         self.role = role
         self.llm = llm
         self.params = params
         self.tracker = tracker
         self.policy = policy or BasePolicy(params)
-        # Läsaren bygger motståndarprofiler. Utan LLM faller den tillbaka på
-        # sekreterarens aritmetik, så en match kan alltid spelas klart.
         self.reader = reader or OpponentReader(llm=llm)
         #: Senaste profilen per motståndare, för insyn i loggen.
         self.profiles: dict[str, OpponentProfile] = {}
 
-    # -- Replik -----------------------------------------------------------
+    # -- Prompt -----------------------------------------------------------
     def system_prompt(self) -> str:
         return (
-            f"Du spelar tärningsspelet Meier som spelaren {self.role.name}. "
-            f"{self.role.description}\n"
-            f"REGLER: {_RULES}\n"
-            "Din strategi har redan bestämt draget. Du formulerar bara en kort, "
-            "naturlig replik på svenska (högst en mening) som spelaren säger.\n"
-            "Repliken måste stämma med draget. Säg aldrig något som motsäger det "
-            "(t.ex. tala inte om att höja när draget är att skicka vidare).\n"
-            'Svara med JSON: {"line": "<replik>"}.'
+            f"Du spelar tärningsspelet Meier som {self.role.name}.\n"
+            f"{self.role.description}\n\n"
+            "DIN SPELSTIL\n"
+            f"{personality.describe(self.params)}\n\n"
+            "REGLER\n"
+            f"{_RULES}\n\n"
+            "Du fattar själv alla beslut. Du får bara välja bland de lagliga "
+            "alternativ som anges i uppgiften. Svara alltid med JSON."
         )
 
-    def _narrate(self, situation: str, fallback: str) -> str:
-        """Låt LLM:en formulera repliken. Misslyckas det används ``fallback``.
-
-        Repliken får aldrig påverka draget, och ett LLM-fel får aldrig fälla en
-        match. Därför fångas allt och den mekaniska repliken används i stället.
-        """
-        if self.llm is None:
-            return fallback
-        try:
-            raw = self.llm.complete(self.system_prompt(), situation, json_mode=True)
-            line = str(parse_json_object(raw).get("line") or "").strip()
-            return line or fallback
-        except Exception:  # noqa: BLE001 - repliken är kosmetisk, aldrig kritisk
-            return fallback
-
-    def _line(self, bid: int) -> str:
-        return f"Jag säger {rules.name(bid)}."
-
-    # -- Hjälpare ---------------------------------------------------------
+    # -- Motståndarbild ---------------------------------------------------
     def opponent_profile(self, opponent: str | None) -> OpponentProfile | None:
         """Motståndarprofilen för ``opponent``, eller ``None`` om ingen läsning.
 
-        Profilen byggs av :class:`~meier.agents.reader.OpponentReader`, där
-        LLM:en tolkar sekreterarens sammanställning. Utan läsande agent (Axel)
-        eller utan motståndare finns ingen profil.
+        Utan läsande agent (``axel``), utan motståndare eller utan tracker finns
+        ingen bild. ``reading = 0`` stänger också av läsningen.
         """
         if self.tracker is None or opponent is None or self.params.reading <= 0.0:
             return None
@@ -112,14 +115,23 @@ class StrategicAgent(Agent):
         self.profiles[opponent] = profile
         return profile
 
+    def _opponent_note(self, opponent: str | None) -> str:
+        """Motståndaren i ord, om agenten har läst den. Annars tom sträng."""
+        profile = self.opponent_profile(opponent)
+        if profile is None:
+            return ""
+        text = personality.describe_opponent(
+            kind=profile.kind,
+            risk=profile.risk,
+            press=profile.press,
+            confidence=profile.confidence,
+        )
+        return f"\nMOTSTÅNDAREN {opponent}\n{text}\n"
+
     def _opponent_prior(self, bid: int, opponent: str | None) -> float | None:
         """Budspecifik tro, justerad för motståndaren — eller None (populationen).
 
-        Justeringen är **relativ**: motståndarens benägenhet skalas in i den
-        budspecifika tron, precis som :meth:`OpponentTracker.bluff_ratio`. Att i
-        stället sätta in motståndarens absoluta bluff-frekvens vore fel — ett lågt
-        bud skulle då bedömas som en bluff och agenten skulle syna bud som nästan
-        alltid är sanna.
+        Används bara av reservpolicyn. LLM:en får motståndaren i ord i stället.
         """
         from ..policy import CALL_PRIOR
 
@@ -127,37 +139,73 @@ class StrategicAgent(Agent):
         if profile is None:
             return None
         base = CALL_PRIOR[bid]
-        # Faktorn är motståndarens benägenhet (ur profilen, dämpad av LLM:ens
-        # konfidens). Agentens egen ``reading`` avgör hur mycket den **vill**
-        # låta den styra — en agent som läser lite tar bara en bråkdel av
-        # signalen. ``reading = 0`` ger exakt den frysta populationstabellen.
         factor = self.tracker.profile_factor(profile)
         factor = 1.0 + self.params.reading * (factor - 1.0)
         return min(0.95, base * factor)
 
     def _call_factor(self, opponent: str | None) -> float:
-        """Hur mycket oftare motståndaren synar, relativt det normala.
-
-        Samma relativa konstruktion som :meth:`_opponent_prior`, men för
-        motståndarens **risk** i stället för dess bluffbenägenhet. Används när
-        agenten väljer bud: en synbenägen motståndare gör bluffen dyrare.
-        ``reading = 0`` eller ingen profil ger exakt 1,0.
-        """
+        """Hur mycket oftare motståndaren synar, relativt det normala."""
         profile = self.opponent_profile(opponent)
         if profile is None:
             return 1.0
         factor = self.tracker.risk_factor(profile)
         return 1.0 + self.params.reading * (factor - 1.0)
 
-    @staticmethod
-    def _coerce_higher(bid: int, previous_bid: int) -> int:
-        """Se till att budet är strikt högre än det förra."""
-        if rules.is_higher(bid, previous_bid):
-            return bid
-        higher = rules.higher_options(previous_bid)
-        return higher[-1] if higher else bid
+    # -- LLM-anropet -------------------------------------------------------
+    def _ask(
+        self, context: str, parse: Callable[[dict], tuple[Any | None, str]]
+    ) -> tuple[Any | None, str]:
+        """Fråga modellen och tolka svaret.
 
-    # -- Beslut 1: första budet (ser tärningarna) ------------------------
+        ``parse`` returnerar ``(värde, motivering)``, där ``värde`` är ``None`` om
+        svaret inte gick att använda. Ett ogiltigt svar får **en** omfrågning med
+        besked om vad som var fel. Sedan ger agenten upp och reservpolicyn tar
+        över, så en trasig modell aldrig kan fälla en match.
+        """
+        if self.llm is None:
+            return None, ""
+        prompt = context
+        reason = ""
+        for _ in range(2):
+            try:
+                raw = self.llm.complete(self.system_prompt(), prompt, json_mode=True)
+                data = parse_json_object(raw)
+            except Exception:  # noqa: BLE001 - ett modellfel får aldrig fälla matchen
+                return None, ""
+            value, reason = parse(data)
+            if value is not None:
+                return value, reason
+            prompt = (
+                f"{context}\n\nDITT FÖRRA SVAR DUGER INTE. {reason}\n"
+                "Välj ett av de lagliga alternativen ovan."
+            )
+        return None, reason
+
+    @staticmethod
+    def _as_bid(value: object) -> int | None:
+        """Tolka ett bud ur modellens svar, som heltal eller siffror i text."""
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, int):
+            return value
+        if isinstance(value, str):
+            digits = "".join(ch for ch in value if ch.isdigit())
+            if digits:
+                return int(digits)
+        return None
+
+    def _parse_bid(self, data: dict, legal: list[int]) -> tuple[int | None, str]:
+        bid = self._as_bid(data.get("bid"))
+        if bid is None:
+            return None, "Du angav inget bud."
+        if bid not in legal:
+            return None, (
+                f"{bid} är inte lagligt här. Lagliga bud: "
+                f"{', '.join(rules.name(v) for v in legal)}."
+            )
+        return bid, str(data.get("reasoning") or "").strip()
+
+    # -- Beslut 1: budet (spelaren ser tärningarna) ------------------------
     def announce(
         self,
         dice: tuple[int, int],
@@ -165,102 +213,320 @@ class StrategicAgent(Agent):
         previous_bid: int | None = None,
         opponent: str | None = None,
     ) -> Announcement:
+        """Vilket bud säger spelaren, givet vad tärningarna visar?"""
         shown = rules.read_dice(*dice)
-        decision = self.policy.decide_bid(shown, opponent_factor=self._call_factor(opponent))
-        bid = decision.bid if decision.bid is not None else shown
-        if previous_bid is not None:
-            bid = self._coerce_higher(bid, previous_bid)
-        situation = (
-            f"Du ser tärning {dice[0]} och {dice[1]} (visar {rules.name(shown)})."
-        )
-        if previous_bid is not None:
-            situation += f" Du måste höja över {rules.name(previous_bid)}."
-        situation += f" Du säger {rules.name(bid)}."
+        legal = legality.legal_bids(shown=shown, previous_bid=previous_bid)
+        context = self._bid_context(dice, shown, previous_bid, legal, opponent)
+        bid, reason = self._ask(context, lambda d: self._parse_bid(d, legal))
+
+        corrected = False
+        if bid is None:
+            # Reservpolicyn väljer bland samma lagliga bud, så budet är spelarens
+            # eget även här. ``corrected`` betyder att LLM:en inte kunde svara.
+            decision = self.policy.decide_bid(
+                shown,
+                opponent_factor=self._call_factor(opponent),
+                previous_bid=previous_bid,
+            )
+            bid, reason = decision.bid, decision.reason
+            # Bara en korrigering om LLM:en faktiskt svarade fel. Utan klient
+            # ar policyn spelearens eget beslut, inte en rattselse av nagon annans.
+            corrected = self.llm is not None
+
         return Announcement(
             dice=(dice[0], dice[1]),
             shown=shown,
             bid=bid,
             truth=bid == shown,
-            line=self._narrate(situation, self._line(bid)),
-            reasoning=decision.reason,
+            line=self._say(context, bid),
+            reasoning=reason,
             role=self.role.key,
-            proposed=decision.bid,
-            corrected=decision.bid != bid,
+            proposed=bid,
+            corrected=corrected,
         )
 
-    # -- Beslut 2: slå (ser inte tärningarna) ----------------------------
+    def _bid_context(
+        self,
+        dice: tuple[int, int],
+        shown: int,
+        previous_bid: int | None,
+        legal: list[int],
+        opponent: str | None,
+    ) -> str:
+        lines = [
+            "TÄRNINGSLAGET",
+            f"Du har skakat bägaren och tittat i smyg: tärning {dice[0]} och {dice[1]}.",
+            f"Det visar {rules.name(shown)}.",
+            self._opponent_note(opponent),
+        ]
+        if previous_bid is None:
+            lines += ["", "DET ÄR DU SOM BÖRJAR RUNDAN."]
+        else:
+            lines += [
+                "",
+                "SITUATIONEN",
+                f"Bägaren har gått ett helt varv tillbaka till dig och du måste höja "
+                f"över {rules.name(previous_bid)}.",
+            ]
+        lines += [
+            "",
+            "LAGLIGA BUD",
+            ", ".join(rules.name(v) for v in legal),
+            "",
+            "Du får säga sanningen, ett högre eller ett lägre resultat. Tänk på vad "
+            "du tjänar på: ett bud under dina tärningar kan ingen syna utan att "
+            "förlora, ett bud över är en bluff.",
+            "",
+            "Svara med JSON:",
+            '{"bid": <heltal ur listan ovan>, "reasoning": "<kort motivering>"}',
+        ]
+        return "\n".join(lines)
+
+    # -- Beslut 2: slå (spelaren ser inte tärningarna) ---------------------
     def announce_blind(
         self, dice: tuple[int, int], *, previous_bid: int, opponent: str | None = None
     ) -> Announcement:
+        """Spelaren slår: bägaren är stängd och budet måste vara strikt högre."""
         if not rules.is_valid_value(previous_bid):
             raise ValueError(f"{previous_bid} är inte ett giltigt bud")
-        decision = self.policy.decide_raise(previous_bid)
-        higher = rules.higher_options(previous_bid)
-        bid = decision.bid if decision.bid is not None else (higher[-1] if higher else previous_bid)
-        bid = self._coerce_higher(bid, previous_bid)
+        legal = legality.blind_bids(previous_bid=previous_bid)
+        if not legal:
+            raise ValueError(
+                f"Kan inte slå: {rules.name(previous_bid)} är högst, det finns inget högre bud"
+            )
         shown = rules.read_dice(*dice)
-        situation = (
-            f"Du har slagit bägaren blint och måste höja över {rules.name(previous_bid)}. "
-            f"Du säger {rules.name(bid)}."
-        )
+        context = self._blind_context(previous_bid, legal, opponent)
+        bid, reason = self._ask(context, lambda d: self._parse_bid(d, legal))
+
+        corrected = False
+        if bid is None:
+            decision = self.policy.decide_raise(previous_bid)
+            bid = decision.bid if decision.bid in legal else legal[-1]
+            reason = decision.reason
+            corrected = self.llm is not None
+
         return Announcement(
             dice=(dice[0], dice[1]),
             shown=shown,
             bid=bid,
-            truth=False,
-            line=self._narrate(situation, self._line(bid)),
-            reasoning=decision.reason,
+            truth=bid == shown,
+            line=self._say(context, bid),
+            reasoning=reason,
             role=self.role.key,
+            proposed=bid,
+            corrected=corrected,
             blind=True,
         )
 
-    # -- Beslut 4: tvingad höjning (titta eller blint) -------------------
+    def _blind_context(
+        self, previous_bid: int, legal: list[int], opponent: str | None
+    ) -> str:
+        return "\n".join(
+            [
+                "DU SLÅR",
+                "Du skakar bägaren själv och lyfter inte på locket. Du ser inte tärningarna.",
+                f"Du måste säga ett strikt högre bud än {rules.name(previous_bid)}.",
+                self._opponent_note(opponent),
+                "",
+                "LAGLIGA BUD",
+                ", ".join(rules.name(v) for v in legal),
+                "",
+                "Ett lågt bud är svårare för nästa spelare att slå över. Ett högt bud "
+                "sätter press men synas oftare.",
+                "",
+                "Svara med JSON:",
+                '{"bid": <heltal ur listan ovan>, "reasoning": "<kort motivering>"}',
+            ]
+        )
+
+    # -- Beslut 3: titta eller bjuda blint vid tvingad höjning -------------
     def announce_forced(
         self, dice: tuple[int, int], *, previous_bid: int, opponent: str | None = None
     ) -> Announcement:
+        """Bägaren har gått ett helt varv: titta på de nya tärningarna eller bjuda blint?"""
         if not rules.is_valid_value(previous_bid):
             raise ValueError(f"{previous_bid} är inte ett giltigt bud")
-        choice = self.policy.decide_forced(previous_bid)
-        if choice.action == "blint":
-            ann = self.announce_blind(
-                dice, previous_bid=previous_bid, opponent=opponent
+        choices = legality.forced_choices(previous_bid=previous_bid)
+        if not choices:
+            # Budet är Meier. Motorn slår om och börjar en ny runda i stället.
+            raise ValueError(
+                f"Kan inte höja: {rules.name(previous_bid)} är högst, det finns inget högre bud"
             )
+        context = self._forced_context(previous_bid, choices, opponent)
+        blind, reason = self._ask(context, self._parse_forced)
+
+        if blind is None:
+            choice = self.policy.decide_forced(previous_bid)
+            blind, reason = choice.action == "blint", choice.reason
+
+        if blind:
+            ann = self.announce_blind(dice, previous_bid=previous_bid, opponent=opponent)
         else:
             ann = self.announce(dice, previous_bid=previous_bid, opponent=opponent)
-        return replace(
-            ann,
-            choice_line=choice.reason,
-            choice_reasoning=choice.reason,
+        return replace(ann, choice_line=reason, choice_reasoning=reason)
+
+    @staticmethod
+    def _parse_forced(data: dict) -> tuple[bool | None, str]:
+        reason = str(data.get("reasoning") or "").strip()
+        value = data.get("blind")
+        if isinstance(value, bool):
+            return value, reason
+        if isinstance(value, str):
+            v = value.strip().lower()
+            if v in ("true", "ja", "j", "blint", "blind"):
+                return True, reason
+            if v in ("false", "nej", "n", "titta", "tittar"):
+                return False, reason
+        return None, 'Du måste svara med "blind": true eller false.'
+
+    def _forced_context(
+        self, previous_bid: int, choices: list[str], opponent: str | None
+    ) -> str:
+        return "\n".join(
+            [
+                "TITTA ELLER BLINT",
+                f"Bägaren har gått ett helt varv och är tillbaka hos dig. Du måste höja "
+                f"över {rules.name(previous_bid)}.",
+                "Tärningarna har slagits om och ligger under locket.",
+                self._opponent_note(opponent),
+                "",
+                f"LAGLIGA VAL: {', '.join(choices)}",
+                "- titta: lyft locket och säg ett bud som du ser tärningarna.",
+                "- blint: bjud utan att titta, som när man slår.",
+                "",
+                "Svara med JSON:",
+                '{"blind": true | false, "reasoning": "<kort motivering>"}',
+            ]
         )
 
-    # -- Beslut 3: syna, skicka eller slå --------------------------------
-    def decide(self, bid: int, *, lives: int = 3, opponent: str | None = None) -> ActionDecision:
-        """Svara på ett bud. Agenten ser inte sina egna tärningar här."""
+    # -- Beslut 4: syna, skicka vidare eller slå --------------------------
+    def decide(
+        self, bid: int, *, lives: int = 3, opponent: str | None = None
+    ) -> ActionDecision:
+        """Svara på ett bud. Spelaren ser inte sina egna tärningar här."""
         if not rules.is_valid_value(bid):
             raise ValueError(f"{bid} är inte ett giltigt bud")
-        profile = self.opponent_profile(opponent)
-        decision = self.policy.decide_response(
-            bid, lives=lives, opponent_q=self._opponent_prior(bid, opponent)
-        )
-        reason = decision.reason
-        if profile is not None:
-            reason = f"{reason} | bild av {opponent}: {profile.kind} (press {profile.press:.2f}, konf {profile.confidence:.2f})"
+        choices = legality.response_actions(bid=bid)
+        context = self._response_context(bid, lives, choices, opponent)
+        action, reason = self._ask(context, lambda d: self._parse_response(d, choices))
 
-        if decision.action == "syna":
-            verb = "syna budet"
-            fallback = f"Jag synar {rules.name(bid)}."
-        elif decision.action == "slå":
-            verb = "slå bägaren och bjuda högre"
-            fallback = f"Jag slår och bjuder högre än {rules.name(bid)}."
-        else:
-            verb = "skicka vidare"
-            fallback = f"Jag skickar vidare {rules.name(bid)}."
+        if action is None:
+            decision = self.policy.decide_response(
+                bid, lives=lives, opponent_q=self._opponent_prior(bid, opponent)
+            )
+            action, reason = decision.action, decision.reason
+            if action not in choices:
+                # Reservpolicyn kan vilja slå mot Meier. Det går inte, så ta det
+                # bästa av de val som återstår i stället för att kasta.
+                action = "skicka"
+            # Reservpolicyn väger in motståndarbilden i tal. Skriv ut den i
+            # klartext också, så loggen visar vad den byggde på.
+            profile = self.opponent_profile(opponent)
+            if profile is not None:
+                reason = (
+                    f"{reason} | bild av {opponent}: {profile.kind} "
+                    f"(press {profile.press:.2f}, konf {profile.confidence:.2f})"
+                )
 
-        situation = f"Motståndaren bjöd {rules.name(bid)}. Din strategi säger att du ska {verb}."
         return ActionDecision(
-            action=decision.action,
+            action=action,
             bid=None,
-            line=self._narrate(situation, fallback),
+            line=self._say_action(context, action, bid),
             reasoning=reason,
             role=self.role.key,
         )
+
+    def _say_action(self, context: str, action: str, bid: int) -> str:
+        """Repliken som hör till svaret på ett bud — inte till ett bud."""
+        fallbacks = {
+            "syna": f"Jag synar {rules.name(bid)}.",
+            "skicka": f"Jag skickar vidare {rules.name(bid)}.",
+            "slå": f"Jag slår och bjuder högre än {rules.name(bid)}.",
+        }
+        fallback = fallbacks.get(action, f"Jag säger {rules.name(bid)}.")
+        if self.llm is None:
+            return fallback
+        # Vid slag är budet ännu inte satt. Repliken får då inte lova en siffra,
+        # för nästa steg kan välja en annan.
+        no_number = (
+            " Nämn inget siffrigt bud, för du har inte bestämt det än."
+            if action == "slå"
+            else ""
+        )
+        prompt = (
+            f"{context}\n\n"
+            f"Ditt drag är redan bestämt: du väljer {action}.\n"
+            "Formulera bara en kort, naturlig replik på svenska (högst en mening) "
+            f"som du säger högt. Den får inte motsäga draget.{no_number}\n"
+            'Svara med JSON: {"line": "<replik>"}'
+        )
+        return self._narrate(prompt, fallback)
+
+    def _narrate(self, prompt: str, fallback: str) -> str:
+        """Ett LLM-anrop för repliken, med en omgång om svaret inte gick att läsa."""
+        for _ in range(2):
+            try:
+                raw = self.llm.complete(self.system_prompt(), prompt, json_mode=True)
+                line = str(parse_json_object(raw).get("line") or "").strip()
+                if line:
+                    return line
+            except Exception:  # noqa: BLE001 - repliken är kosmetisk, aldrig kritisk
+                continue
+        return fallback
+
+    @staticmethod
+    def _parse_response(data: dict, choices: list[str]) -> tuple[str | None, str]:
+        value = data.get("action")
+        if not isinstance(value, str):
+            return None, 'Du måste svara med "action".'
+        v = value.strip().lower().rstrip("!.")
+        aliases = {
+            "slå": "slå", "sla": "slå", "höj": "slå", "hoj": "slå", "raise": "slå",
+            "syna": "syna", "syn": "syna", "call": "syna", "se": "syna",
+            "skicka": "skicka", "skicka vidare": "skicka", "vidare": "skicka",
+            "pass": "skicka", "skickar": "skicka",
+        }
+        action = aliases.get(v)
+        if action is None or action not in choices:
+            return None, f'"{value}" är inte ett av valen: {", ".join(choices)}.'
+        return action, str(data.get("reasoning") or "").strip()
+
+    def _response_context(
+        self, bid: int, lives: int, choices: list[str], opponent: str | None
+    ) -> str:
+        return "\n".join(
+            [
+                "SITUATIONEN",
+                f"Bägaren är hos {opponent or 'motståndaren'}, som säger {rules.name(bid)}.",
+                f"Du har {lives} liv kvar.",
+                self._opponent_note(opponent),
+                "",
+                f"LAGLIGA VAL: {', '.join(choices)}",
+                "- slå: skaka bägaren utan att titta och säga ett strikt högre bud.",
+                "- syna: lyft locket. Visar tärningarna lägre än budet förlorar "
+                "budgivaren ett liv, annars förlorar du ett. Meier kostar två.",
+                "- skicka: skicka bägaren vidare med samma bud och ta över ansvaret för det.",
+                "",
+                "Svara med JSON:",
+                '{"action": "slå" | "syna" | "skicka", "reasoning": "<kort motivering>"}',
+            ]
+        )
+
+    # -- Repliken ----------------------------------------------------------
+    def _say(self, context: str, bid: int) -> str:
+        """Formulera repliken som hör till ett bud.
+
+        Repliken är kosmetisk. Går den inte att få fram används en mekanisk rad,
+        för en trasig modell får aldrig fälla en match.
+        """
+        fallback = f"Jag säger {rules.name(bid)}."
+        if self.llm is None:
+            return fallback
+        prompt = (
+            f"{context}\n\n"
+            f"Draget är redan bestämt: du säger {rules.name(bid)}.\n"
+            "Formulera bara en kort, naturlig replik på svenska (högst en mening) "
+            "som du säger högt. Den får inte motsäga draget.\n"
+            'Svara med JSON: {"line": "<replik>"}'
+        )
+        return self._narrate(prompt, fallback)

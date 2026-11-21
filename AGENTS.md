@@ -679,16 +679,34 @@ The roster was rebuilt. The old roles (`arling`/`trygg`/`kalkyl`/`rackar`) are
   profile wins on its tactics or its label. Personality lives in the params.
 - **Axel is BASE** — deterministic, non-reading, **no LLM**. He is the fixed
   measuring stick the others are compared against. He is allowed to lose often.
-- **The policy owns the move.** `StrategicAgent` (`meier/agents/strategic.py`)
-  computes the move with `BasePolicy`. The LLM has **two** jobs, neither of which
-  is the move itself:
-  1. **Narrate the line** (`_narrate`) — say what the player says.
-  2. **Read the opponents** (`OpponentReader`, `meier/agents/reader.py`) — turn
-     the secretary's public numbers into an `OpponentProfile`.
-  The profile is an **input** to the policy, not a free choice: the policy still
-  computes the move. The stored `reasoning` is the policy's machine reason plus
-  the profile label and confidence (e.g. `"EV=-0.386 liv | bild av David:
-  försiktig (press 0.10, konf 0.40)"`).
+- **The LLM owns the move** (changed 2026-11-18). `StrategicAgent`
+  (`meier/agents/strategic.py`) asks the model which move to make and accepts
+  any **legal** answer. It does not pick the move for the model.
+  - `meier/legality.py` owns the **rules**: it enumerates the legal bids,
+    responses and forced choices for a position, and rejects everything else.
+    A player can never break the rules, whatever the model says.
+  - `meier/agents/personality.py` turns `risk`/`press`/`reading` into **prose**
+    for the prompt. The params describe a human to play as; they are no longer
+    fed into a formula that computes the move.
+  - An illegal or unparseable answer gets **one** retry that names the error.
+    After that the agent falls back to `BasePolicy` and sets `corrected=True`,
+    so a broken model can never crash a match.
+- **Why it changed.** The old design computed the move in `BasePolicy` and left
+  only the line to the LLM. Every player then played the same algorithm with
+  different constants: `berit` always bid 43 and `david` always 64 when
+  bluffing, regardless of the dice. `press` drove a bid choice the model never
+  saw. The params are now **material for simulating a real player**, and judging
+  what the players do is the user's job, not the machine's.
+- **No more silent rewriting.** `decide_bid` now takes `previous_bid` and
+  chooses among the legal bids directly. Before, it chose as if the table were
+  empty and the engine rewrote **47.9 %** of bids (805/1680) without a trace.
+  That is now **0 %**, guarded by
+  `tests/test_legality.py::test_policy_never_silently_rewrites_the_bid`.
+- **`slå` is not legal against Meier.** `legality.response_actions` drops it
+  when no higher bid exists. A real LLM match crashed here before the fix,
+  because the player chose `slå` and the engine asked for a bid above the
+  highest one that exists. Guarded by
+  `::test_shaking_is_not_offered_against_meier`.
 - **Secretary vs reader.** `OpponentTracker` (`meier/opponents.py`) is the
   secretary: it *records* public play in numbers (bids, reveals, bluffs, calls,
   passes) and never interprets. `OpponentReader` is the reader: the **LLM decides

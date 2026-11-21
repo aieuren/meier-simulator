@@ -42,8 +42,9 @@ motståndare och anpassning.
 ---
 
 Målet är att kunna mäta **vilka taktiker som vinner Meier**, både speltekniskt
-och mot motståndare med olika beteende. Därför är besluten deterministiska och
-reproducerbara: LLM:en är persona och motivering, inte den som avgör draget.
+och mot motståndare med olika beteende. Därför är besluten **LLM:ens** och
+reglerna kodens: modellen väljer fritt bland de lagliga dragen, och koden avgör
+vilka drag som är lagliga. Ingen av dem gör den andras jobb.
 
 Grundidén bygger på opponent modeling: en agent uppskattar motståndarens
 beteende ur observerade handlingar och anpassar sitt val därefter
@@ -56,7 +57,7 @@ göra besluten tolkbara och körbara [Suspicion-Agent, 2023].
 ## 1. Grundmodell
 
 ```
-Agent = basstrategi × (risk, press, reading) × motståndarhistorik
+Agent = LLM som spelar en person (risk, press, reading) inom spelets regler
 ```
 
 | Parameter | Intervall | Betydelse |
@@ -65,37 +66,40 @@ Agent = basstrategi × (risk, press, reading) × motståndarhistorik
 | `press` | 0–1 | Hur ofta agenten bluffar, höjer eller pressar |
 | `reading` | 0–1 | Hur mycket agenten använder motståndarnas tidigare beteende |
 
-Parametrarna påverkar **hur agenten värderar och väljer mellan tillåtna drag**,
-aldrig vilka drag som är tillåtna. Legaliteten bor kvar i motorn
-(`StrategicAgent._coerce_higher`, `Session._enforce_bid`) och rörs inte.
+Parametrarna är **underlag för en personlighet**, inte indata till en formel. De
+beskriver hur en människa brukar spela, och beskrivningen går in i prompten
+(`meier/agents/personality.py`). Modellen får sedan spela som den personen.
+
+Det är en medveten ändring. En tidigare version lät `BasePolicy` räkna fram
+draget ur parametrarna och lät LLM:en formulera repliken. Då blev varje spelare
+samma algoritm med olika konstanter, och `press` styrde ett budval som modellen
+aldrig fick påverka. Nu är måtten ett *underlag* — något att simulera en
+verklig spelare med — och inte en dom över vad som är rätt drag.
 
 ### Ansvarsfördelning (lager)
 
 | Lager | Ansvar | Deterministiskt? |
 |---|---|---|
-| **Policy-kärna** (`meier/policy.py`) | Räknar fram draget ur tillstånd + parametrar | **Ja** |
+| **Regler** (`meier/legality.py`) | Räknar upp lagliga drag, avvisar olagliga | **Ja** |
+| **Personlighet** (`meier/agents/personality.py`) | Beskriver spelaren i ord | **Ja** |
 | **Sekreterare** (`meier/opponents.py`) | Bokför offentligt spel i siffror | **Ja** |
 | **Läsare** (`meier/agents/reader.py`) | **LLM:en** tolkar siffrorna → motståndarprofil | Nej (profilen) |
-| **LLM-lager** (`meier/agents/strategic.py`) | Replik och persona | Nej (påverkar ej draget) |
+| **Spelaren** (`meier/agents/strategic.py`) | **LLM:en väljer drag** bland de lagliga | Nej |
 
-Draget ägs helt av policyn. LLM:en har **två** uppgifter, och ingen av dem rör
-draget direkt:
+Tre saker hålls isär:
 
-1. **Repliken** — formulera vad spelaren säger.
-2. **Motståndarprofilen** — tolka motståndarnas offentliga beteende och sätta en
-   profil. Profilen är en **indata** till policyn, precis som parametrarna.
+1. **Reglerna** — vilka bud och svar som är lagliga. Koden äger dem, och ett
+   olagligt svar från modellen når aldrig bordet. Modellen får en omfrågning
+   med besked om felet; sedan tar reservpolicyn över.
+2. **Personligheten** — vem spelaren är, i ord. Parametrarna blir en människa
+   att spela som, inte en tabell att räkna ur.
+3. **Beslutet** — vad spelaren gör. Det är modellens.
 
-Det andra är det nya. Det är fortfarande mätbart: profilen är ett strukturerat
-estimat som policyn räknar på, inte ett fritt val. Skälet att hålla isär dem: om
-LLM:en fick välja drag skulle en profil kunna vinna på sin formulering i stället
-för sina parametrar, och då går det inte att avgöra vilket som avgjorde.
-Motiveringen som sparas är därför alltid policyns maskinella skäl (t.ex.
-`"EV=-0.386 liv"`), med profilens etikett och konfidens som tillägg.
-
-Konsekvensen är också praktisk: en match kan köras **utan LLM** (`--no-llm`) och
-ger då en deterministisk match — läsaren faller tillbaka på sekreterarens
-aritmetik. Det är läget för utvärdering och statistik. LLM:en slås på när
-replikerna och tolkningen ska göras på riktigt.
+Konsekvensen är praktisk: en match kan köras **utan LLM** (`--no-llm`). Då faller
+varje spelare tillbaka på `BasePolicy`, som väljer bland samma lagliga drag. Det
+läget är deterministiskt och används av `axel` (den fasta mätstickan) samt av
+tester som ska gå på millisekunder utan nätverk. Det är en **referens**, inte en
+beskrivning av hur de andra spelarna fungerar.
 
 ---
 
