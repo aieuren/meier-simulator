@@ -367,6 +367,21 @@ def test_regeltexten_lankar_till_pdf_originalet():
     assert "PDF:ens ordalydelse" not in text
 
 
+def test_tolkningarna_ar_fa_och_utan_kodnamn():
+    """Bryggan i slutet ska vara kort och handla om spelet, inte om koden."""
+    text = REGLER.read_text(encoding="utf-8")
+    assert "Några tolkningar för denna simulator" in text, (
+        "regeltexten behöver en kort brygga till simulatorn"
+    )
+    avsnitt = text[text.index("Några tolkningar för denna simulator") :]
+    punkter = [ln for ln in avsnitt.splitlines() if ln.startswith("- ")]
+    assert 2 <= len(punkter) <= 6, (
+        f"bryggan har {len(punkter)} punkter; håll den kort"
+    )
+    for namn in ("DIE_ELONGATION", "rules.", ".py", "`bid`", "BasePolicy"):
+        assert namn not in avsnitt, f"bryggan läcker implementationsdetaljen {namn}"
+
+
 def test_skicka_vidare_ar_blint_i_regeltext_och_prompt():
     """Att titta är att syna. Regeln ska stå i både regeltext och LLM-prompt."""
     regler = _flat(REGLER.read_text(encoding="utf-8"))

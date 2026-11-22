@@ -112,3 +112,23 @@ spelaren är blind för tärningarna. Men alternativet vore orimligt: att lyfta 
 locket är att syna. Kunde man titta och sedan skicka vidare skulle "skicka
 vidare" vara en gratis syn, och syna-alternativet vore meningslöst. Därför ser
 den som skickar vidare inte tärningarna, utan vet bara vad påståendet säger.
+
+## Några tolkningar för denna simulator
+
+Reglerna ovan lämnar några saker öppna. Här står de tolkningar som gjorts, så
+att det går att skilja på vad spelet kräver och vad den här maskinen har
+bestämt. Inget av detta är regler, och allt kan ändras utan att reglerna
+ändras.
+
+- Att datorn spelar spelaren ändrar inte blindheten i "skicka vidare". Den som
+  svarar får påståendet och sitt livsantal, aldrig tärningarna.
+- Att en blind höjning måste lägga sig över det förra påståendet är en regel.
+  Vilket högre påstående som väljs är däremot ett strategival.
+- Hur ofta en spelare bluffar, synar eller skickar vidare är också ett
+  strategival. Reglerna säger inget om det.
+- Tärningarnas form är modellerad som en avlång kropp, där längden är 1,3 gånger
+  bredden. Det ger ändytorna lägre sannolikhet än långytorna, i linje med
+  reglernas lösa beskrivning.
+
+Hur valen är gjorda i praktiken står i [agentmodellen](../agent-model.md) och
+[granskningen](granskning.md).

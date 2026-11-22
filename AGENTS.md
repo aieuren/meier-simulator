@@ -187,9 +187,12 @@ implementation details out of it: no module or field names, no `DIE_ELONGATION`,
 no strategy choices, no notes about how the engine or an agent behaves. Those
 belong in `docs/agent-model.md` or `docs/regler/granskning.md`.
 
-The one code-facing note that stays is the wording note: the PDF says "bud",
-this text says "påstående", and the quote keeps the PDF's wording. That helps a
-reader map the rules onto the repo.
+Two things bridge the gap to the repo without turning the file into a spec.
+One is the wording note: the PDF says "bud", this text says "påstående". The
+other is the short closing section "Några tolkningar för denna simulator",
+which lists the open choices (blind passing, blind raises, bluff frequency,
+die shape) as choices, not rules. Keep that section to a handful of bullets and
+link out for detail.
 
 ## The `line` is built locally, never written by the model
 
