@@ -91,9 +91,9 @@ def test_readme_links_to_the_full_model():
     assert "docs/agent-model.md" in _text()
 
 
-# -- docs/om-meier.md: kompisversionen --------------------------------------
+# -- docs/om-meier-simulatorn.md: kompisversionen ---------------------------
 
-OM_MEIER = README.parent / "docs" / "om-meier.md"
+OM_MEIER = README.parent / "docs" / "om-meier-simulatorn.md"
 AGENT_MODEL = README.parent / "docs" / "agent-model.md"
 
 
@@ -102,37 +102,37 @@ def _om() -> str:
 
 
 def test_om_meier_exists_and_is_linked_from_readme():
-    assert OM_MEIER.is_file(), "docs/om-meier.md saknas"
-    assert "docs/om-meier.md" in _text(), "README länkar inte till Om Meier"
+    assert OM_MEIER.is_file(), "docs/om-meier-simulatorn.md saknas"
+    assert "docs/om-meier-simulatorn.md" in _text(), "README länkar inte till Om meier-simulatorn"
 
 
 def test_om_meier_has_no_technical_installation_instructions():
     """Kompisversionen ska inte innehålla kommandon och installationssteg."""
     text = _om()
     for noise in ("pip install", "uvicorn", "pytest", "curl ", "export "):
-        assert noise not in text, f"Om Meier innehåller teknik: {noise!r}"
+        assert noise not in text, f"Om meier-simulatorn innehåller teknik: {noise!r}"
 
 
 def test_om_meier_player_table_matches_the_roster():
-    """Siffertabellen i Om Meier ska visa samma parametrar som koden."""
+    """Siffertabellen i Om meier-simulatorn ska visa samma parametrar som koden."""
     text = _om()
     for profile in ROSTER.values():
         row = next(
             (ln for ln in text.splitlines() if f"**{profile.name}**" in ln and "|" in ln),
             None,
         )
-        assert row is not None, f"Om Meier saknar tabellrad för {profile.name}"
+        assert row is not None, f"Om meier-simulatorn saknar tabellrad för {profile.name}"
         cells = [c.strip() for c in row.split("|")[1:-1]]
         for cell, value in zip(cells[1:4], (
             profile.params.risk, profile.params.press, profile.params.reading
         )):
             assert cell == f"{value:.2f}".replace(".", ","), (
-                f"{profile.name}: Om Meier visar {cell}, koden har {value}"
+                f"{profile.name}: Om meier-simulatorn visar {cell}, koden har {value}"
             )
 
 
 def test_om_meier_describes_the_machine_not_its_results():
-    """Om Meier ska beskriva vad vi satt upp, inte vad simuleringarna gav.
+    """Om meier-simulatorn ska beskriva vad vi satt upp, inte vad simuleringarna gav.
 
     Mätvärden hör hemma i en rapport, inte i en beskrivning av maskinen. De
     åldras, de kräver en mätning för att verifieras, och de lockar till
@@ -146,7 +146,7 @@ def test_om_meier_describes_the_machine_not_its_results():
     # Utfallstabeller: rubriker som sammanställer vad spelarna gjorde.
     for header in ("vinster", "bluffar i", "synar i"):
         assert header not in flat, (
-            f"Om Meier har en utfallstabell ({header!r}). Flytta mätvärden till "
+            f"Om meier-simulatorn har en utfallstabell ({header!r}). Flytta mätvärden till "
             "en rapport – dokumentet ska beskriva maskinen."
         )
 
@@ -161,13 +161,13 @@ def test_om_meier_describes_the_machine_not_its_results():
         "inga säkra slutsatser",
     ):
         assert marker not in flat, (
-            f"Om Meier innehåller mätvärdesmarkören {marker!r}. "
+            f"Om meier-simulatorn innehåller mätvärdesmarkören {marker!r}. "
             "Dokumentet ska beskriva maskinen, inte resultaten."
         )
 
     # Ett påstående om vem som vinner mest/minst är en slutsats om utfall.
     for claim in ("vinner mest", "vinner minst", "förlorade nästan varje"):
-        assert claim not in flat, f"Om Meier drar en slutsats om utfall: {claim!r}"
+        assert claim not in flat, f"Om meier-simulatorn drar en slutsats om utfall: {claim!r}"
 
     # Procenttal får bara stå i konstruktionsbeskrivningar: tärningarnas vikter,
     # läsningstaket och spelarnas parametrar. Utfall ur en spelad match hör inte
@@ -190,6 +190,31 @@ def test_om_meier_describes_the_machine_not_its_results():
         assert ok, f"procenttal utan konstruktionssammanhang: {line!r}"
 
 
+def test_om_meier_says_the_model_makes_the_move():
+    """Kompisversionen ska beskriva arkitekturen som den är: modellen väljer draget.
+
+    ``StrategicAgent`` låter LLM:en välja bland de lagliga dragen. En tidigare
+    version av dokumentet sa motsatsen, att en gemensam beräkning tog beslutet
+    och att modellen bara formulerade sig. Det stämde inte då och stämmer inte nu.
+    """
+    flat = _flat(_om()).lower()
+    for fel in (
+        "modellen får inte bestämma draget",
+        "själva beslutet tas av en beräkning",
+        "beräkning som är densamma för alla spelare",
+    ):
+        assert fel not in flat, (
+            f"Om meier-simulatorn påstår {fel!r}. Modellen väljer draget i "
+            "StrategicAgent; koden räknar bara upp de lagliga dragen."
+        )
+    assert "modellen bestämmer draget" in flat, (
+        "Om meier-simulatorn måste säga att modellen bestämmer draget"
+    )
+    assert "repliken" in flat and "byggs i koden" in flat, (
+        "Dokumentet ska skilja på draget (modellen) och repliken (koden)"
+    )
+
+
 def test_om_meier_dice_table_matches_the_rules():
     """Tärningstabellen ska stämma med FACE_WEIGHTS, inte med en kub."""
     from meier import rules
@@ -202,8 +227,8 @@ def test_om_meier_dice_table_matches_the_rules():
         p = weights[hi] * weights[lo] / total * (1 if hi == lo else 2)
         shown = f"{p * 100:.1f}".replace(".", ",") + " %"
         row = next((ln for ln in text.splitlines() if ln.startswith(f"| {label}")), None)
-        assert row is not None, f"Om Meier saknar tärningsraden {label}"
-        assert shown in row, f"{label}: Om Meier borde visa {shown}, fick {row}"
+        assert row is not None, f"Om meier-simulatorn saknar tärningsraden {label}"
+        assert shown in row, f"{label}: Om meier-simulatorn borde visa {shown}, fick {row}"
 
 
 def test_agents_md_examples_use_real_roles():
@@ -256,10 +281,10 @@ def test_om_meier_round_terminology_matches_the_engine():
 
     text = _om()
     assert "till dess att någon synar" in text, (
-        "Om Meier måste definiera att en runda slutar vid syn"
+        "Om meier-simulatorn måste definiera att en runda slutar vid syn"
     )
     assert "En match är många rundor" in text, (
-        "Om Meier måste skilja runda från match"
+        "Om meier-simulatorn måste skilja runda från match"
     )
 
     rounds_without_call = 0
@@ -411,7 +436,7 @@ def test_om_meier_does_not_claim_raises_are_always_one_step():
         "alltid på den minsta möjliga höjningen",
     ):
         assert claim not in flat, (
-            f"Om Meier påstår {claim!r}. Minsta höjning gäller bluffen över sedda "
+            f"Om meier-simulatorn påstår {claim!r}. Minsta höjning gäller bluffen över sedda "
             "tärningar; blind höjning styrs av press."
         )
 

@@ -1,4 +1,4 @@
-# Om Meier – vad det här är
+# Om meier-simulatorn – vad det här är
 
 En kort genomgång för dig som är nyfiken men inte ska bygga vidare på koden.
 Inga formler, ingen installation. Bara vad grejen är och vad spelarna gör.
@@ -118,8 +118,12 @@ Om spelaren fick se allt skulle det inte finnas något att bluffa om.
 
 ### Spelaren väger risk mot vinst
 
-Varje beslut är en avvägning mellan två saker: chansen att slippa bli synad
-och vad det kostar om du blir synad.
+Modellen bestämmer draget. Den väljer fritt bland de lagliga alternativen, men
+den kan aldrig bryta mot reglerna: koden räknar upp vad som är tillåtet i läget
+och modellen väljer inom den listan.
+
+Varje beslut är sedan en avvägning mellan två saker: chansen att slippa bli
+synad och vad det kostar om du blir synad.
 
 Att påstå exakt det tärningarna visar är säkert. Blir du synad vinner du
 rundan, för tärningarna visar då minst påståendet.
@@ -134,25 +138,29 @@ högre – och då ta över risken själv. En bluff är inte "värd mer". Den fl
 till motståndaren, och den lönar sig bara när motståndaren hellre avstår från
 att syna än tar den chansen.
 
-Maskinen fattar två olika slags höjningar, och de fungerar olika.
+Det finns två slags höjningar, och de skiljer sig åt.
 
-När spelaren har sett sina tärningar och bluffar över det hen såg, väljer
-hen den minsta möjliga höjningen. Ett högre påstående synas nämligen oftare: en
-syn på 66 är billigare för motståndaren än en syn på 51, eftersom tärningarna
-då oftare är lägre än påståendet. Att höja längre ökar alltså bara risken att åka
-dit, utan att ge något tillbaka. Här höjs det därför bara ett enda steg, aldrig
-flera.
+När spelaren har sett sina tärningar och bluffar över det hen såg, är ett högre
+påstående alltid dyrare att bli synad på. En syn på 66 är billigare för
+motståndaren än en syn på 51, eftersom tärningarna då oftare är lägre än
+påståendet. Att höja långt ökar alltså risken att åka dit.
 
-När spelaren slår skakar hen om bägaren och tittar inte. Då finns
-ingen "sann" nivå att lägga sig strax över, och då är kalkylen en annan. Här
-bestämmer `press` hur högt påståendet läggs: låg press lägger sig nära minimum, hög
-press tar ett språng uppåt för att sätta motståndaren i ett dyrare läge. Det är
-ett medvetet val i modellen, inte en sanning om spelet – ett språng är farligare
-om det blir synat, men svårare att värja sig mot.
+När spelaren i stället slår blint finns ingen sann nivå att lägga sig strax
+över, och kalkylen är en annan: ett lågt påstående är svårt för nästa spelare att
+slå över, ett högt sätter press men synas oftare.
 
-Så: minsta höjning gäller bluffen över sedda tärningar. Höjningen vid slag
-styrs av `press`. Det är två skilda beslut i koden
-(`decide_bid` respektive `decide_raise`).
+Vem väger det ena mot det andra? Modellen. Koden räknar bara upp vilka
+påståenden som är lagliga i läget, och modellen väljer bland dem. Den får
+spelets ekonomi beskriven i ord – att ett påstående under tärningarna är säkert
+och ett över är en bluff – men ingen färdig formel.
+
+Repliken däremot skrivs inte av modellen. Den byggs i koden ur draget, så att en
+spelare aldrig säger något annat än det hen faktiskt gjorde.
+
+Axel är undantaget. Han har ingen modell utan spelar en fast räkneregel: vid
+bluff lägger han sig på den minsta möjliga höjningen, och vid blindt slag
+bestämmer `press` hur högt han går. Samma räkneregel tar över om en modell inte
+svarar.
 
 ### Spelaren bluffar med flit
 
@@ -173,14 +181,8 @@ motståndarprofil: en gissning om motståndarens `risk` och `press`, plus en
 kort motståndartyp som "bluffbenägen", "försiktig" eller "oförutsägbar", och
 ett mått på hur säker gissningen är.
 
-Två saker är viktiga här:
-
-Modellen får aldrig se dolda tärningar. Den får bara det som varit
-offentligt. Annars skulle läsförmågan vara fusk.
-
-Modellen får inte bestämma draget. Den tolkar och beskriver. Själva beslutet
-tas av en beräkning som är densamma för alla spelare. Det gör att en spelare
-aldrig kan spela sämre för att modellen skriver en dålig mening.
+En sak är viktig här: modellen får aldrig se dolda tärningar. Den får bara det
+som varit offentligt. Annars skulle läsförmågan vara fusk.
 
 ### Spelaren litar inte fullt på sin egen läsförmåga
 
@@ -215,9 +217,10 @@ Modellen får säga "jag är säker", men taket gäller ändå. En bild byggd p�
 enda syn väger en fjärdedel av en mogen bild.
 
 Samma princip gäller åt andra hållet: en motståndare som synar ofta gör varje
-bluff dyrare, så spelaren bluffar mindre mot hen. Maskinen räknar med
-motståndarens synfrekvens när den väljer påstående. Mot en som sällan synar är det
-friare fram; mot en som synar ofta lönar sig bara de påståenden som är nästan säkra.
+bluff dyrare, så spelaren bluffar mindre mot hen. Spelaren får motståndarens
+benägenhet att syna med i underlaget när hen väljer påstående. Mot en som sällan
+synar är det friare fram; mot en som synar ofta lönar sig bara de påståenden som
+är nästan säkra.
 
 ---
 
@@ -228,7 +231,7 @@ friare fram; mot en som synar ofta lönar sig bara de påståenden som är näst
 - Fyra spelare – fyra spelare spelar mot varandra, ett steg i taget eller
   hela matchen. Loggen visar varje påstående, varje syn och vem som förlorade liv.
 - Matchserie – kör många matcher och få statistik.
-- Analys – ladda upp loggarna och ställ frågor om materialet. Svaren kommer
+- Analys – välj bland loggarna och ställ frågor om materialet. Svaren kommer
   från en språkmodell och kan innehålla diagram.
 
 ---
@@ -238,9 +241,8 @@ friare fram; mot en som synar ofta lönar sig bara de påståenden som är näst
 Maskinen mäter ingenting åt dig, men den ger underlag. Efter en matchserie kan
 du titta på två frågor:
 
-- Vilken spelstil som vinner oftast. I Meier är de två samma sak: den som
-  står kvar sist har vunnit, för den som mist tre liv är ute. Överlevnad är
-  spelets enda mått, och därför finns det ingen poängliga att titta på.
+- Vilken spelstil som vinner oftast. Här finns bara ett mått: den som står kvar
+  sist har vunnit, för den som mist tre liv är ute. Det finns ingen poängliga.
 - Om läsförmågan lönar sig. Cecilia läser motståndarna, Berit nästan inte.
   Går det att se någon skillnad mellan dem, eller väger tur och bordets övriga
   spelare tyngre?
@@ -259,10 +261,11 @@ vända på en enda syn. Kör hellre flera hundra matcher än tio.
 
 ## Vad du kan prova
 
-Öppna fliken *Enskild spelare* och mata in två tärningar. Du får se vad varje
-spelare svarar på samma slag. Samma tärningar, samma regler, olika profil – det
-är själva poängen med maskinen.
+Öppna fliken *Enskild spelare*, välj en roll och mata in två tärningar. Du får
+se vad just den spelaren svarar på slaget.
 
-Prova samma slag med flera spelare och jämför. Prova också att köra en hel
-match och läsa loggen: varje påstående, varje syn och vem som förlorade liv står
-med.
+Byt sedan roll och slå samma tärningar igen. Samma slag, samma regler, olika
+profil – det är själva poängen med maskinen.
+
+Prova också att köra en hel match och läsa loggen: varje påstående, varje syn och
+vem som förlorade liv står med.

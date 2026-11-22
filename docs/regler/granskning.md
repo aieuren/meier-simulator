@@ -65,14 +65,14 @@ Den mekaniska policyn gör det aldrig. Av 21 möjliga utfall lägger
 Detta är ett strategival, inte ett regelbrott – maskinen *får* påstå lägre,
 den *väljer* att inte göra det. Men det är värt att veta, eftersom:
 
-- Mätningarna i `docs/om-meier.md` gäller en maskin som aldrig påstår under
+- Mätningarna i `docs/om-meier-simulatorn.md` gäller en maskin som aldrig påstår under
   tärningarna.
 - En mänsklig spelare kan påstå 31 på 52. Simulatorn gör det aldrig.
 - LLM-agenten *kan* göra det, eftersom prompten tillåter det. LLM- och
   policy-spelare är alltså inte helt jämförbara.
 
 Att göra om man vill täppa till det: antingen lägga till `lower_options` och
-låta policyn välja ibland, eller skriva i `docs/om-meier.md` att simulatorn
+låta policyn välja ibland, eller skriva i `docs/om-meier-simulatorn.md` att simulatorn
 medvetet avstår från lägre påståenden. Det senare är billigare och bör göras först.
 
 ## Så här återskapas mätningarna

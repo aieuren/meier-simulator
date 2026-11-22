@@ -194,6 +194,18 @@ which lists the open choices (blind passing, blind raises, bluff frequency,
 die shape) as choices, not rules. Keep that section to a handful of bullets and
 link out for detail.
 
+## The friend doc is `docs/om-meier-simulatorn.md`
+
+It used to be `docs/om-meier.md`, which readers mistook for a document about
+the game rather than about the simulator. The file name and the title now say
+"meier-simulatorn". The test constant is still `OM_MEIER`.
+
+The friend doc must track the architecture, not an older one. It once claimed
+the model only phrases the move and a shared calculation decides it. That was
+wrong after the LLM took ownership of the move. When you change who decides
+what, update this file in the same commit. `test_om_meier_says_the_model_makes_the_move`
+guards the specific claim.
+
 ## The `line` is built locally, never written by the model
 
 The model only produces the move (`bid`, `action`, `blind`). The spoken `line`
@@ -395,14 +407,14 @@ code, and `tests/test_docs.py` enforces it:
 |---|---|---|
 | `README.md` | whoever runs and changes the code | install, CLI, API, config |
 | `docs/regler/meier-regler.md` | anyone asking "is this a rule or a choice?" | the rules only – no code, no strategy, no modelling |
-| `docs/om-meier.md` | a friend who just wants to understand | what it is, rules, players, how the machine is built |
+| `docs/om-meier-simulatorn.md` | a friend who just wants to understand | what it is, rules, players, how the machine is built |
 | `docs/agent-model.md` | whoever tunes the model | formulas, calibration, measurements |
 | `docs/regler/granskning.md` | anyone doubting the engine | rule-by-rule audit with measurements |
 
 The rules file is canonical. If code and rules disagree, the code is wrong.
-If prose in `docs/om-meier.md` and the rules file disagree, the prose is wrong.
+If prose in `docs/om-meier-simulatorn.md` and the rules file disagree, the prose is wrong.
 
-`docs/om-meier.md` describes the machine, not what it produced. It must not
+`docs/om-meier-simulatorn.md` describes the machine, not what it produced. It must not
 contain win rates, bluff frequencies, match lengths or any other result of a
 simulation run – those belong in a report, and they age. It may describe
 construction: dice weights, reading caps, roster parameters. `tests/test_docs.py`
