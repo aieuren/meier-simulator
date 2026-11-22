@@ -541,9 +541,11 @@ def test_roll_favours_the_long_faces():
             counts[d] += 1
     low = counts[1] + counts[2]
     high = counts[3] + counts[4] + counts[5] + counts[6]
-    # Per sida väntas 1 / 1,3 = 0,769, alltså (low/2) / (high/4).
+    # Jämför mot de vikter koden faktiskt använder, så att testet inte låser
+    # en viss modell: (low/2) / (high/4) ska ligga nära w_änd / w_lång.
+    expected = rules.FACE_WEIGHTS[0] / rules.FACE_WEIGHTS[2]
     assert high > low
-    assert 0.73 < (low / 2) / (high / 4) < 0.81
+    assert abs((low / 2) / (high / 4) - expected) < 0.02
 
 
 def test_roll_keeps_odd_and_even_equally_likely():
@@ -564,7 +566,9 @@ def test_face_weights_sum_and_shape():
     assert len(rules.FACE_WEIGHTS) == 6
     assert rules.FACE_WEIGHTS[0] == rules.FACE_WEIGHTS[1]
     assert rules.FACE_WEIGHTS[2] == rules.FACE_WEIGHTS[5]
-    assert rules.FACE_WEIGHTS[2] == rules.DIE_ELONGATION
+    # Vikterna är normaliserade sannolikheter, inte råa vikter.
+    assert abs(sum(rules.FACE_WEIGHTS) - 1.0) < 1e-12
+    assert rules.FACE_WEIGHTS[2] > rules.FACE_WEIGHTS[0]
 
 
 # -- Kontrakt mot frontend: fälten måste alltid finnas ----------------------
@@ -900,24 +904,34 @@ def test_every_life_row_carries_a_standings_snapshot():
         assert loser["lives"] == row["lives_left"]
 
 
-def test_die_model_is_area_based_and_says_so():
-    """Tärningens vikter ska vara areamodellen, och modellen ska vara märkt som val.
+def test_die_model_is_solid_angle():
+    """Tärningens vikter ska härledas ur rymdvinkeln, inte ur arean.
 
-    ``DIE_ELONGATION`` är längd/bredd. Areamodellen ger då viktförhållandet
-    L/w mellan lång- och ändyta. Rymdvinkelmodellen för samma form ger 1,56,
-    vilket är en annan fördelning (~2,94 % Meier i stället för 3,86 %). Testet
-    låser att koden använder areamodellen och att det står i docstringen att
-    det är ett val, inte en fysikalisk lag.
+    ``DIE_ELONGATION`` är längd/bredd. Med rymdvinkelmodellen blir en långsida
+    1,562 gånger så sannolik som en ändyta för samma form. Areamodellen gav
+    exakt 1,3 och är borttagen. Testet låser både talet och att det räknas fram
+    ur formeln, så att ingen återinför en gissad konstant.
     """
+    import math
+
     assert rules.DIE_ELONGATION == 1.3
     ratio = rules.FACE_WEIGHTS[2] / rules.FACE_WEIGHTS[0]
-    assert ratio == rules.DIE_ELONGATION
+    assert math.isclose(ratio, 1.5620056285, rel_tol=1e-9)
 
-    import inspect
+    # Samma formel som koden, räknad här, ska ge samma vikter.
+    def omega(a: float, b: float, d: float) -> float:
+        return 4.0 * math.atan(a * b / (d * math.sqrt(a * a + b * b + d * d)))
 
-    src = inspect.getsource(rules).lower()
-    start = src.index("face_weights: tuple[float, ...]")
-    comment = src[:start]
-    assert "area" in comment
-    assert "val" in comment or "choice" in comment
-    assert "rymdvinkel" in comment
+    end = omega(0.5, 0.5, rules.DIE_ELONGATION / 2)
+    side = omega(0.5, rules.DIE_ELONGATION / 2, 0.5)
+    total = 2 * end + 4 * side
+    for expected, actual in zip(
+        (end / total, end / total, side / total, side / total, side / total, side / total),
+        rules.FACE_WEIGHTS,
+    ):
+        assert math.isclose(expected, actual, rel_tol=1e-12)
+
+    # P(21) följer av vikterna: ~2,94 %, inte areamodellens 3,86 %.
+    from meier.policy import OUTCOME_P
+
+    assert math.isclose(OUTCOME_P[21], 0.0293988, abs_tol=1e-7)

@@ -24,7 +24,12 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ..llm import LLMClient, parse_json_object
-from ..opponents import OpponentProfile, OpponentTracker, _clamp01
+from ..opponents import (
+    POPULATION_CALL_RATE,
+    OpponentProfile,
+    OpponentTracker,
+    _clamp01,
+)
 
 #: Kort regeltext så modellen kan tolka siffrorna rätt.
 _RULES = (
@@ -72,9 +77,10 @@ def _summarise(player: str, ev: dict, *, table_reveals: int, strength: float) ->
         f"  synade: {ev['calls']} (frekvens {_fmt_rate(ev['call_rate'])})",
         f"  synen gick hem: {ev['calls_won']}",
         "",
-        "JÄMFÖRELSE: en vanlig Meier-spelare synar ungefär 19 % av gångerna och "
-        "bluffar ofta (runt 70 % av de avslöjade påståendena). Bedöm motståndaren "
-        "RELATIVT det — inte som om 0 vore normalt.",
+        f"JÄMFÖRELSE: en vanlig Meier-spelare synar ungefär "
+        f"{POPULATION_CALL_RATE:.0%} av gångerna och bluffar ofta (runt 70 % av de "
+        "avslöjade påståendena). Bedöm motståndaren RELATIVT det — inte som om 0 "
+        "vore normalt.",
         "",
         f"Synar som avgjorts vid bordet hittills (alla spelare): {table_reveals}",
         f"Underlagets styrka: {strength:.2f} av 1,00 "

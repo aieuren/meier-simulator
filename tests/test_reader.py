@@ -275,17 +275,21 @@ def test_opponent_factor_never_lowers_the_bid_below_the_truth():
 
 def test_call_ratio_is_relative_to_the_population():
     tracker = OpponentTracker()
-    for _ in range(20):
+    from meier.opponents import POPULATION_CALL_RATE
+
+    n = 100
+    normal_calls = round(n * POPULATION_CALL_RATE)
+    for _ in range(n):
         tracker.observe_bid("normal", blind=False)
-    for i in range(20):
-        tracker.observe_decision("normal", "syna" if i < 4 else "skicka")
-    for _ in range(20):
+    for i in range(n):
+        tracker.observe_decision("normal", "syna" if i < normal_calls else "skicka")
+    for _ in range(n):
         tracker.observe_bid("synare", blind=False)
-    for i in range(20):
-        tracker.observe_decision("synare", "syna" if i < 12 else "skicka")
+    for i in range(n):
+        tracker.observe_decision("synare", "syna" if i < 60 else "skicka")
     normal = tracker.call_ratio("normal")
     synare = tracker.call_ratio("synare")
-    assert normal == pytest.approx(1.0, abs=0.15), "typisk synfrekvens ska ge ratio ~1"
+    assert normal == pytest.approx(1.0, abs=0.05), "typisk synfrekvens ska ge ratio ~1"
     assert synare > normal
 
 
@@ -324,12 +328,15 @@ def test_risk_reaches_the_bid_through_the_agent():
 
 
 def test_summary_gives_the_model_a_reference_point():
-    """Modellen ska veta vad en *vanlig* synfrekvens är, inte läsa 19 % som noll."""
+    """Modellen ska veta vad en *vanlig* synfrekvens är, inte läsa den som noll."""
+    from meier.opponents import POPULATION_CALL_RATE
+
     tracker = _tracker_with_bluffer()
     llm = FakeLLM()
     reader = OpponentReader(llm=llm)
     reader.profile(tracker, "bluffare")
-    assert "19" in llm.last_user, "referenspunkten ska stå i sammanställningen"
+    # Referenspunkten ska komma ur konstanten, inte ur en siffra skriven i prompten.
+    assert f"{POPULATION_CALL_RATE:.0%}" in llm.last_user
     assert "RELATIVT" in llm.last_user.upper()
 
 

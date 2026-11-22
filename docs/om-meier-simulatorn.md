@@ -43,16 +43,14 @@ Den fullständiga regeltexten står i
 Tärningarna är avlånga. Ändytorna (1 och 2) är kvadratiska, långytorna
 (3–6) är längre. Längden är ungefär 1,3 gånger bredden.
 
-Maskinen antar att chansen för en sida följer sidans area. Då blir 3–6 exakt
-1,3 gånger så sannolika som 1–2, eftersom långytan har arean bredd gånger längd
-medan ändytan har arean bredd gånger bredd. Det är den fördelning maskinen slår
-med.
+Chansen för en sida följer sidans rymdvinkel från tärningens masscentrum. Det
+är den vanligaste modellen för en kropp som kastas på måfå: en yta som ligger
+längre bort från centrum täcker en mindre vinkel och blir mindre sannolik.
 
-Area är ett val, inte en naturlag. Räknar man i stället efter sidans rymdvinkel
-från masscentrum, den vanligaste modellen för en kropp som kastas på måfå, blir
-förhållandet mellan långsida och ändyta 1,56. Med den vikten går Meier från
-3,9 % till 2,9 %. Skillnaden är liten. Arean är vald för att den går att räkna
-och kontrollera. Vilken vikt som passar Meiers tärningar vet vi inte.
+Ändytorna ligger längst ut och blir därför ovanligare än man kanske tror. Med
+längden 1,3 mot bredden 1,0 blir en långsida 1,56 gånger så sannolik som en
+ändyta — inte 1,3, som man får om man bara jämför areorna. Det är den
+fördelning maskinen slår med.
 
 Tabellen visar sannolikheten för varje utfall, och hur stor chansen är att slå
 utfallet eller lägre. Den sista kolumnen är samma sak för en vanlig kub, så att
@@ -60,32 +58,32 @@ det går att se vad formen gör.
 
 | Utfall | Exakt utfall | Utfallet eller lägre | Vanlig kub, eller lägre |
 |---|---:|---:|---:|
-| 21 (Meier) | 3,9 % | 100,0 % | 100,0 % |
-| 11 | 1,9 % | 96,1 % | 94,4 % |
-| 22 | 1,9 % | 94,2 % | 91,7 % |
-| 33 | 3,3 % | 92,3 % | 88,9 % |
-| 44 | 3,3 % | 89,0 % | 86,1 % |
-| 55 | 3,3 % | 85,8 % | 83,3 % |
-| 66 | 3,3 % | 82,5 % | 80,6 % |
-| 65 | 6,5 % | 79,2 % | 77,8 % |
-| 64 | 6,5 % | 72,7 % | 72,2 % |
-| 63 | 6,5 % | 66,2 % | 66,7 % |
-| 62 | 5,0 % | 59,7 % | 61,1 % |
-| 61 | 5,0 % | 54,7 % | 55,6 % |
-| 54 | 6,5 % | 49,7 % | 50,0 % |
-| 53 | 6,5 % | 43,1 % | 44,4 % |
-| 52 | 5,0 % | 36,6 % | 38,9 % |
-| 51 | 5,0 % | 31,6 % | 33,3 % |
-| 43 | 6,5 % | 26,6 % | 27,8 % |
-| 42 | 5,0 % | 20,1 % | 22,2 % |
-| 41 | 5,0 % | 15,0 % | 16,7 % |
-| 32 | 5,0 % | 10,0 % | 11,1 % |
-| 31 | 5,0 % | 5,0 % | 5,6 % |
+| 21 (Meier) | 2,9 % | 100,0 % | 100,0 % |
+| 11 | 1,5 % | 97,1 % | 94,4 % |
+| 22 | 1,5 % | 95,6 % | 91,7 % |
+| 33 | 3,6 % | 94,1 % | 88,9 % |
+| 44 | 3,6 % | 90,5 % | 86,1 % |
+| 55 | 3,6 % | 86,9 % | 83,3 % |
+| 66 | 3,6 % | 83,4 % | 80,6 % |
+| 65 | 7,2 % | 79,8 % | 77,8 % |
+| 64 | 7,2 % | 72,6 % | 72,2 % |
+| 63 | 7,2 % | 65,4 % | 66,7 % |
+| 62 | 4,6 % | 58,3 % | 61,1 % |
+| 61 | 4,6 % | 53,7 % | 55,6 % |
+| 54 | 7,2 % | 49,1 % | 50,0 % |
+| 53 | 7,2 % | 41,9 % | 44,4 % |
+| 52 | 4,6 % | 34,7 % | 38,9 % |
+| 51 | 4,6 % | 30,1 % | 33,3 % |
+| 43 | 7,2 % | 25,5 % | 27,8 % |
+| 42 | 4,6 % | 18,4 % | 22,2 % |
+| 41 | 4,6 % | 13,8 % | 16,7 % |
+| 32 | 4,6 % | 9,2 % | 11,1 % |
+| 31 | 4,6 % | 4,6 % | 5,6 % |
 
-Mellan kolumnerna syns vad formen gör. Meier och 11 blir ovanligare, medan utfall
-där båda tärningarna är 3–6 blir vanligare. Udda och jämnt förblir ändå lika
-sannolikt, eftersom 1 och 2 ligger på ändytorna (en udda, en jämn) och 3–6 på
-långytorna.
+Mellan kolumnerna syns vad formen gör. Meier och 11 blir ovanligare än vid en
+kub, medan utfall där båda tärningarna är 3–6 blir vanligare. Udda och jämnt
+förblir ändå lika sannolikt, eftersom 1 och 2 ligger på ändytorna (en udda, en
+jämn) och 3–6 på långytorna.
 
 Kolumnen Utfallet eller lägre är den som liknar spelet mest. Den säger hur ofta
 tärningarna visar påståendet eller mindre, och det är just det en syn avgör.
@@ -166,9 +164,9 @@ tärningar inte räcker till, alltså hur ofta du tvingas bluffa:
 
 | Bordet står på | Du tvingas bluffa |
 |---|---:|
-| 43 | 27 % |
-| 52 | 37 % |
-| 63 | 66 % |
+| 43 | 26 % |
+| 52 | 35 % |
+| 63 | 65 % |
 | 66 | 83 % |
 
 Vid Meier finns inget högre påstående, så där kan ingen slå. Bägaren går tillbaka

@@ -31,7 +31,8 @@ def test_bluff_estimate_uses_only_revealed_bids():
     for _ in range(4):
         tracker.observe_bid("a", blind=False)
     tracker.reveal("a", was_bluff=True)
-    # Med förhandstro 4 och global_q 0,586: (1 + 4*0,586) / (1 + 4) ≈ 0,669
+    # Ett avslöjat påstående som var en bluff höjer tron över förhandstron:
+    # (1 + 4*DEFAULT_Q) / (1 + 4) > DEFAULT_Q för alla DEFAULT_Q > 0.
     assert tracker.bluff_estimate("a") > tracker.global_q
     assert tracker.stats["a"].revealed == 1
 

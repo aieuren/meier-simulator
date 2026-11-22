@@ -7,6 +7,7 @@ Två tärningar läses som ett tvåsiffrigt tal med den högsta tärningen förs
 
 from __future__ import annotations
 
+import math
 import random
 from dataclasses import dataclass
 
@@ -44,21 +45,42 @@ MEIER = 21
 #: Tärningens längd delad med dess bredd. 1,0 vore en perfekt kub.
 DIE_ELONGATION = 1.3
 
-#: Vikter per tärningssida 1..6 för en avlång tärning.
-#:
-#: Modellen är "chansen följer sidans area": ändytorna (1, 2) är kvadratiska med
-#: arean w², långytorna (3-6) har arean w·L. Vikten blir då ytans area, så en
-#: sida 3-6 väger DIE_ELONGATION gånger en sida 1-2. En kub (1,0) ger likformig
-#: fördelning. Udda och jämn förblir alltid lika sannolika, eftersom 1 och 2
-#: ligger på ändytorna (en udda, en jämn) och 3-6 på långytorna.
-#:
-#: Area är ett val, inte en fysikalisk lag. Väger man i stället efter sidans
-#: rymdvinkel från masscentrum — den vanligaste modellen för en slumpmässigt
-#: kastad kropp — blir förhållandet 1,56 för samma form, och P(21) går från
-#: 3,86 % till 2,94 %. Se docs/agent-model.md avsnitt 3.0.
-FACE_WEIGHTS: tuple[float, ...] = (
-    1.0, 1.0, DIE_ELONGATION, DIE_ELONGATION, DIE_ELONGATION, DIE_ELONGATION,
-)
+
+def _solid_angle(a: float, b: float, distance: float) -> float:
+    """Rymdvinkeln för en rektangel med halva sidorna ``a`` och ``b``.
+
+    Rektangeln ligger vinkelrätt mot siktlinjen på avståndet ``distance``.
+    """
+    return 4.0 * math.atan(a * b / (distance * math.sqrt(a * a + b * b + distance * distance)))
+
+
+def _face_weights(length: float = DIE_ELONGATION) -> tuple[float, ...]:
+    """Vikter per tärningssida 1..6 för en avlång tärning, ur rymdvinkeln.
+
+    Modellen är att en sida landar med en chans som följer dess rymdvinkel från
+    tärningens masscentrum. Det är den vanligaste modellen för en kropp som
+    kastas slumpmässigt: en yta längre bort från centrum täcker en mindre
+    rymdvinkel och blir mindre sannolik.
+
+    Ändytorna (1, 2) är kvadratiska, ``w`` gånger ``w``, och ligger ``L/2`` från
+    centrum. Långytorna (3-6) är ``w`` gånger ``L`` och ligger ``w/2`` från
+    centrum. Med bredden 1 och längden 1,3 blir förhållandet mellan en långsida
+    och en ändyta 1,562, inte 1,3 — areamodellen underskattar hur mycket
+    längden spelar in.
+
+    Vikterna är normaliserade så att de summerar till 1 och alltså är
+    sannolikheter. Udda och jämn förblir lika sannolika, eftersom 1 och 2
+    ligger på ändytorna (en udda, en jämn) och 3-6 på långytorna.
+    """
+    end = _solid_angle(0.5, 0.5, length / 2)
+    side = _solid_angle(0.5, length / 2, 0.5)
+    weights = (end, end, side, side, side, side)
+    total = sum(weights)
+    return tuple(w / total for w in weights)
+
+
+#: Vikter per tärningssida 1..6. Summan är 1,0.
+FACE_WEIGHTS: tuple[float, ...] = _face_weights()
 
 
 _FACES: tuple[int, ...] = (1, 2, 3, 4, 5, 6)

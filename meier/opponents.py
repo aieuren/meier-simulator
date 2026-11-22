@@ -31,7 +31,7 @@ BLIND_WEIGHT = 0.5
 
 #: Namnet på den nominella spelaren i motståndarprofilen. Profilens tal är
 #: **relativa** mot detta: ``press = 0,5`` betyder "bluffar som folk gör mest".
-#: Talet är medvetet inte samma som ``DEFAULT_Q`` (0,715) — ``DEFAULT_Q`` är en
+#: Talet är medvetet inte samma som ``DEFAULT_Q`` — ``DEFAULT_Q`` är en
 #: uppmätt *bluff-frekvens*, medan profilens tal är en *benägenhet* på en
 #: neutral skala där 0,5 är mitten. Översättningen sker i
 #: :meth:`OpponentTracker.profile_factor`.
@@ -40,11 +40,16 @@ NEUTRAL_PRESS = 0.5
 #: Neutral riskbenägenhet i :meth:`OpponentTracker.risk_factor`.
 NEUTRAL_RISK = 0.5
 
-#: Typisk synfrekvens vid bordet, uppmätt över 200 matcher utan LLM (alla fyra
-#: rollerna låg på 17–22 %). Används av :meth:`OpponentTracker.call_ratio` för att
+#: Typisk synfrekvens vid bordet, uppmätt över 500 matcher utan LLM (alla fyra
+#: rollerna låg på 26–27 %). Används av :meth:`OpponentTracker.call_ratio` för att
 #: skala en spelares synfrekvens **relativt** populationen — inte som ett absolut
 #: mått på den 0–1-skala där 0,5 är neutral.
-POPULATION_CALL_RATE = 0.19
+#:
+#: Talet drevs av regelbytet i 9057290, då spelaren fick svara "slå" i stället
+#: för att tvingas syna: andelen synar gick från 17,9 % till 25,6 %. Tärningarnas
+#: form spelar liten roll (25,6 % med areamodellen mot 26,3 % med rymdvinkeln),
+#: men mät om talet när spelets svar ändras, inte när ``FACE_WEIGHTS`` gör det.
+POPULATION_CALL_RATE = 0.265
 
 #: Hur många synar (facit) bordet behöver innan underlaget räknas som starkt.
 #: Används av :meth:`OpponentTracker.evidence_strength`, som dämpar LLM:ens
@@ -465,7 +470,7 @@ class OpponentTracker:
             else NEUTRAL_PRESS
         )
         # Risk skalas **relativt** populationen, av samma skäl som pressen: den
-        # råa synfrekvensen ligger kring 0,19 för alla, så att sätta in den rakt
+        # råa synfrekvensen ligger kring ``POPULATION_CALL_RATE`` för alla, så att sätta in den rakt
         # på 0–1-skalan (där 0,5 är neutral) skulle få varje motståndare att se
         # extremt försiktig ut. Ratio 1,0 = synar som folk mest.
         risk = (

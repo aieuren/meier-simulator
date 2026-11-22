@@ -164,13 +164,18 @@ class Decision:
 #: Den typiska bluff-frekvensen i populationen, mätt på **avslöjade** påstående
 #: (frivilliga väger fullt, blinda halvt). Används som nämnare när en motståndares
 #: benägenhet mäts relativt populationen, och som förhandstro innan en spelare
-#: avslöjats. Kalibrerad mot en färsk strategisk serie (300 matcher, 0,715).
+#: avslöjats.
 #:
 #: Notera att detta **inte** är samma tal som andelen överbud bland alla synliga
-#: påståenden (0,586). Skillnaden är de tvingade höjningarna: de är mekaniska (~78 %
-#: "överbud" för alla) och räknas därför bort ur profilen. Använder man 0,586 som
+#: påståenden (~0,52). Skillnaden är de tvingade höjningarna: de är mekaniska
+#: överbud för alla och räknas därför bort ur profilen. Använder man 0,52 som
 #: nämnare får varje normal spelare ratio > 1,0 och en läsande agent synar i
 #: onödan.
+#:
+#: Värdet är fryst. Det påverkas inte av tärningarnas form: samma mätning ger
+#: 0,048 med areamodellen och 0,040 med rymdvinkelmodellen. Eftersom
+#: ``bluff_ratio`` delar med detta tal förkortas det till stor del bort — det som
+#: styr läsningen är förhållandet mellan spelaren och populationen.
 DEFAULT_Q = 0.715
 
 #: Kalibrerad, fryst, **riskjusterad** tro på ``P(synaren vinner | påståendenivå)``.
@@ -194,9 +199,9 @@ DEFAULT_Q = 0.715
 #: ``docs/agent-model.md``, avsnitt 5.1). Den punkten ger samtidigt en stark
 #: BASE, en stark läsande baslinje och ett **positivt** värde av läsning.
 CALL_PRIOR: dict[int, float] = {
-    21: 0.544, 11: 0.620, 22: 0.618, 33: 0.499, 44: 0.475, 55: 0.474, 66: 0.482,
-    65: 0.535, 64: 0.486, 63: 0.423, 62: 0.438, 61: 0.431, 54: 0.322, 53: 0.283,
-    52: 0.326, 51: 0.404, 43: 0.248, 42: 0.293, 41: 0.277, 32: 0.333, 31: 0.000,
+    21: 0.549, 11: 0.627, 22: 0.627, 33: 0.507, 44: 0.481, 55: 0.478, 66: 0.485,
+    65: 0.534, 64: 0.482, 63: 0.416, 62: 0.433, 61: 0.428, 54: 0.316, 53: 0.274,
+    52: 0.319, 51: 0.399, 43: 0.240, 42: 0.287, 41: 0.273, 32: 0.331, 31: 0.000,
 }
 
 #: Tröghetströskel för synen: ``inertia = CALL_INERTIA_BASE + CALL_INERTIA_RISK * risk``.

@@ -13,12 +13,14 @@ lower bid). Multiple agents with distinct roles can also play full games.
 
 - `meier/rules.py` – game rules. Single source of truth for the ranking order,
   bid comparison, and call resolution. Change rules here only. The dice are
-  elongated (length/width = `DIE_ELONGATION` = 1.3). `roll` weights each face
-  by its area under that model, so faces 3-6 (the long sides) are 1.3x as
-  likely as 1-2 (the square end faces). Area is a modelling choice, not physics:
-  weighting by solid angle from the centre of mass gives 1.56 for the same
-  shape. See `docs/agent-model.md` §3.0. Odd and even stay equally likely
-  either way, since 1/2 sit on the ends (one odd, one even).
+  elongated (length/width = `DIE_ELONGATION` = 1.3). `_face_weights` derives
+  each face weight from its solid angle seen from the centre of mass, so faces
+  3-6 (the long sides) are 1.562x as likely as 1-2 (the square end faces).
+  Solid angle is the chosen model (2026-11-22); the older area model gave 1.3
+  and was dropped. Every probability in `meier/policy.py` is derived from
+  `FACE_WEIGHTS`, so changing the die shape moves all of them. See
+  `docs/agent-model.md` §3.0. Odd and even stay equally likely, since 1/2 sit
+  on the ends (one odd, one even).
 - `meier/llm.py` – LLM client, Gemini only. Key via
   `GEMINI_API_KEY`/`GOOGLE_API_KEY` (or `$MEIER_SECRETS_DIR/gemini.key`).
   Anthropic/Claude support was removed 2026-11-08 at the user's request.
@@ -795,15 +797,15 @@ gone — replaced by four neutral-named players in `meier/agents/roster.py`:
   flows as `opponent_factor` into `BasePolicy.decide_bid()` and on to `_p_called`,
   which scales the chance the bid gets called. A calling opponent makes bluffing
   expensive, so the agent moves closer to the truth. Measured: 5 % call rate →
-  factor 0.31 → bluffs in 20/20 spots; 19 % → 0.93 → 14/20; 45 % → 1.93 → 5/20.
+  factor 0.25 → bluffs in 20/21 spots; 26 % → 1.00 → 16/21; 45 % → 1.70 → 8/21.
   `press` adjusts belief about a bid (`_opponent_prior`), `risk` adjusts the
   chance of being called (`_p_called`) — different terms, both live.
-- The same absolute-scale trap hits `risk`. Raw call rate is ~0.19 for every
+- The same absolute-scale trap hits `risk`. Raw call rate is ~0.265 for every
   role, so feeding it straight onto the 0–1 scale makes every opponent look timid
-  and the agent bluffs wildly against all of them. `POPULATION_CALL_RATE = 0.19`
+  and the agent bluffs wildly against all of them. `POPULATION_CALL_RATE = 0.265`
   plus `OpponentTracker.call_ratio()` keep it relative: ratio 1.0 = "calls as much
   as people usually do". The LLM summary states this reference point too, so the
-  model does not read 19 % as "never calls".
+  model does not read 26 % as "never calls".
 - Evaluation runs without LLM. `play_match(..., with_llm=False)` and
   `cli match --no-llm` give a deterministic match: the reader falls back to the
   secretary's arithmetic. Fast (milliseconds vs minutes). Use `--no-llm` for
@@ -832,5 +834,5 @@ python3 -m meier.cli match axel berit cecilia david --count 200 --seed 1000 \
     --workers 4 --no-llm --out /tmp/meier_eval.jsonl
 ```
 
-Baseline (200 matches, four players, chance 25 %): Berit 28 %, Cecilia 29.5 %,
-Axel 23.5 %, David 19 %. David is weakest, as expected with the highest `press`.
+Baseline (800 matches, four players, chance 25 %): Berit 32 %, Cecilia 24 %,
+Axel 32 %, David 11 %. David is weakest, as expected with the highest `press`.

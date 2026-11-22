@@ -66,17 +66,16 @@ Tärningarna är avlånga, inte kubiska. Ändytorna (1 och 2) är kvadratiska,
 långytorna (3–6) är längre. Längden är ungefär 1,3 gånger bredden
 (`rules.DIE_ELONGATION`).
 
-Maskinen antar att vikten per sida följer ytans area. Då blir en sida 3–6
-exakt 1,3 gånger så sannolik som en sida 1–2 (`rules.FACE_WEIGHTS`). Det är ett
-antagande, inte en fysikalisk sanning: väger man i stället efter rymdvinkeln
-från masscentrum — den vanligaste modellen för en slumpmässigt kastad kropp —
-blir förhållandet 1,56 för samma form. Skillnaden är liten men verklig. Se
-`docs/agent-model.md` för resonemanget.
+Vikten per sida följer sidans rymdvinkel från tärningens masscentrum
+(`rules.FACE_WEIGHTS`). Det är den vanligaste modellen för en kropp som kastas
+slumpmässigt: en yta längre bort från centrum täcker en mindre vinkel och blir
+mindre sannolik. Med längden 1,3 mot bredden 1,0 blir en sida 3–6 därför 1,56
+gånger så sannolik som en sida 1–2, inte 1,3. Se `docs/agent-model.md` §3.0.
 
-Med areamodellen blir Meier (21) och 11 ovanligare än vid en kub, medan
-utfall som 65, 64 och 43 blir vanligare. Udda och jämn förblir ändå lika
-sannolika, eftersom 1 och 2 ligger på ändytorna (en udda, en jämn) och 3–6 på
-långytorna (två udda, två jämna).
+Därför blir Meier (21) och 11 ovanligare än vid en kub, medan utfall som 65, 64
+och 43 blir vanligare. Udda och jämn förblir ändå lika sannolika, eftersom 1 och
+2 ligger på ändytorna (en udda, en jämn) och 3–6 på långytorna (två udda, två
+jämna).
 
 ## Kom igång
 
