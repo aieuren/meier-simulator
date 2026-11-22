@@ -8,18 +8,18 @@ källfilerna.
 
 PDF:en (en sida, 190 559 byte) lästes in och jämfördes med koden:
 
-- **Brödtexten** är ordagrant samma regler som projektet redan utgick från.
+- Brödtexten är ordagrant samma regler som projektet redan utgick från.
   Inga skillnader i sak.
-- **Poängtabellen ligger som bild.** Den lästes av och jämfördes rad för rad
-  mot `rules.RANKING`: **alla 21 rader stämmer**, inklusive att 21 är Meier och
+- Poängtabellen ligger som bild. Den lästes av och jämfördes rad för rad
+  mot `rules.RANKING`: alla 21 rader stämmer, inklusive att 21 är Meier och
   att 31 är sämst.
-- **Stavning:** PDF:en skriver **Meier**, inte "Mejer". Koden skrev redan Meier.
+- Stavning: PDF:en skriver Meier, inte "Mejer". Koden skrev redan Meier.
   Den nya regeltexten rättades till Meier.
 
 ## Sammanfattning
 
-Maskinen följer reglerna på alla punkter som går att mäta. **En avvikelse
-finns**, och den är ett strategival, inte ett regelbrott: den mekaniska policyn
+Maskinen följer reglerna på alla punkter som går att mäta. En avvikelse
+finns, och den är ett strategival, inte ett regelbrott: den mekaniska policyn
 påstår aldrig *lägre* än tärningarna, trots att reglerna tillåter det. Motorn
 tillåter det, och LLM-agenten kan göra det.
 
@@ -40,7 +40,7 @@ tillåter det, och LLM-agenten kan göra det.
 | 11 | Sist kvar vinner | ✅ | 100 matcher, alltid minst en kvar |
 | 12 | Skicka vidare behåller påstående och tärningar | ✅ | 3448 skicka-händelser, tärningarna oförändrade |
 | 13 | Påståendet stiger strikt inom rundan | ✅ | 0 brott på 60 matcher |
-| 14 | Bägaren till föregående **aktiva** spelare | ✅ | 1727/1727 kontroller (100 %) |
+| 14 | Bägaren till föregående aktiva spelare | ✅ | 1727/1727 kontroller (100 %) |
 | 15 | Helt varv → måste höja | ✅ | 743 tvingade höjningar på 40 matcher |
 | 16 | Meier-varv → slå om, ingen livsförlust | ✅ | `higher_options(21) == []`, mätt 0 av 1158 rundor |
 | 17 | En runda slutar vid syn | ✅ | 0 rundor utan syn på 1158 |
@@ -52,17 +52,17 @@ tillåter det, och LLM-agenten kan göra det.
 Reglerna säger att första spelaren får säga "det sanna, ett högre eller ett
 lägre" resultat. Bluffen går alltså åt båda hållen.
 
-**Motorn följer regeln.** Ett lägre påstående accepteras:
+Motorn följer regeln. Ett lägre påstående accepteras:
 
 ```
 Tärningarna visar 52, LLM säger 31  ->  accepterat påstående: 31
 ```
 
-**Den mekaniska policyn gör det aldrig.** Av 21 möjliga utfall lägger
+Den mekaniska policyn gör det aldrig. Av 21 möjliga utfall lägger
 `BasePolicy` ett lägre påstående i 0 fall. Det finns ingen `lower_options` i `rules`, bara
 `higher_options`.
 
-Detta är ett **strategival, inte ett regelbrott** – maskinen *får* påstå lägre,
+Detta är ett strategival, inte ett regelbrott – maskinen *får* påstå lägre,
 den *väljer* att inte göra det. Men det är värt att veta, eftersom:
 
 - Mätningarna i `docs/om-meier.md` gäller en maskin som aldrig påstår under
@@ -71,7 +71,7 @@ den *väljer* att inte göra det. Men det är värt att veta, eftersom:
 - LLM-agenten *kan* göra det, eftersom prompten tillåter det. LLM- och
   policy-spelare är alltså inte helt jämförbara.
 
-**Att göra om man vill täppa till det:** antingen lägga till `lower_options` och
+Att göra om man vill täppa till det: antingen lägga till `lower_options` och
 låta policyn välja ibland, eller skriva i `docs/om-meier.md` att simulatorn
 medvetet avstår från lägre påståenden. Det senare är billigare och bör göras först.
 

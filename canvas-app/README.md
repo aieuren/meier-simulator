@@ -9,7 +9,7 @@ webbappen nere och behöver startas igen. Panelen ger dig en knapp i
 Canvas i stället för en egen terminal.
 
 Panelen anropar agent-serverns bash-endpoint via `host.agentServer.request`.
-Agent Canvas sköter autentiseringen, så **ingen hemlighet finns i appkoden**
+Agent Canvas sköter autentiseringen, så ingen hemlighet finns i appkoden
 och ingen egen server behövs.
 
 ## Filer
@@ -28,7 +28,7 @@ och ingen egen server behövs.
 ./canvas-app/install.sh
 ```
 
-Installationen lämnar panelen **avstängd**. `install.sh` aktiverar den
+Installationen lämnar panelen avstängd. `install.sh` aktiverar den
 också, eftersom det är ett medvetet val att köra appens kod. Vill du bara
 installera, hoppa över sista steget i skriptet.
 

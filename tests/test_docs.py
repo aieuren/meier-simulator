@@ -255,10 +255,10 @@ def test_om_meier_round_terminology_matches_the_engine():
     from meier.game import Game
 
     text = _om()
-    assert "till dess att någon **synar**" in text, (
+    assert "till dess att någon synar" in text, (
         "Om Meier måste definiera att en runda slutar vid syn"
     )
-    assert "En **match** är många rundor" in text, (
+    assert "En match är många rundor" in text, (
         "Om Meier måste skilja runda från match"
     )
 
@@ -359,11 +359,12 @@ def test_regel_pdf_sager_samma_som_regeltexten():
     assert "Mejer" not in regler, "regeltexten stavar Meier fel"
 
 
-def test_regeltexten_citerar_pdf_ordalydelsen():
+def test_regeltexten_lankar_till_pdf_originalet():
+    """PDF:en är originalet, men dess text upprepas inte i regeltexten."""
     text = _flat(REGLER.read_text(encoding="utf-8"))
-    assert "PDF:ens ordalydelse" in text
     assert "meier-regler.pdf" in text
     assert "Vid tvekan gäller" in text
+    assert "PDF:ens ordalydelse" not in text
 
 
 def test_skicka_vidare_ar_blint_i_regeltext_och_prompt():
@@ -411,7 +412,7 @@ def test_agent_model_has_no_forced_meier_call_rule():
     for claim in (
         "meier synas alltid",
         "ett meier-bud synas alltid",
-        "**obligatoriskt**",
+        "obligatoriskt",
     ):
         assert claim not in flat, (
             f"agent-model.md påstår {claim!r}. Ingen regel tvingar fram en syn på "
