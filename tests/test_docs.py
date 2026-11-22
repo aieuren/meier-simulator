@@ -190,6 +190,95 @@ def test_om_meier_describes_the_machine_not_its_results():
         assert ok, f"procenttal utan konstruktionssammanhang: {line!r}"
 
 
+def test_om_meier_cumulative_dice_table_matches_the_rules():
+    """Den kumulativa kolumnen ska räknas ur FACE_WEIGHTS, inte ur en kub."""
+    from meier import rules
+
+    weights = dict(zip(range(1, 7), rules.FACE_WEIGHTS))
+
+    def exact(value: int, w: dict[int, float]) -> float:
+        total = sum(w.values()) ** 2
+        hi, lo = divmod(value, 10)
+        return w[hi] * w[lo] / total * (1 if hi == lo else 2)
+
+    def cum(value: int, w: dict[int, float]) -> float:
+        return sum(exact(v, w) for v in rules.RANKING if rules.compare(v, value) <= 0)
+
+    kub = {i: 1.0 for i in range(1, 7)}
+    text = _om()
+    for value in rules.RANKING:
+        label = "21 (Meier)" if value == 21 else str(value)
+        row = next((ln for ln in text.splitlines() if ln.startswith(f"| {label} |")), None)
+        assert row is not None, f"Om meier-simulatorn saknar raden {label}"
+        cells = [c.strip() for c in row.split("|")[1:-1]]
+        for cell, p in (
+            (cells[1], exact(value, weights)),
+            (cells[2], cum(value, weights)),
+            (cells[3], cum(value, kub)),
+        ):
+            assert cell == f"{p * 100:.1f}".replace(".", ",") + " %", (
+                f"{label}: dokumentet visar {cell}, koden ger {p * 100:.1f} %"
+            )
+
+
+def test_om_meier_explains_that_bluffing_comes_from_the_forced_raise():
+    """Bluffens grund är tvånget att höja, inte psykologi.
+
+    Dokumentet sa förut att en avslöjad bluff inte ger något, som om bluffen
+    vore ett fritt val. I Meier måste varje påstående vara högre än det förra,
+    så den som får tärningar under bordets nivå tvingas bluffa. Psykologin
+    kommer ovanpå. Tabellen ska stämma med den regeln.
+    """
+    from meier import rules
+
+    weights = dict(zip(range(1, 7), rules.FACE_WEIGHTS))
+    total = sum(weights.values()) ** 2
+
+    def p(v: int) -> float:
+        hi, lo = divmod(v, 10)
+        return weights[hi] * weights[lo] / total * (1 if hi == lo else 2)
+
+    text = _om()
+    flat = _flat(text).lower()
+
+    for fel in (
+        "en bluff som avslöjas ger dig alltså ingenting",
+        "en bluff som avslöjas ger dig ingenting",
+    ):
+        assert fel not in flat, (
+            f"Om meier-simulatorn säger {fel!r}. En bluff är ofta påtvingad av "
+            "regeln att varje påstående måste vara högre."
+        )
+
+    assert "tvingas" in flat, "dokumentet ska säga att höjningstvånget tvingar fram bluffar"
+
+    # Tabellen för tvingad bluff, avgränsad så att tärningstabellen inte blandas in.
+    # Påståendet måste vara strikt högre, så även tärningar på bordets egen nivå
+    # tvingar fram en bluff. Därför räknas "eller lägre".
+    start = text.index("### Bluffen börjar med tvånget att höja")
+    avsnitt = text[start : text.index("### Vad ett påstående kostar")]
+    for prev in (43, 52, 63, 66):
+        tvingad = sum(p(v) for v in rules.RANKING if rules.compare(v, prev) <= 0)
+        rad = next(
+            (ln for ln in avsnitt.splitlines() if ln.startswith(f"| {prev}")),
+            None,
+        )
+        assert rad is not None, f"dokumentet saknar tvingad-bluff-raden {prev}"
+        assert f"{tvingad * 100:.0f} %" in rad, (
+            f"{rules.name(prev)}: dokumentet visar {rad!r}, koden ger {tvingad * 100:.0f} %"
+        )
+
+
+def test_om_meier_describes_axel_without_the_vague_phrase():
+    """Axel ska beskrivas med vad som faktiskt gäller: fast räkneregel, ingen inlärning."""
+    flat = _flat(_om()).lower()
+    assert "spelar alltid likadant och ändrar sig aldrig" not in flat, (
+        "Beskriv Axel konkret: fast räkneregel, lär sig inget om motståndarna"
+    )
+    assert "fast räkneregel" in flat, "dokumentet ska säga att Axel spelar en fast räkneregel"
+    assert "lär sig inget" in flat, "dokumentet ska säga att Axel inte lär sig om motståndarna"
+
+
 def test_om_meier_says_the_model_makes_the_move():
     """Kompisversionen ska beskriva arkitekturen som den är: modellen väljer draget.
 

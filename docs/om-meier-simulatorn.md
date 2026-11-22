@@ -43,30 +43,52 @@ Den fullständiga regeltexten står i
 Tärningarna är avlånga. Ändytorna (1 och 2) är kvadratiska, långytorna
 (3–6) är längre. Längden är ungefär 1,3 gånger bredden.
 
-Maskinen antar att chansen för en sida följer sidans area. Då blir 3–6
-exakt 1,3 gånger så sannolika som 1–2, eftersom långytan har arean bredd gånger
-längd medan ändytan har arean bredd gånger bredd.
+Maskinen antar att chansen för en sida följer sidans area. Då blir 3–6 exakt
+1,3 gånger så sannolika som 1–2, eftersom långytan har arean bredd gånger längd
+medan ändytan har arean bredd gånger bredd. Det är den fördelning maskinen slår
+med.
 
-Det är ett antagande, inte en fysikalisk sanning. Den vanligaste modellen för en
-kropp som kastas slumpmässigt väger sidorna efter rymdvinkeln från
-masscentrum. För samma form blir förhållandet då 1,56 i stället för 1,30, och
-Meier blir 2,9 % i stället för 3,9 %. Skillnaden är liten, men den finns. Arean
-är vald för att den är enkel att förklara och kontrollera. Vilken modell som är
-rätt för Meiers tärningar vet vi inte.
+Area är ett val, inte en naturlag. Räknar man i stället efter sidans rymdvinkel
+från masscentrum, den vanligaste modellen för en kropp som kastas på måfå, blir
+förhållandet mellan långsida och ändyta 1,56. Med den vikten går Meier från
+3,9 % till 2,9 %. Skillnaden är liten. Arean är vald för att den går att räkna
+och kontrollera. Vilken vikt som passar Meiers tärningar vet vi inte.
 
-Med areamodellen blir fördelningen så här:
+Tabellen visar sannolikheten för varje utfall, och hur stor chansen är att slå
+utfallet eller lägre. Den sista kolumnen är samma sak för en vanlig kub, så att
+det går att se vad formen gör.
 
-| Utfall | Avlång tärning | Vanlig kub |
-|---|---:|---:|
-| 21 (Meier) | 3,9 % | 5,6 % |
-| 11 | 1,9 % | 2,8 % |
-| 65, 64, 63, 54, 53, 43 | 6,5 % | 5,6 % |
+| Utfall | Exakt utfall | Utfallet eller lägre | Vanlig kub, eller lägre |
+|---|---:|---:|---:|
+| 21 (Meier) | 3,9 % | 100,0 % | 100,0 % |
+| 11 | 1,9 % | 96,1 % | 94,4 % |
+| 22 | 1,9 % | 94,2 % | 91,7 % |
+| 33 | 3,3 % | 92,3 % | 88,9 % |
+| 44 | 3,3 % | 89,0 % | 86,1 % |
+| 55 | 3,3 % | 85,8 % | 83,3 % |
+| 66 | 3,3 % | 82,5 % | 80,6 % |
+| 65 | 6,5 % | 79,2 % | 77,8 % |
+| 64 | 6,5 % | 72,7 % | 72,2 % |
+| 63 | 6,5 % | 66,2 % | 66,7 % |
+| 62 | 5,0 % | 59,7 % | 61,1 % |
+| 61 | 5,0 % | 54,7 % | 55,6 % |
+| 54 | 6,5 % | 49,7 % | 50,0 % |
+| 53 | 6,5 % | 43,1 % | 44,4 % |
+| 52 | 5,0 % | 36,6 % | 38,9 % |
+| 51 | 5,0 % | 31,6 % | 33,3 % |
+| 43 | 6,5 % | 26,6 % | 27,8 % |
+| 42 | 5,0 % | 20,1 % | 22,2 % |
+| 41 | 5,0 % | 15,0 % | 16,7 % |
+| 32 | 5,0 % | 10,0 % | 11,1 % |
+| 31 | 5,0 % | 5,0 % | 5,6 % |
 
-Alltså: Meier och 11 blir ovanligare, medan höga utfall där båda
-tärningarna är 3–6 blir vanligare. Udda och jämnt förblir ändå lika sannolikt,
-eftersom 1 och 2 ligger på ändytorna (en udda, en jämn) och 3–6 på långytorna.
+Mellan kolumnerna syns vad formen gör. Meier och 11 blir ovanligare, medan utfall
+där båda tärningarna är 3–6 blir vanligare. Udda och jämnt förblir ändå lika
+sannolikt, eftersom 1 och 2 ligger på ändytorna (en udda, en jämn) och 3–6 på
+långytorna.
 
-Det är den fördelning maskinen använder när den slår tärningarna.
+Kolumnen Utfallet eller lägre är den som liknar spelet mest. Den säger hur ofta
+tärningarna visar påståendet eller mindre, och det är just det en syn avgör.
 
 ---
 
@@ -76,8 +98,8 @@ Spelarens egen profil sitter i tre parametrar, inte i namnet. Varje parameter
 går från 0 till 1.
 
 - `risk` – riskbenägenhet: hur gärna spelaren synar och tar en chans
-- `press` – press: hur ofta spelaren bluffar, och hur högt hen påstår när
-  hen slår
+- `press` – press: hur hårt spelaren driver upp sina påståenden, alltså hur
+  ofta hen bluffar och hur högt hen lägger sig när hen slår
 - `reading` – läsförmåga: hur mycket spelaren låter information om andras
   tidigare spel styra
 
@@ -88,10 +110,14 @@ går från 0 till 1.
 | **Cecilia** | 0,50 | 0,45 | 0,50 | ja | Kalkylerande. Läser motståndaren. |
 | **David** | 0,65 | 0,60 | 0,35 | ja | Djärv. Pressar påståendet högre. |
 
-Axel är referensen. Han har ingen språkmodell alls, spelar alltid likadant
-och ändrar sig aldrig. De andras resultat mäts mot hans. Han är byggd för att
-vara "tillräckligt bra", inte optimerad. Hans uppsättning kallas
-grundtaktik.
+Axel är referensen. Han har ingen språkmodell utan spelar en fast räkneregel.
+Samma läge ger alltid samma drag: han lär sig inget om motståndarna under
+matchens gång och anpassar sig inte efter dem. Det är hela poängen. De andras
+resultat mäts mot en spelare som inte förändras, så att skillnader går att
+härleda till profilen och inte till tur i inlärningen.
+
+Han är byggd för att vara tillräckligt bra, inte optimerad. Hans uppsättning
+kallas grundtaktik.
 
 Tre begrepp:
 
@@ -114,31 +140,62 @@ En spelare vet bara tre saker: sina egna tärningar, vad som sagts högt, och va
 som hänt tidigare i matchen. Den vet inte vad motståndaren har i bägaren.
 Allt den tror om andra är en gissning byggd på offentligt beteende.
 
-Om spelaren fick se allt skulle det inte finnas något att bluffa om.
+Att tärningarna är dolda är det som gör en bluff möjlig att komma undan med.
+Att man måste höja är det som gör den nödvändig. Två olika saker, och båda
+behövs.
 
-### Spelaren väger risk mot vinst
+### Modellen väljer draget
 
 Modellen bestämmer draget. Den väljer fritt bland de lagliga alternativen, men
 den kan aldrig bryta mot reglerna: koden räknar upp vad som är tillåtet i läget
 och modellen väljer inom den listan.
 
-Varje beslut är sedan en avvägning mellan två saker: chansen att slippa bli
-synad och vad det kostar om du blir synad.
+### Bluffen börjar med tvånget att höja
 
-Att påstå exakt det tärningarna visar är säkert. Blir du synad vinner du
-rundan, för tärningarna visar då minst påståendet.
+Grunden till bluffandet i Meier är inte psykologi. Den är regeln att varje nytt
+påstående måste vara högre än det förra. Tärningarna bryr sig inte om den
+regeln.
 
-Att påstå högre är en bluff. Blir du synad förlorar du ett liv (två om påståendet
-är Meier), för tärningarna visar då mindre än du sa. En bluff som avslöjas ger
-dig alltså ingenting.
+Står bordet på 63 måste du säga 64 eller högre, vad dina tärningar än visar.
+Visar de 41 finns inget ärligt påstående kvar. Du säger något högre än
+tärningarna, alltså bluffar. Samma sak om tärningarna visar exakt 63: påståendet
+måste vara strikt högre, så din egen nivå duger inte som svar.
+
+Ju högre bordet står, desto oftare händer det. Tabellen visar hur ofta dina
+tärningar inte räcker till, alltså hur ofta du tvingas bluffa:
+
+| Bordet står på | Du tvingas bluffa |
+|---|---:|
+| 43 | 27 % |
+| 52 | 37 % |
+| 63 | 66 % |
+| 66 | 83 % |
+
+Vid Meier finns inget högre påstående, så där kan ingen slå. Bägaren går tillbaka
+och den som satte påståendet måste slå om, och då börjar en ny runda.
+
+Det är därför bluffen finns. Sedan kan man välja hur man bluffar: var man lägger
+sig, hur ofta man tar chansen och vad man försöker få motståndaren att tro. Det
+kommer ovanpå grunden.
+
+### Vad ett påstående kostar
+
+Varje beslut är en avvägning mellan två saker: chansen att slippa bli synad och
+vad det kostar om du blir synad.
+
+Påstår du exakt det tärningarna visar och blir synad, vinner du rundan.
+Tärningarna visar då minst påståendet, så synaren förlorar. Påstår du högre och
+blir synad, förlorar du ett liv, eller två om påståendet är Meier. En avslöjad
+bluff kostar dig alltså ett liv. Det du kan vinna med den är att motståndaren
+inte synar.
 
 Så vad köper en bluff? Att motståndaren får ett svårare beslut. Hen måste
 antingen syna ett påstående hen misstror, eller slå om bägaren till något ännu
-högre – och då ta över risken själv. En bluff är inte "värd mer". Den flyttar risken över
-till motståndaren, och den lönar sig bara när motståndaren hellre avstår från
-att syna än tar den chansen.
+högre – och då ta över risken själv. En bluff är inte värd mer än sanningen. Den
+flyttar risken över till motståndaren, och den lönar sig bara när motståndaren
+hellre avstår från att syna än tar den chansen.
 
-Det finns två slags höjningar, och de skiljer sig åt.
+### Två slags höjningar
 
 När spelaren har sett sina tärningar och bluffar över det hen såg, är ett högre
 påstående alltid dyrare att bli synad på. En syn på 66 är billigare för
@@ -162,12 +219,15 @@ bluff lägger han sig på den minsta möjliga höjningen, och vid blindt slag
 bestämmer `press` hur högt han går. Samma räkneregel tar över om en modell inte
 svarar.
 
-### Spelaren bluffar med flit
+### Hur spelaren bluffar
 
-Bluffen är ett aktivt val, och hur ofta spelaren bluffar styrs av `press`.
+Tvånget att höja gäller alla lika. Det som skiljer spelarna är hur de hanterar
+det, och där kommer `press` in.
 
-En spelare med låg `press` påstår oftast sanningen. En spelare med hög `press`
-tar chansen oftare. Parametern styr hur ofta, inte vilken strategi som är bäst.
+En spelare med låg `press` lägger sig nära tärningarna och tar sällan en extra
+chans. En spelare med hög `press` driver upp påståendet och bluffar oftare, även
+när hen inte måste. Parametern säger hur spelaren brukar göra, inte vilket drag
+som är bäst i läget.
 
 ### Spelaren läser sina motståndare
 
