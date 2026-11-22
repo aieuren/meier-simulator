@@ -171,6 +171,17 @@ and a later syna blames the wrong player. A forced raise is `blind=True` only
 when the bidder chose to bid blind. (`höja` is still a bid, so it counts in
 `BID_ACTIONS`; blind raises count as `blinds`, not bluffs.)
 
+## The rules file describes the game, not the code
+
+`docs/regler/meier-regler.md` holds the rules of Meier and nothing else. Keep
+implementation details out of it: no module or field names, no `DIE_ELONGATION`,
+no strategy choices, no notes about how the engine or an agent behaves. Those
+belong in `docs/agent-model.md` or `docs/regler/granskning.md`.
+
+The one code-facing note that stays is the wording note: the PDF says "bud",
+this text says "påstående", and the quote keeps the PDF's wording. That helps a
+reader map the rules onto the repo.
+
 ## The `line` is built locally, never written by the model
 
 The model only produces the move (`bid`, `action`, `blind`). The spoken `line`
@@ -371,7 +382,7 @@ code, and `tests/test_docs.py` enforces it:
 | File | Reader | Content |
 |---|---|---|
 | `README.md` | whoever runs and changes the code | install, CLI, API, config |
-| `docs/regler/meier-regler.md` | anyone asking "is this a rule or a choice?" | **canonical rules** – the source of truth |
+| `docs/regler/meier-regler.md` | anyone asking "is this a rule or a choice?" | **the rules only** – no code, no strategy, no modelling |
 | `docs/om-meier.md` | a friend who just wants to understand | what it is, rules, players, how the machine is built |
 | `docs/agent-model.md` | whoever tunes the model | formulas, calibration, measurements |
 | `docs/regler/granskning.md` | anyone doubting the engine | rule-by-rule audit with measurements |

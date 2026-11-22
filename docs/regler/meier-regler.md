@@ -1,13 +1,10 @@
 # Reglerna för Meier
 
-Detta är den kanoniska regeltexten för simulatorn. Allt annat i repot – kod,
-tester och övrig dokumentation – ska följa det som står här. Avviker koden från
-den här filen är det koden som är fel.
+Detta är regeltexten för Meier.
 
 Källan är [`meier-regler.pdf`](meier-regler.pdf) (en sida, hämtad 2026-11-08).
-PDF:en ligger i den här mappen och är originalet. Texten nedan är samma regler
-i läsbar form, med förtydliganden där PDF:en är kortfattad. Vid tvekan gäller
-PDF:en.
+PDF:en är originalet. Texten nedan är samma regler i läsbar form. Vid tvekan
+gäller PDF:en.
 
 ## PDF:ens ordalydelse
 
@@ -43,16 +40,12 @@ PDF:en.
 > spelaren höja. Är budet Meier får spelaren i stället slå om och börja en ny
 > runda.
 
-PDF:ens poängordning ligger som en bild. Den är avläst och verifierad mot
-`rules.RANKING`: alla 21 rader stämmer.
-
 ### Om ordet "påstående"
 
-PDF:en säger **bud** om det en spelare säger om tärningarna. Resten av repot
+PDF:en säger **bud** om det en spelare säger om tärningarna. Den här texten
 säger **påstående**, eftersom det ligger närmare vad handlingen faktiskt är: ett
 påstående om vad tärningarna visar, som kan vara sant eller falskt. Citatet ovan
-behåller PDF:ens ordalydelse. I koden heter fältet fortfarande `bid`, och
-loggarna använder `"bud"` som åtgärdsnamn.
+behåller PDF:ens ordalydelse.
 
 ---
 
@@ -69,8 +62,7 @@ Två tärningar läses som ett tal med den **högsta siffran först**. 2 och 5 b
 **52**, inte 25.
 
 Tärningarna är avlånga, inte kubiska. Det gör att sidorna 1 och 2 (ändytorna)
-är mindre sannolika än 3–6 (långytorna). Se `docs/om-meier.md` för de uppmätta
-sannolikheterna.
+är mindre sannolika än 3–6 (långytorna).
 
 ## Poängordning, högst först
 
@@ -99,8 +91,7 @@ sannolikheterna.
 | 21 | ⚂ ⚀ | 31 |
 
 Lägg märke till att **par slår singlar**. 11 är näst bäst och 31 sämst. 44 slår
-alltså 65. Det är den vanligaste källan till förvirring när man läser kod som
-"ser fel ut".
+alltså 65.
 
 ## En runda
 
@@ -153,16 +144,6 @@ den spelaren **höja**.
 - Är påståendet **Meier**: det går inte att höja. Spelaren slår i stället **om** och
   börjar en **ny runda**. Ingen förlorar liv.
 
-## Vad som INTE står i reglerna
-
-Detta är inte regler, utan simulatorns egna val. De får ändras utan att
-regeltexten ändras:
-
-- Att en blind höjning ("slå") alltid läggs på ett högre påstående än det förra – det
-  *är* en regel, men *vilket* högre påstående som väljs är ett strategival.
-- Hur ofta en agent bluffar, synar eller skickar vidare.
-- Att tärningarnas exakta form modelleras som `DIE_ELONGATION = 1.3`.
-
 ## Ett förtydligande som PDF:en bara antyder
 
 PDF:en säger att "skicka vidare" sker "utan att slå". Den säger inte ordagrant
@@ -173,6 +154,3 @@ Därför gäller:
 
 > Den som skickar vidare ser **inte** tärningarna. Spelaren vet bara vad påståendet
 > säger.
-
-Motorn följer detta: den som ska välja handling får **påståendet** och sitt
-**livsantal**, aldrig tärningsvärdet. Se `docs/regler/granskning.md`, punkt 19.

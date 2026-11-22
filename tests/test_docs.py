@@ -286,10 +286,10 @@ REGLER = Path(__file__).resolve().parent.parent / "docs" / "regler" / "meier-reg
 GRANSKNING = Path(__file__).resolve().parent.parent / "docs" / "regler" / "granskning.md"
 
 
-def test_regeltexten_finns_och_ar_kanonisk():
+def test_regeltexten_finns():
     assert REGLER.exists(), "docs/regler/meier-regler.md saknas"
     text = _flat(REGLER.read_text(encoding="utf-8"))
-    assert "kanoniska regeltexten" in text
+    assert "regeltexten för Meier" in text
     assert "Sist kvar vinner" in text
 
 
