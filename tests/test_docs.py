@@ -189,8 +189,6 @@ def test_om_meier_describes_the_machine_not_its_results():
         "rymdvinkel",
         "area",
         "vikt",
-        "risk",
-        "press",
     )
     for line in text.splitlines():
         if "%" not in line:
@@ -524,8 +522,9 @@ def test_om_meier_does_not_claim_raises_are_always_one_step():
     """Dokumentet får inte påstå att *alla* höjningar är ett steg.
 
     ``decide_bid`` (sedda tärningar) höjer exakt ett steg, men ``decide_raise``
-    (blint) skalar med ``press`` och kan hoppa ända till Meier. Ett påstående om
-    att höjningen "alltid" är ett steg beskriver bara det första beslutet.
+    (blint) skalar med ``unpredictability`` och kan hoppa ända till Meier. Ett
+    påstående om att höjningen "alltid" är ett steg beskriver bara det första
+    beslutet.
     """
     text = _om()
     flat = " ".join(text.split()).lower()
@@ -536,7 +535,7 @@ def test_om_meier_does_not_claim_raises_are_always_one_step():
     ):
         assert claim not in flat, (
             f"Om meier-simulatorn påstår {claim!r}. Minsta höjning gäller bluffen över sedda "
-            "tärningar; blind höjning styrs av press."
+            "tärningar; blind höjning styrs av unpredictability."
         )
 
 

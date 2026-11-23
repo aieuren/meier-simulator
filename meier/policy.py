@@ -229,9 +229,7 @@ CALL_INERTIA_CAUTION = 0.10
 #:
 #: Bluffen är ett nödvändigt ont i Meier: den som slår måste alltid säga ett högre
 #: påstående, och då blir en del påståenden lögnar vad spelaren än vill. Därför finns
-#: det ingen ``press``-parameter att skruva på. Talet är det samma som den gamla
-#: baslinjen använde (``press = 0,5``), så en agent med ``caution = 0,5`` spelar
-#: precis som förut.
+#: det ingen bluffparameter att skruva på.
 BLUFF_GAIN = 0.5
 
 #: Den platta tron på ``P(synaren vinner | påstående)`` som en agent med
@@ -250,12 +248,6 @@ UNPREDICTABILITY_SPAN = 0.15
 #: hindrar att ett lågt påstående ser ut att vara gratis att bluffa till.
 CALL_FLOOR = 0.10
 CALL_SLOPE = 0.40
-
-#: Värde av ett *säkert* påstående (bid ≤ visat). Ett sådant påstående kan aldrig straffa
-#: dig vid en syn — synaren förlorar. ``SAFE_POSITION`` gör ett högre säkert påstående
-#: (närmare det visade) mer värt, eftersom det är svårare att slå över.
-SAFE_BASE = 0.10
-SAFE_POSITION = 0.25
 
 
 @dataclass
@@ -448,7 +440,8 @@ class BasePolicy:
         ``opponent_factor`` är motståndarens **synbenägenhet** relativt det
         normala (1,0 = som folk mest). En motståndare som synar ofta gör varje
         bluff dyrare, och då bluffar agenten mindre. Det är läsningens inverkan
-        på påståendet — skild från ``press``, som är agentens egen benägenhet.
+        på påståendet, skild från agentens egen ``caution``, som styr hur gärna
+        den synar.
         """
         legal = legality.legal_bids(shown=shown, previous_bid=previous_bid)
         if not legal:
@@ -492,19 +485,6 @@ class BasePolicy:
             bid=safe,
             reason=f"Visar {rules.name(shown)}; påstår {rules.name(safe)}.",
         )
-
-    def _bid_value(self, bid: int, shown: int) -> float:
-        """Värdet av att påstå ``bid`` när tärningarna visar ``shown``.
-
-        Behålls som en enkel, läsbar poängsättning för analys och tester. Det
-        faktiska påståendevalet görs i :meth:`decide_bid`, som jämför sanning mot bästa
-        bluff direkt.
-        """
-        cmp = rules.compare(bid, shown)
-        if cmp <= 0:
-            return SAFE_BASE + _strength(bid) * SAFE_POSITION
-        p_called = self._p_called(bid)
-        return (1.0 - p_called) * BLUFF_GAIN - p_called * CALL_ODDS[bid].l_lose
 
     def _p_called(self, bid: int, opponent_factor: float = 1.0) -> float:
         """Uppskattad sannolikhet att ett påstående blir synat.

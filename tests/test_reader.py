@@ -89,7 +89,8 @@ def test_evidence_is_public_only():
     assert ev["bluff_rate"] == 1.0
     assert ev["call_rate"] == 1.0
     # Inga fält läcker motståndarens interna parametrar.
-    assert "risk" not in ev and "press" not in ev
+    assert not {"caution", "statistics", "unpredictability", "reading"} & set(ev)
+    assert not {"call_tendency", "bluff_tendency", "predictability"} & set(ev)
 
 
 def test_evidence_is_empty_for_unknown_player():
@@ -210,7 +211,7 @@ def test_bluff_factor_is_one_for_a_neutral_profile():
     assert tracker.bluff_factor(OpponentProfile()) == 1.0
 
 
-def test_bluff_factor_grows_with_press_and_confidence():
+def test_bluff_factor_grows_with_tendency_and_confidence():
     tracker = OpponentTracker()
     low = tracker.bluff_factor(OpponentProfile(bluff_tendency=0.9, confidence=0.2))
     high = tracker.bluff_factor(OpponentProfile(bluff_tendency=0.9, confidence=1.0))
@@ -219,7 +220,7 @@ def test_bluff_factor_grows_with_press_and_confidence():
 
 def test_bluff_factor_is_damped_by_confidence():
     tracker = OpponentTracker()
-    # Samma press, olika konfidens: en osäker gissning får inte slå över tron.
+    # Samma benägenhet, olika konfidens: en osäker gissning får inte slå över tron.
     unsure = tracker.bluff_factor(OpponentProfile(bluff_tendency=0.9, confidence=0.0))
     sure = tracker.bluff_factor(OpponentProfile(bluff_tendency=0.9, confidence=1.0))
     assert unsure == 1.0
@@ -234,7 +235,10 @@ def test_call_factor_is_one_for_a_neutral_profile():
 
 
 def test_call_factor_tracks_calls_not_bluffs():
-    """Risk handlar om att syna, press om att ljuga. De får inte blandas."""
+    """Synbenägenhet handlar om att syna, bluffbenägenhet om att ljuga.
+
+    De får inte blandas: ``call_factor`` ska bara läsa ``call_tendency``.
+    """
     tracker = OpponentTracker()
     synbenägen = tracker.call_factor(OpponentProfile(call_tendency=0.9, bluff_tendency=0.1, confidence=1.0))
     lögnaktig = tracker.call_factor(OpponentProfile(call_tendency=0.1, bluff_tendency=0.9, confidence=1.0))
@@ -249,28 +253,26 @@ def test_call_factor_is_damped_by_confidence():
     assert sure > unsure
 
 
-def test_a_calling_opponent_makes_the_policy_bluff_less():
-    """Möter agenten en synbenägen motståndare blir bluffen dyrare."""
-    from meier.policy import BasePolicy
-
-    policy = BasePolicy()
-    shown = 52
-    neutral = policy.decide_bid(shown)
-    vs_caller = policy.decide_bid(shown, opponent_factor=2.0)
-    assert rules.compare(vs_caller.bid, neutral.bid) <= 0
-
-
 def test_opponent_factor_never_lowers_the_bid_below_the_truth():
-    """En synbenägen motståndare får aldrig locka fram en *högre* bluff."""
-    from meier.policy import BasePolicy
+    """En synbenägen motståndare får aldrig locka fram en *högre* bluff.
 
-    policy = BasePolicy()
+    Ju oftare motståndaren synar, desto dyrare blir bluffen. Faktorn får
+    alltså bara sänka påståendet, aldrig höja det.
+    """
+    from meier.policy import AgentParams, BasePolicy
+
+    # Utan oförutsägbarhet blir jämförelsen mellan de två anropen meningsfull;
+    # annars kan slumpen släppa en bluff i det ena anropet och inte i det andra.
+    policy = BasePolicy(AgentParams(unpredictability=0.0))
     for shown in rules.RANKING:
         if rules.is_meier(shown):
             continue
         neutral = policy.decide_bid(shown)
-        vs_caller = policy.decide_bid(shown, opponent_factor=3.0)
-        assert rules.compare(vs_caller.bid, neutral.bid) <= 0
+        for factor in (2.0, 3.0):
+            vs_caller = policy.decide_bid(shown, opponent_factor=factor)
+            assert rules.compare(vs_caller.bid, neutral.bid) <= 0, (
+                f"faktor {factor} höjde budet på {rules.name(shown)}"
+            )
 
 
 def test_call_ratio_is_relative_to_the_population():
@@ -293,8 +295,8 @@ def test_call_ratio_is_relative_to_the_population():
     assert synare > normal
 
 
-def test_risk_reaches_the_bid_through_the_agent():
-    """Riskfaktorn ska faktiskt styra agentens bud, inte bara räknas ut."""
+def test_call_tendency_reaches_the_bid_through_the_agent():
+    """Synbenägenheten ska faktiskt styra agentens bud, inte bara räknas ut."""
     from meier.agents.base import Role
     from meier.agents.strategic import StrategicAgent
     from meier.policy import AgentParams

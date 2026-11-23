@@ -23,7 +23,7 @@ De fyra situationerna:
    visar — det är säkert, för synar någon förlorar den som synade. Bara en
    tillräckligt billig högre bluff tar hon.
 2. Hon slår utan att titta. Eftersom hon inte vet vad tärningarna visar tar
-   hon minsta tillåtna höjning. På presshumör kan hon ta ett större kliv.
+   hon minsta tillåtna höjning. Är hon oförutsägbar kan hon ta ett större kliv.
 3. Hon svarar på ett påstående. Hon synar om chansen att vinna är tillräckligt
    stor, annars skickar hon vidare. Ett Meier-påstående synar hon alltid, annars tar
    rundan aldrig slut.
@@ -56,24 +56,28 @@ göra besluten tolkbara och körbara [Suspicion-Agent, 2023].
 ## 1. Grundmodell
 
 ```
-Agent = LLM som spelar en person (risk, press, reading) inom spelets regler
+Agent = LLM som spelar en person (caution, statistics, unpredictability, reading)
 ```
 
 | Parameter | Intervall | Betydelse |
 |---|---:|---|
-| `risk` | 0–1 | Hur mycket agenten offrar säkerhet för chansen att vinna mer |
-| `press` | 0–1 | Hur ofta agenten bluffar, höjer eller pressar |
-| `reading` | 0–1 | Hur mycket agenten använder motståndarnas tidigare beteende |
+| `caution` | 0–1 | Hur gärna agenten undviker risk. Hög försiktighet höjer tröskeln för att syna |
+| `statistics` | 0–1 | Hur mycket sannolikheterna får styra tron. Noll ger en enda fast tro |
+| `unpredictability` | 0–1 | Hur mycket agenten varierar sitt spel för att vara svår att läsa |
+| `reading` | 0–1 | Hur mycket motståndarnas tidigare beteende får styra |
 
 Parametrarna är underlag för en personlighet, inte indata till en formel. De
 beskriver hur en människa brukar spela, och beskrivningen går in i prompten
 (`meier/agents/personality.py`). Modellen får sedan spela som den personen.
 
+Bluffandet är **inte** en parameter. I Meier måste den som slår alltid höja över
+det som står, så en del påståenden blir lögner vad spelaren än vill. Bluffen är
+ett nödvändigt ont i spelet, inte en personlighetsegenskap att skruva på.
+
 Det är en medveten ändring. En tidigare version lät `BasePolicy` räkna fram
 draget ur parametrarna och lät LLM:en formulera repliken. Då blev varje spelare
-samma algoritm med olika konstanter, och `press` styrde ett påståendeval som modellen
-aldrig fick påverka. Nu är måtten ett *underlag* — något att simulera en
-verklig spelare med — och inte en dom över vad som är rätt drag.
+samma algoritm med olika konstanter. Nu är måtten ett *underlag* — något att
+simulera en verklig spelare med — och inte en dom över vad som är rätt drag.
 
 ### Ansvarsfördelning (lager)
 
@@ -127,8 +131,8 @@ värde(drag) = förväntade kvarvarande liv för agenten efter draget
 - `E[kvarvarande liv]` är beräkningsbart ur den exakta sannolikhetsmodellen
   (avsnitt 3) och ställningen.
 - `P(utslagning)` är sannolikheten att draget leder till att agenten förlorar
-  sina sista liv. Den viktas av `risk`: högre `risk` → lägre `risk_vikt` → agenten
-  tar större chans.
+  sina sista liv. Den viktas av `caution`: högre `caution` höjer tröskeln för att
+  ta en chans.
 
 `E[kvarvarande liv]` är en approximation av vinstsannolikhet. Att beräkna
 vinstsannolikhet exakt kräver att man modellerar hela resten av matchen
@@ -257,9 +261,14 @@ tillåtet men oftast dåligt: påståendet är lätt att syna, och du blir håll
 
 Parametrarna styr:
 
-- `press` höjer sannolikheten att påstå över `shown` (bluffa).
-- `risk` avgör hur nära `shown` agenten vågar ligga (lägre risk → närmare
-  sanningen).
+- `unpredictability` gör att agenten ibland tar den säkra vägen även när en bluff
+  räknas som marginellt bättre, så att mönstret inte går att läsa.
+- `caution` höjer tröskeln för att syna, vilket gör bluffen billigare att komma
+  undan med.
+
+Bluffen i sig är inte en parameter. Vikten av att motståndaren lägger sig är den
+fasta `BLUFF_GAIN`: ett påstående över `shown` jämförs med det säkra
+grundpåståendet, och agenten tar bluffen när den räknas som lönsam.
 
 ### Beslut 2 — Slå (ser dem inte)
 
@@ -267,20 +276,22 @@ Spelaren skakar en ny bägare och får inte lyfta locket. Det nya påståendet m
 strikt högre än det förra. Agenten vet alltså inte vad tärningarna visar — men
 vet att motståndaren kommer att se dem vid en syn.
 
-Policy: `decide_raise` lägger påståendet på en nivå som styrs av `press`. Låg
-`press` väljer den minsta lagliga höjningen — den är säkrast, eftersom
-chansen att tärningarna visar mindre än påståendet är som minst där. Hög `press` tar
-ett språng uppåt: ett högre påstående är dyrare för motståndaren att syna, men också
-större risk om det blir synat.
+Policy: `decide_raise` lägger påståendet på den minsta lagliga höjningen, som är
+säkrast (minst chans att tärningarna visar lägre). En oförutsägbar agent hoppar
+ibland högre ändå, just för att den inte ska gå att läsa: en motståndare som vet
+att budet alltid är det minsta kan planera efter det.
 
-Formeln är `steps = round(press · (len(higher) − 1))`, så `press` = 1,0 kan
-hoppa ända till Meier. Det är alltså inte en regel om att höjningen alltid
-är ett steg — bara om att ett steg är minimum, och om att `press` väljer hur
-långt över det lägsta lagliga påståendet.
+```python
+steps = rng.randint(1, len(higher) − 1)   # bara om rng.random() < unpredictability
+new_bid = higher[−(steps + 1)]            # 0 steg = minsta höjningen
+```
+
+`unpredictability = 0` ger alltså alltid minsta lagliga höjning. Det finns ingen
+parameter som väljer hur långt över det lägsta påståendet agenten går.
 
 Skilj detta från beslut 1 (`decide_bid`), där spelaren *har* sett
 tärningarna. Där är bluffen alltid exakt ett steg över det visade utfallet:
-`min(higher_options(shown))`. Där finns ingen `press`-styrning, eftersom den
+`min(higher_options(shown))`. Där finns ingen styrning alls, eftersom den
 kalkylen (sann påståendenivå + ett steg) inte har någon motsvarighet när nivån är
 okänd.
 
@@ -303,7 +314,7 @@ syna om   P(bluff | B) · L_win(B)  >  (1 − P(bluff | B)) · L_lose(B)
 
 Det vill säga: syna när förväntade livsöverskottet är positivt. Med den fasta
 tron `P(bluff | B) = q` blir villkoret exakt `q > q*(B)` (tabellen i 3.1).
-`risk` sänker tröskeln (synar hellre); `reading` ersätter `q` med den
+`caution` höjer tröskeln (synar mer sällan); `reading` ersätter `q` med den
 motståndarspecifika uppskattningen (avsnitt 6).
 
 ### Beslut 4 — Tvingad höjning (väljer själv)
@@ -462,8 +473,8 @@ beslut. Arbetet är delat i två roller med skarp gräns:
 
 Motståndarprofilen innehåller:
 
-- `risk` – hur gärna motståndaren tar en osäker chans,
-- `press` – hur ofta motståndaren bluffar och pressar,
+- `call_tendency` – hur ofta motståndaren synar,
+- `bluff_tendency` – hur ofta motståndaren bluffar,
 - `predictability` – hur förutsägbar motståndaren är,
 - `kind` – en kort etikett,
 - `confidence` – hur säker uppskattningen är.
@@ -513,12 +524,13 @@ Profilen är tekniska tal. För att en människa ska kunna läsa vad agenten *tr
 parentes:
 
 > Försiktig: bluffar nästan aldrig, synar sällan och är mycket förutsägbar
-> (risk 20 %, press 10 %, förutsägbarhet 90 %; gott underlag).
+> (bluff 10 %, syn 20 %, förutsägbarhet 90 %; gott underlag).
 
 Översättningen är ren presentation — den påverkar aldrig ett beslut. Samma idé
-används för spelarens egen kända karaktär i spelarlistan
-(`describe_params`), så att "risk 25 % · press 25 %" blir "synar sällan,
-bluffar sällan och läser motståndarna lite (risk 25 %, press 25 %, läsning 15 %)".
+används för spelarens egen kända karaktär i spelarlistan (`describe_params`), så
+att en profil med hög försiktighet blir "Försiktig, håller sig till
+sannolikheterna och varierar sig sällan; läser motståndarna lite (försiktighet
+80 %, statistik 50 %, oförutsägbarhet 20 %, läsning 50 %)".
 
 I webbappen syns motståndarbilderna i spelfliken under Motståndarbilder.
 Rutan växer fram när agenterna får underlag och kan ändras när matchen fortsätter.
@@ -535,14 +547,14 @@ bluff-frekvens. Skälet:
   `P(vinst | 41)` synar agenten påståenden som nästan alltid är sanna, och förlorar.
 
 Rätt konstruktion är en relativ justering: profilens benägenhet skalas in i
-tabellen som en faktor kring 1,0. Faktorn är centrerad kring `press = 0,5` och
-dämpas av LLM:ens konfidens, så en osäker gissning inte slår över
-populationstron.
+tabellen som en faktor kring 1,0. Faktorn är centrerad kring
+`bluff_tendency = 0,5` och dämpas av LLM:ens konfidens, så en osäker gissning
+inte slår över populationstron.
 
 ```
-raw    = 1 + (profil.press − 0,5) / (1 − 0,5)      # 0,5 → 1,0; 0,9 → 1,8
-faktor = 1 + profil.confidence · (raw − 1)         # osäker gissning → 1,0
-signal = 1 + reading · (faktor − 1)                # agentens egen ovilja
+raw    = 1 + (profil.bluff_tendency − 0,5) / (1 − 0,5)   # 0,5 → 1,0; 0,9 → 1,8
+faktor = 1 + profil.confidence · (raw − 1)               # osäker gissning → 1,0
+signal = 1 + reading · (faktor − 1)                      # agentens egen ovilja
 P(vinst | B, spelare) = CALL_PRIOR[B] · signal
 ```
 
@@ -550,18 +562,18 @@ P(vinst | B, spelare) = CALL_PRIOR[B] · signal
 - `reading = 1` ger motståndarens benägenhet fullt ut.
 - Resultatet klipps vid 0,95 så ett litet urval inte kan slå över.
 
-En spelare utan data bedöms som populationen (`press = 0,5`), så en läsande
-agent drar aldrig för stora slutsatser ur litet underlag.
+En spelare utan data bedöms som populationen (`bluff_tendency = 0,5`), så en
+läsande agent drar aldrig för stora slutsatser ur litet underlag.
 
-### 6.07 Risk: synbenägenheten styr hur mycket agenten bluffar
+### 6.07 Synbenägenheten styr hur mycket agenten bluffar
 
-Samma relativa konstruktion används för `risk`, men med omvänt tecken. `press`
-säger hur ofta motståndaren ljuger; `risk` säger hur ofta hon synar. En
-motståndare som gärna synar gör varje bluff dyrare, så agenten ska bluffa mindre
-mot henne.
+Samma relativa konstruktion används för `call_tendency`, men med omvänt tecken.
+`bluff_tendency` säger hur ofta motståndaren ljuger; `call_tendency` säger hur
+ofta hon synar. En motståndare som gärna synar gör varje bluff dyrare, så
+agenten ska bluffa mindre mot henne.
 
 ```
-raw    = 1 + (profil.risk − 0,5) / (1 − 0,5)       # 0,5 → 1,0; 0,9 → 1,8
+raw    = 1 + (profil.call_tendency − 0,5) / (1 − 0,5)    # 0,5 → 1,0; 0,9 → 1,8
 faktor = 1 + profil.confidence · (raw − 1)
 P(syn | påstående) = min(1, CALL_PRIOR_syn · faktor)
 ```
@@ -584,10 +596,10 @@ Skalan måste vara relativ, inte absolut. Den råa synfrekvensen ligger kring
 26 % för alla roller. Sätter man in den rakt på 0–1-skalan (där 0,5 är neutral)
 ser *varje* motståndare extremt försiktig ut, och agenten bluffar vilt mot alla.
 Därför finns `POPULATION_CALL_RATE = 0,265` och `OpponentTracker.call_ratio()`:
-ratio 1,0 betyder "synar som folk mest". Samma fälla som för `press` — se 6.0.
+ratio 1,0 betyder "synar som folk mest". Samma fälla som för `bluff_tendency` — se 6.0.
 
-Båda faktorerna kan vara aktiva samtidigt. `press` justerar tron på att ett visst
-påstående är sant (`_opponent_prior`), `risk` justerar chansen att påståendet blir synat
+Båda faktorerna kan vara aktiva samtidigt. `bluff_tendency` justerar tron på att ett visst
+påstående är sant (`_opponent_prior`), `call_tendency` justerar chansen att påståendet blir synat
 (`_p_called`). De rör alltså olika led i samma uträkning.
 
 ### 6.1 Den läckagefria regeln (obligatorisk)
@@ -633,9 +645,10 @@ en profil vinner för att den är bra, eller för att den stör BASE specifikt.
 
 Skillnaden mellan en läsande profil och BASE är exakt värdet av läsning.
 
-BASE:s egna parametrar är `risk = 0,5, press = 0,5, reading = 0,0`. Att `press`
-inte är noll gör att BASE också bluffar när det lönar sig — en referens som
-aldrig bluffar vore inte en realistisk motståndare.
+BASE:s egna parametrar är `caution = 0,5, statistics = 0,5,
+unpredictability = 0,2, reading = 0,0`. Att `unpredictability` inte är noll gör
+att BASE också varierar sitt spel — en referens som spelar exakt samma drag varje
+gång vore för lätt att läsa.
 
 ### 7.1 Kalibrering: härled, validera
 
@@ -697,7 +710,7 @@ låser den.
 
 ### 8.3 Fall: kvarglömd absolut läsning
 
-Symptom: `cecilia` och `david` (hög `risk` + läsning) förlorade nästan alltid.
+Symptom: `cecilia` och `david` (hög `reading` + synbenägen motståndarbild) förlorade nästan alltid.
 Orsak: samma absoluta läsning som 8.2 gjorde att de synade låga påstående, där
 `CALL_PRIOR ≈ 0,05` och en syn nästan alltid förlorar.
 
@@ -714,30 +727,31 @@ då spelar den en karikatyr i stället för att spela spelet — och det går in
 veta om profilen vinner på sin taktik eller på sin etikett. Beteendet styrs av
 explicita parametrar, aldrig av namnet.
 
-| Namn | Roll | Risk | Press | Läsning | LLM | Kort beskrivning |
-|---|---|---:|---:|---:|---|---|
-| Axel | `axel` | 0,50 | 0,50 | 0,00 | nej | Basmodellen; referens utan LLM |
-| Berit | `berit` | 0,25 | 0,25 | 0,15 | ja | Försiktig; påstår nära sanningen |
-| Cecilia | `cecilia` | 0,50 | 0,45 | 0,50 | ja | Kalkylerande; läser motståndaren |
-| David | `david` | 0,65 | 0,60 | 0,35 | ja | Djärv; pressar påståendet högre |
+| Namn | Roll | Förs. | Stat. | Oförut. | Läsn. | LLM | Kort beskrivning |
+|---|---|---:|---:|---:|---:|---|---|
+| Axel | `axel` | 0,50 | 0,50 | 0,20 | 0,00 | nej | Grundtaktiken; referens utan LLM |
+| Berit | `berit` | 0,50 | 0,50 | 0,20 | 0,00 | ja | Samma taktik som Axel, men med språkmodell |
+| Cecilia | `cecilia` | 0,80 | 0,50 | 0,20 | 0,50 | ja | Försiktig; undviker risk |
+| David | `david` | 0,50 | 0,80 | 0,20 | 0,50 | ja | Statistisk; håller sig till sannolikheterna |
+| Elsa | `elsa` | 0,50 | 0,50 | 0,80 | 0,50 | ja | Oförutsägbar; varierar sitt spel |
 
 Axel är basmodellen (BASE): icke-läsande och utan LLM. Han är referensen — de
 andra jämförs mot honom, och han får förlora ofta. Han är avsiktligt "good
 enough", inte optimerad. Hans taktik innehåller ingen språkmodell; däremot
 behöver hans enskilda drag inte vara reproducerbara ner på slumpnivå.
 
-De tre LLM-spelarna är samma policykärna med milda profiler ovanpå.
-Ingen av dem är så extrem som de gamla rollerna var. De historiska loggarna
-visade att en extremt pressande profil (`press` ≈ 0,9) förlorade nästan varje
-match, eftersom hög press bluffar in i synar. Profilerna grundas i
-logganalysen (avsnitt 8): vinnaren skickar vidare oftare och synar sällan men
-träffsäkert — därför ligger `press` lågt och `reading` högt hos de som ska läsa
-spelet.
+Berit spelar exakt samma taktik som Axel. Skillnaden är bara att hennes beslut
+fattas av en språkmodell i stället för direkt av kärnan. Paret Axel/Berit mäter
+alltså värdet av språkmodellen och inget annat.
+
+Cecilia, David och Elsa är samma kärna med **en** dimension lyft var, och samma
+läsförmåga. Deras inbördes jämförelse handlar därför bara om den dimension de
+lyfter: försiktighet, statistik eller oförutsägbarhet.
 
 Värdena är startpunkter. De kalibreras när vi utvärderar tillsammans. En
-självspelning utan LLM (800 matcher, fyra spelare, baslinje 25 %) gav:
-Berit 32 %, Cecilia 24 %, Axel 32 %, David 11 %. Balansen är god nog för att
-gå vidare — David är svagast, vilket är väntat med högst press.
+självspelning utan LLM (400 matcher, fyra spelare, baslinje 25 %) gav:
+Axel 31 %, Berit 28 %, Cecilia 22 %, David 19 %. Siffrorna gäller de fem
+nuvarande profilerna, med Axel och Berit på samma parametrar.
 
 ---
 

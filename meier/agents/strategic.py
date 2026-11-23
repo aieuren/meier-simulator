@@ -4,15 +4,15 @@ Uppdelningen är hela poängen:
 
 - :mod:`meier.agents.legality` äger reglerna. Den räknar upp vilka drag som är
   lagliga i ett givet läge.
-- :mod:`meier.agents.personality` beskriver spelaren i ord, så att ``risk``,
-  ``press`` och ``reading`` blir en människa att spela som — inte tal i en formel.
+- :mod:`meier.agents.personality` beskriver spelaren i ord, så att ``caution``,
+  ``statistics``, ``unpredictability`` och ``reading`` blir en människa att
+  spela som — inte tal i en formel.
 - LLM:en väljer drag bland de lagliga. Den får aldrig bryta mot reglerna, men
   den bestämmer själv vad den vill göra.
 
 En tidigare version gjorde tvärtom: :class:`~meier.policy.BasePolicy` räknade
 fram draget och LLM:en formulerade bara repliken. Då blev varje spelare samma
-algoritm med olika konstanter, och ``press`` styrde ett påståendeval som modellen
-aldrig fick påverka.
+algoritm med olika konstanter, och modellen fick aldrig påverka påståendevalet.
 
 Utan LLM-klient faller agenten tillbaka på :class:`~meier.policy.BasePolicy`.
 Det läget används av ``axel`` (referensen utan språkmodell) samt av tester som

@@ -226,19 +226,21 @@ Repliken däremot skrivs inte av modellen. Den byggs i koden ur draget, så att 
 spelare aldrig säger något annat än det hen faktiskt gjorde.
 
 Axel är undantaget. Han har ingen modell utan spelar en fast räkneregel: vid
-bluff lägger han sig på den minsta möjliga höjningen, och vid blindt slag
-bestämmer `press` hur högt han går. Samma räkneregel tar över om en modell inte
-svarar.
+bluff lägger han sig på den minsta möjliga höjningen. Vid blindt slag är den
+minsta lagliga höjningen det säkra valet, men han tar ibland ett större kliv
+ändå — det är hans oförutsägbarhet som slår till. Samma räkneregel tar över om
+en modell inte svarar.
 
 ### Hur spelaren bluffar
 
-Tvånget att höja gäller alla lika. Det som skiljer spelarna är hur de hanterar
-det, och där kommer `press` in.
+Tvånget att höja gäller alla lika. Bluffen är därför ingen ratt man skruvar på
+— den följer av spelet. Det som skiljer spelarna är hur de hanterar tvånget.
 
-En spelare med låg `press` lägger sig nära tärningarna och tar sällan en extra
-chans. En spelare med hög `press` driver upp påståendet och bluffar oftare, även
-när hen inte måste. Parametern säger hur spelaren brukar göra, inte vilket drag
-som är bäst i läget.
+En försiktig spelare synar mer sällan, vilket gör att en bluff oftare får stå.
+En oförutsägbar spelare tar ibland ett större kliv än nödvändigt, så att
+motståndaren inte kan läsa mönstret. Ingen av dem har en inställning som heter
+"bluffa mer". Parametrarna säger hur spelaren brukar göra, inte vilket drag som
+är bäst i läget.
 
 ### Spelaren läser sina motståndare
 
@@ -248,9 +250,9 @@ Sekreteraren bokför vad som hänt vid bordet. Rena siffror, ingen tolkning:
 hur ofta motståndaren bluffat, hur ofta hen synat, hur ofta hen höjt.
 
 Läsaren är språkmodellen. Den tolkar siffrorna och sätter en
-motståndarprofil: en gissning om motståndarens `risk` och `press`, plus en
-kort motståndartyp som "bluffbenägen", "försiktig" eller "oförutsägbar", och
-ett mått på hur säker gissningen är.
+motståndarprofil: en gissning om hur ofta motståndaren synar och hur ofta hen
+bluffar, plus en kort motståndartyp som "bluffbenägen", "försiktig" eller
+"oförutsägbar", och ett mått på hur säker gissningen är.
 
 En sak är viktig här: modellen får aldrig se dolda tärningar. Den får bara det
 som varit offentligt. Annars skulle läsförmågan vara fusk.

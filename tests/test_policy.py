@@ -7,7 +7,8 @@ motorn och analysen bygger på, särskilt de som höll på att gå förlorade:
 - budet är alltid lagligt och strikt högre vid höjning,
 - svaret på ett bud har tre lagliga val (syna, skicka, slå) och ingen av dem
   tvingas fram av en regel — bara av värderingen,
-- ``press`` ger distinkt bluffbenägenhet mellan rollerna,
+- ``caution``, ``statistics``, ``unpredictability`` och ``reading`` är de enda
+  personlighetsmåtten; bluffandet är ingen parameter,
 - den budspecifika tron följer den frysta tabellen.
 """
 
@@ -47,6 +48,16 @@ def test_bluffing_is_not_a_parameter():
     Alla fyra dimensionerna varieras, men antalet bluffar ska vara detsamma —
     annars har bluffandet smygit in som en femte, oavsiktlig parameter.
     """
+    from meier.policy import BLUFF_GAIN
+
+    assert BLUFF_GAIN > 0.0
+    assert {f.name for f in AgentParams.__dataclass_fields__.values()} == {
+        "caution",
+        "statistics",
+        "unpredictability",
+        "reading",
+    }
+
     counts = set()
     for caution in (0.0, 0.5, 1.0):
         for statistics in (0.0, 0.5, 1.0):
@@ -66,14 +77,6 @@ def test_bluffing_is_not_a_parameter():
                     )
                 )
     assert len(counts) == 1, f"bluffantalet varierade med profilerna: {counts}"
-
-
-def test_bluff_gain_is_a_fixed_constant():
-    """Bluffens värde ska vara en konstant, inte ett parameterfält."""
-    from meier.policy import BLUFF_GAIN
-
-    assert BLUFF_GAIN > 0.0
-    assert "press" not in {f.name for f in AgentParams.__dataclass_fields__.values()}
 
 
 def test_never_bids_below_shown_when_it_could_bid_truth(base):

@@ -1,10 +1,10 @@
 """Spelarpersonlighet som **prosa**, inte som formel.
 
-Parametrarna ``risk``, ``press`` och ``reading`` beskriver en människa. Tidigare
-matades de in i en formel som räknade fram draget, vilket gjorde varje spelare
-till samma algoritm med olika tal. Här översätts de i stället till en
-beskrivning som LLM:en får läsa, så att modellen kan spela *som* den personen i
-stället för att räkna som en tabell.
+Parametrarna ``caution``, ``statistics``, ``unpredictability`` och ``reading``
+beskriver en människa. Tidigare matades de in i en formel som räknade fram
+draget, vilket gjorde varje spelare till samma algoritm med olika tal. Här
+översätts de i stället till en beskrivning som LLM:en får läsa, så att modellen
+kan spela *som* den personen i stället för att räkna som en tabell.
 
 Måtten är underlag, inte dom. De säger hur en spelare brukar bete sig — inte
 vilket drag som är rätt i en viss situation.

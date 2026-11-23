@@ -143,16 +143,17 @@ of exactly one of the two decisions. Keep them apart:
 
 - `decide_bid(shown)` — bidder *has* seen the dice. A bluff over `shown` is
   always exactly one step above it (`min(higher_options(shown))`), at every
-  `press`. Higher bids get called more often, so a longer jump is pure downside.
-- `decide_raise(bid)` — blind shake, dice unseen. This one scales with
-  `press`: `steps = round(press * (len(higher_options(bid)) - 1))`, so
-  `press` 0.0 sits on minimum and `press` 1.0 can jump all the way to Meier.
+  `unpredictability`. Higher bids get called more often, so a longer jump is
+  pure downside.
+- `decide_raise(bid)` — blind shake, dice unseen. The minimum legal raise is
+  safest. With probability `unpredictability` the agent instead picks a random
+  higher option (up to Meier), so it cannot be read as "always the minimum".
   There is no "true level" to sit just above when the dice are unknown.
 
 Measured on 80 no-LLM matches: 63.3 % of raises were one step, 36.7 % were
 more, up to 18. So "always one step" was wrong for the table as played.
 
-Guarded by `tests/test_policy.py::test_blind_raise_grows_with_press` and
+Guarded by `tests/test_policy.py::test_unpredictability_makes_blind_raises_vary` and
 `::test_seen_bid_bluff_is_always_exactly_one_step`, plus
 `tests/test_docs.py::test_om_meier_does_not_claim_raises_are_always_one_step`.
 
@@ -452,13 +453,15 @@ Three rules that keep the companion doc honest:
 ## Conventions
 
 - Code comments and docstrings are in Swedish, matching the domain. Keep them.
-- Player personality lives in three numbers (`risk`, `press`, `reading`), never
-  in the player's name. Names are deliberately neutral: an evocative label makes
+- Player personality lives in four numbers (`caution`, `statistics`,
+  `unpredictability`, `reading`), never in the player's name. Names are
+  deliberately neutral: an evocative label makes
   the model play a caricature of the label instead of playing the game, and then
   you cannot tell whether it wins on tactics or on its name. The old roles
   (Ärlig-Adolf, Rackar-Rakel, …) were removed for this reason.
-- `axel` has `uses_llm=False` on purpose. He is the deterministic reference the
-  others are measured against. Do not "upgrade" him.
+- `axel` has `uses_llm=False` on purpose. He is the LLM-free reference the
+  others are measured against — not a bit-for-bit deterministic one, since his
+  `unpredictability` still varies his play. Do not "upgrade" him.
 - The 21-outcome ranking is fixed: 21, 11, 22, 33, 44, 55, 66, 65, 64, 63, 62,
   61, 54, 53, 52, 51, 43, 42, 41, 32, 31. Meier (21) is highest and costs double.
 - Agents must always respond with a JSON object; parsing tolerates code fences
@@ -474,6 +477,31 @@ Three rules that keep the companion doc honest:
   is tracked per role to see whether bidding blind pays off over many matches.
 - Note that pairs (11–66) outrank high singles, so e.g. 44 beats 65. When a call
   looks "wrong", check the ranking before assuming a bug.
+- "Deterministic" means `unpredictability == 0`, not "no LLM". `axel` is the
+  LLM-free reference, but his params carry `unpredictability = 0.2`, so his
+  bids vary between runs by design. A test that compares two agents' bids must
+  pass `AgentParams(unpredictability=0.0)`; otherwise it fails ~20 % of runs.
+  This bit `tests/test_legality.py::test_agent_without_llm_is_deterministic`,
+  which was flaky until it built its own params instead of `AgentParams()`.
+
+## Personality parameters were renamed
+
+The old names `risk` and `press` are gone. Current fields on `AgentParams` are
+`caution`, `statistics`, `unpredictability`, `reading`. On `OpponentProfile`
+the pair is `call_tendency` (was `risk`) and `bluff_tendency` (was `press`),
+and the factor helpers are `call_factor` / `bluff_factor` with
+`NEUTRAL_CALL` / `NEUTRAL_BLUFF` (was `NEUTRAL_RISK` / `NEUTRAL_PRESS`).
+Bluffing is **not** a parameter at all: `BLUFF_GAIN` is a fixed constant.
+
+Watch the two traps when touching this:
+
+- Swedish prose still says "undviker risk" and "sätter press". That is correct
+  language about behaviour, not a stale identifier. Only change backticked
+  identifiers and code.
+- `tests/test_docs.py` used to allowlist `"risk"` and `"press"` so percentage
+  lines in the companion doc would pass. Once the doc stopped using those
+  words the entries were dead weight and were removed. If you add a percentage
+  line to that doc, add its context word back deliberately.
 
 ## Environment notes
 
@@ -735,7 +763,8 @@ gone — replaced by four neutral-named players in `meier/agents/roster.py`:
   - `meier/legality.py` owns the rules: it enumerates the legal bids,
     responses and forced choices for a position, and rejects everything else.
     A player can never break the rules, whatever the model says.
-  - `meier/agents/personality.py` turns `risk`/`press`/`reading` into prose
+  - `meier/agents/personality.py` turns `caution`/`statistics`/
+    `unpredictability`/`reading` into prose
     for the prompt. The params describe a human to play as; they are no longer
     fed into a formula that computes the move.
   - An illegal or unparseable answer gets one retry that names the error.
@@ -744,9 +773,9 @@ gone — replaced by four neutral-named players in `meier/agents/roster.py`:
 - Why it changed. The old design computed the move in `BasePolicy` and left
   only the line to the LLM. Every player then played the same algorithm with
   different constants: `berit` always bid 43 and `david` always 64 when
-  bluffing, regardless of the dice. `press` drove a bid choice the model never
-  saw. The params are now material for simulating a real player, and judging
-  what the players do is the user's job, not the machine's.
+  bluffing, regardless of the dice. The old `press` parameter drove a bid
+  choice the model never saw. The params are now material for simulating a real
+  player, and judging what the players do is the user's job, not the machine's.
 - No more silent rewriting. `decide_bid` now takes `previous_bid` and
   chooses among the legal bids directly. Before, it chose as if the table were
   empty and the engine rewrote 47.9 % of bids (805/1680) without a trace.
@@ -763,10 +792,10 @@ gone — replaced by four neutral-named players in `meier/agents/roster.py`:
   alone what the numbers mean. The reader is fed only
   `tracker.evidence(player)` — never the session log — so it cannot see hidden
   dice. Ask "who judges?" and the answer is: the LLM. The secretary only writes.
-- `OpponentProfile` has `risk`, `press`, `predictability`, `kind`,
-  `confidence`, `source`. `source` is `"llm"`, `"statistik"` (fallback without
-  LLM) or `"population"` (no data). Values are clamped to 0–1 so a garbled LLM
-  reply cannot leak junk into decisions.
+- `OpponentProfile` has `call_tendency`, `bluff_tendency`, `predictability`,
+  `kind`, `confidence`, `source`. `source` is `"llm"`, `"statistik"` (fallback
+  without LLM) or `"population"` (no data). Values are clamped to 0–1 so a
+  garbled LLM reply cannot leak junk into decisions.
 - `confidence` is capped by evidence at the table, not by the LLM's self-report.
   `OpponentTracker.evidence_strength()` = `reveals / (reveals + 3)` over the whole
   match (every player's settled calls), and `reader.profile()` takes
@@ -776,7 +805,7 @@ gone — replaced by four neutral-named players in `meier/agents/roster.py`:
   are also sent to the model in the summary so it knows how thin the evidence is.
 - Plain-language view. `OpponentProfile.describe()` renders the numbers as a
   sentence with the percentages in parentheses (e.g. *"Försiktig: bluffar nästan
-  aldrig, synar sällan och är mycket förutsägbar (risk 20 %, press 10 %,
+  aldrig, synar nästan aldrig och är mycket förutsägbar (bluff 10 %, syn 20 %,
   förutsägbarhet 90 %; gott underlag)."*). `describe_params()` does the same for a
   player's own known character in the roster list. Presentation only — never an
   input to a decision. The web app shows each agent's picture of the others in
@@ -785,26 +814,29 @@ gone — replaced by four neutral-named players in `meier/agents/roster.py`:
 - The profile is cached per opponent and recomputed only when new evidence
   becomes public (a reveal). So a match makes a handful of reader calls per
   opponent, not one per decision.
-- Relative scaling, never absolute. `profile_factor` maps `press` to a factor
-  around 1.0 centred on `NEUTRAL_PRESS = 0.5`, damped by `confidence`; the agent's
-  own `reading` then scales how much of that signal it wants. This preserves the
-  `reading = 0 → exact CALL_PRIOR` invariant. Absolute bluff rates here are ~0.72
-  for everyone, so feeding them in raw inflates every opponent — the factor must
-  stay relative.
-- `risk` is wired into bidding too, not just `press`. `risk_factor` maps the
-  opponent's `risk` to a factor around 1.0 centred on `NEUTRAL_RISK = 0.5`; it
-  flows as `opponent_factor` into `BasePolicy.decide_bid()` and on to `_p_called`,
-  which scales the chance the bid gets called. A calling opponent makes bluffing
-  expensive, so the agent moves closer to the truth. Measured: 5 % call rate →
-  factor 0.25 → bluffs in 20/21 spots; 26 % → 1.00 → 16/21; 45 % → 1.70 → 8/21.
-  `press` adjusts belief about a bid (`_opponent_prior`), `risk` adjusts the
-  chance of being called (`_p_called`) — different terms, both live.
-- The same absolute-scale trap hits `risk`. Raw call rate is ~0.265 for every
-  role, so feeding it straight onto the 0–1 scale makes every opponent look timid
-  and the agent bluffs wildly against all of them. `POPULATION_CALL_RATE = 0.265`
-  plus `OpponentTracker.call_ratio()` keep it relative: ratio 1.0 = "calls as much
-  as people usually do". The LLM summary states this reference point too, so the
-  model does not read 26 % as "never calls".
+- Relative scaling, never absolute. `bluff_factor` maps `bluff_tendency` to a
+  factor around 1.0 centred on `NEUTRAL_BLUFF = 0.5`, damped by `confidence`; the
+  agent's own `reading` then scales how much of that signal it wants. This
+  preserves the `reading = 0 → exact CALL_PRIOR` invariant. Absolute bluff rates
+  here are ~0.72 for everyone, so feeding them in raw inflates every opponent —
+  the factor must stay relative.
+- `call_tendency` is wired into bidding, not just `bluff_tendency`.
+  `call_factor` maps the opponent's `call_tendency` to a factor around 1.0
+  centred on `NEUTRAL_CALL = 0.5`; it flows as `opponent_factor` into
+  `BasePolicy.decide_bid()` and on to `_p_called`, which scales the chance the
+  bid gets called. A calling opponent makes bluffing expensive, so the agent
+  moves closer to the truth. Measured: 5 % call rate → factor 0.25 → bluffs in
+  20/21 spots; 26 % → 1.00 → 16/21; 45 % → 1.70 → 8/21.
+  `bluff_tendency` adjusts belief about a bid (`_opponent_prior`),
+  `call_tendency` adjusts the chance of being called (`_p_called`) — different
+  terms, both live.
+- The same absolute-scale trap hits `call_tendency`. Raw call rate is ~0.265 for
+  every role, so feeding it straight onto the 0–1 scale makes every opponent look
+  timid and the agent bluffs wildly against all of them.
+  `POPULATION_CALL_RATE = 0.265` plus `OpponentTracker.call_ratio()` keep it
+  relative: ratio 1.0 = "calls as much as people usually do". The LLM summary
+  states this reference point too, so the model does not read 26 % as "never
+  calls".
 - Evaluation runs without LLM. `play_match(..., with_llm=False)` and
   `cli match --no-llm` give a deterministic match: the reader falls back to the
   secretary's arithmetic. Fast (milliseconds vs minutes). Use `--no-llm` for
@@ -833,5 +865,6 @@ python3 -m meier.cli match axel berit cecilia david --count 200 \
     --workers 4 --no-llm --out /tmp/meier_eval.jsonl
 ```
 
-Baseline (800 matches, four players, chance 25 %): Berit 32 %, Cecilia 24 %,
-Axel 32 %, David 11 %. David is weakest, as expected with the highest `press`.
+Baseline (400 matches, four players, chance 25 %): Axel 31 %, Berit 28 %,
+Cecilia 22 %, David 19 %. David is weakest despite (or because of) the highest
+`statistics`; the flat-prior baseline reads the bid level less.

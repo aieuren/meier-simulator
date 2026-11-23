@@ -186,9 +186,17 @@ def test_line_does_not_need_an_llm():
 
 
 def test_agent_without_llm_is_deterministic():
+    """Utan LLM och utan ``unpredictability`` är agenten helt mekanisk.
+
+    Slumpen är den enda källan till variation, så två agenter med
+    ``unpredictability = 0`` måste bjuda exakt lika. Axel själv har
+    ``unpredictability > 0`` och får därför variera mellan körningar — se
+    ``test_base_model_uses_no_llm_and_no_reading``.
+    """
     role = Role(key="axel", name="Axel", description="", style="")
-    a = StrategicAgent(role, AgentParams())
-    b = StrategicAgent(role, AgentParams())
+    params = AgentParams(unpredictability=0.0)
+    a = StrategicAgent(role, params)
+    b = StrategicAgent(role, params)
     for dice in [(1, 1), (2, 5), (6, 6), (1, 6)]:
         assert a.announce(dice).bid == b.announce(dice).bid
 
