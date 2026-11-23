@@ -592,18 +592,20 @@ def test_agent_model_names_the_legality_layer():
     assert "meier/legality.py" in text
 
 
-# -- docs/agent-model.md: avsnitt 7.2 om Axels speltaktik -------------------
+# -- Om meier-simulatorn: avsnittet om Axels speltaktik ---------------------
 
 def test_axel_section_tables_match_the_policy():
-    """Tabellerna i avsnitt 7.2 ska visa vad koden faktiskt gör.
+    """Tabellerna om Axels speltaktik ska visa vad koden faktiskt gör.
 
     Avsnittet är skrivet för en människa, men siffrorna kommer ur ``BasePolicy``.
     Glider de isär är det dokumentet som ljuger, inte koden.
     """
     from meier import policy, rules
 
-    text = AGENT_MODEL.read_text(encoding="utf-8")
-    assert "## 7.2 Axels speltaktik" in text, "avsnitt 7.2 saknas i agent-model.md"
+    text = _om()
+    assert "### Så spelar Axel, drag för drag" in text, (
+        "Om meier-simulatorn saknar avsnittet om Axels speltaktik"
+    )
 
     axel = policy.BasePolicy(
         policy.AgentParams(caution=0.5, statistics=0.5, unpredictability=0.0, reading=0.0)
