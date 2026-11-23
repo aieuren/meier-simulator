@@ -672,6 +672,159 @@ konkret exempel på varför frysning + färsk kalibrering är ett krav.
 
 ---
 
+## 7.2 Axels speltaktik, steg för steg
+
+Detta avsnitt beskriver vad Axel faktiskt gör, mekaniskt. Axel är grundtaktiken
+i `meier/policy.py` (`BasePolicy`) med profilerna `caution = 0,5`,
+`statistics = 0,5`, `unpredictability = 0,2`, `reading = 0,0`. Han har ingen
+språkmodell: varje drag räknas fram ur tabellerna nedan.
+
+Två saker gäller för hela taktiken:
+
+1. **Han räknar i liv, inte i vunna rundor.** Det enda som spelar roll är
+   förväntade kvarvarande liv. Att vinna en runda är inget värt i sig.
+2. **Han har en enda fast tro om bordet.** Han tror att en syn vinner med
+   sannolikheten `q` som beror på påståendets nivå (`CALL_PRIOR`), blandad
+   halvt om halvt med en platt tro på 0,45. Blandningen är vad
+   `statistics = 0,5` betyder. Han lär sig inget om enskilda motståndare.
+
+### Axel i fyra situationer
+
+| Situation | Ser han tärningarna? | Vad han gör |
+|---|---|---|
+| 1. Rundans första påstående | ja | säger sanningen, eller bluffar ett steg om tärningarna är svaga |
+| 2. Någon annan har påstått | nej | väljer mellan att syna, skicka vidare eller slå |
+| 3. Han slår (blint) | nej | säger den minsta lagliga höjningen |
+| 4. Bägaren har gått ett varv | nej, han väljer först | tittar på de nya tärningarna |
+
+### 1. Första påståendet — han tittar, sedan räknar
+
+Han ser utfallet och ställer det säkra påståendet mot varje möjlig bluff.
+
+Det säkra påståendet är tärningarna själva, till exempel 52. Det är sant: synar
+någon visar tärningarna minst 52, så synaren förlorar livet. Värdet är
+
+```
+värdet(sant) = P(synad) × liv som synaren förlorar
+```
+
+En bluff är ett påstående över tärningarna. Den vinner bara om ingen synar:
+
+```
+värdet(bluff) = (1 − P(synad)) × 0,5 − P(synad) × liv som jag förlorar
+```
+
+Han väljer bluffen bara om den slår det sanna påståendet. Med hans profil blir
+resultatet detta, utan brus:
+
+| Tärningarna visar | Han säger | Sant eller bluff |
+|---|---|---|
+| 21, 11, 22, 33, 44, 55, 66 | samma | sant |
+| 65, 64, 63, 62, 61, 54, 53, 52, 51 | samma | sant |
+| 43 | 51 | bluff |
+| 42 | 43 | bluff |
+| 41 | 42 | bluff |
+| 32 | 41 | bluff |
+| 31 | 32 | bluff |
+
+Mönstret är enkelt att förstå. **Har han 51 eller högre säger han alltid
+sanningen.** Där är det sanna påståendet starkt nog att stå emot en syn, och en
+bluff lägger bara till risk. **Har han 43 eller lägre bluffar han ett steg.**
+Där är sanningen svag: säger han 31 när han har 43 kan nästa spelare slå över
+billigt, så han höjer ribban i stället.
+
+Han bluffar aldrig högre än nödvändigt. Det är alltid ett steg, aldrig ett
+skutt.
+
+### 2. Någon annan har påstått — tre svar, tre prislappar
+
+Nu ser han inte tärningarna. Han vet bara vad som sagts. Han räknar fram ett
+värde för varje svar och tar det högsta. Tröskeln `0,13` liv är hans försiktighet
+i siffror.
+
+| Svar | Vad det är värt för honom |
+|---|---|
+| **Syna** | sannolikheten att synen vinner, minus risken att förlora. Sedan läggs tröskeln 0,13 på, som en knuff mot att syna |
+| **Skicka vidare** | vad påståendet är värt att bära, gånger hur ofta det synas |
+| **Slå** | samma sak, men för det påstående han skulle säga blint |
+
+Med hans profil ger det här bordet:
+
+| Påstående han svarar på | Han gör | Varför |
+|---|---|---|
+| 21, 11, 22, 33, 44, 55, 66, 65, 64 | synar | påståendet är svagt nog att en syn lönar sig |
+| 63, 62, 61, 54, 53, 52, 51, 43, 42 | skickar vidare | påståendet är för starkt att syna, men värt att bära |
+| 41, 32, 31 | slår | ett blint slag är bättre än att bära ett svagt påstående |
+
+Tre saker är värda att lägga märke till:
+
+- **Han synar hellre låga påståenden än höga.** Ett lågt påstående som 22 är
+  ofta en bluff, och då vinner synen. Ett högt som 52 är oftare sant.
+- **Han synar aldrig på 31.** Bara Meier är högre än 31, så en syn kan nästan
+  aldrig vinna. Han slår i stället.
+- **Han synar inte ens på 61 och 62**, trots att de ligger högt. Att bära dem är
+  billigare än att syna dem.
+
+### 3. När han slår — alltid minsta höjning
+
+Han skakar blint och ser inte tärningarna. Då är den minsta lagliga höjningen
+säkrast, eftersom den har minst chans att tärningarna visar lägre. Så han säger
+alltid nästa steg i ordningen:
+
+| Över | Säger |
+|---|---|
+| 31 → 32 → 41 → 42 → 43 → 51 → 52 → 53 → 54 → 61 → 62 → 63 → 64 → 65 → 66 | nästa steg |
+| 66 | 55 |
+
+Att 66 följs av 55 ser bakvänt ut, men det är rätt. Ordningen är inte numerisk
+utan rangordning: alla dubbletter (11 till 66) ligger över de blandade paren,
+och 55 är nästa steg över 66.
+
+Han går aldrig högre frivilligt. Med `unpredictability = 0,2` händer det att han
+hoppar längre, men bara som brus, aldrig som ett val.
+
+### 4. Tvingad höjning — han tittar
+
+När bägaren gått ett helt varv slås tärningarna om och han måste höja. Han
+väljer först, tittar sedan. Han påstår blint med sannolikheten
+`unpredictability × 0,5`, alltså 10 procent. Resten av gångerna tittar han.
+
+### Vad `unpredictability = 0,2` gör
+
+Den lägger ett brus på `±0,15` liv på värdena, så att två nästan lika bra drag
+ibland byts ut. Tre effekter:
+
+- han tar ibland den säkra vägen även när en bluff räknas som marginellt bättre,
+- han hoppar ibland längre än minsta höjning när han slår,
+- han påstår ibland blint vid tvingad höjning.
+
+Bruset är medvetet litet. Det ska göra honom svår att läsa, inte dålig. Med
+`unpredictability = 0` blir han helt mekanisk och tabellerna ovan gäller exakt.
+
+### Vad han inte gör
+
+- Han lär sig inget om motståndarna. `reading = 0,0` betyder att han aldrig
+  använder deras tidigare spel.
+- Han anpassar sig inte under matchen. Samma tabeller gäller i runda 1 och i
+  sista rundan.
+- Han satsar inte på att vinna rundan. Han satsar på att överleva matchen.
+- Han bluffar inte för att vara rolig. Varje bluff ska slå det sanna påståendet
+  i förväntade liv, annars låter han bli.
+
+### Så hänger det ihop med koden
+
+| Begrepp i texten | Kod |
+|---|---|
+| tron `q` på påståendenivån | `CALL_PRIOR`, `FLAT_Q`, `BasePolicy.belief` |
+| `P(synad)` | `CALL_FLOOR`, `CALL_SLOPE`, `BasePolicy._p_called` |
+| liv vid syn, Meier dubbelt | `lives_lost`, `CALL_ODDS` |
+| tröskeln 0,13 liv | `CALL_INERTIA_BASE`, `CALL_INERTIA_CAUTION` |
+| bluffens värde när ingen synar | `BLUFF_GAIN` |
+| bruset | `UNPREDICTABILITY_SPAN`, `BasePolicy.jitter` |
+| de fyra besluten | `decide_bid`, `decide_response`, `decide_raise`, `decide_forced` |
+
+---
+
 ## 8. Fallback och felvägar
 
 - Ogiltigt påstående från modellen: motorn korrigerar (`_coerce_higher`,

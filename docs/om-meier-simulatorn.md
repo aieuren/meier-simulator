@@ -130,6 +130,10 @@ Däremot behöver hans enskilda drag inte vara reproducerbara ner på slumpnivå
 Han är byggd för att vara tillräckligt bra, inte optimerad. Hans uppsättning
 kallas grundtaktik.
 
+Vill du se exakt vad Axel gör, drag för drag, finns hela hans speltaktik
+beskriven i [agent-model.md §7.2](agent-model.md). Där står tabellerna för
+vilket påstående han säger, när han synar och när han slår.
+
 Tre begrepp:
 
 | Begrepp | Vad det är |

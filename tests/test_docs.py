@@ -590,3 +590,46 @@ def test_agent_model_names_the_legality_layer():
     """Dokumentet ska peka ut var reglerna bor."""
     text = AGENT_MODEL.read_text(encoding="utf-8")
     assert "meier/legality.py" in text
+
+
+# -- docs/agent-model.md: avsnitt 7.2 om Axels speltaktik -------------------
+
+def test_axel_section_tables_match_the_policy():
+    """Tabellerna i avsnitt 7.2 ska visa vad koden faktiskt gör.
+
+    Avsnittet är skrivet för en människa, men siffrorna kommer ur ``BasePolicy``.
+    Glider de isär är det dokumentet som ljuger, inte koden.
+    """
+    from meier import policy, rules
+
+    text = AGENT_MODEL.read_text(encoding="utf-8")
+    assert "## 7.2 Axels speltaktik" in text, "avsnitt 7.2 saknas i agent-model.md"
+
+    axel = policy.BasePolicy(
+        policy.AgentParams(caution=0.5, statistics=0.5, unpredictability=0.0, reading=0.0)
+    )
+
+    # Öppningspåståendet: tabellen säger att 51+ är sant och 43- bluffar ett steg.
+    for shown in rules.RANKING:
+        bid = axel.decide_bid(shown).bid
+        if rules.compare(shown, 51) >= 0:
+            assert bid == shown, f"tabellen påstår sanning på {rules.name(shown)}, koden säger {rules.name(bid)}"
+        else:
+            assert rules.is_higher(bid, shown), f"tabellen påstår bluff på {rules.name(shown)}"
+            assert bid == rules.next_higher(shown), (
+                f"tabellen påstår ett steg över {rules.name(shown)}, koden säger {rules.name(bid)}"
+            )
+
+    # Svaren: tabellen delar in påståendena i syna / skicka / slå.
+    for bid in (21, 11, 22, 33, 44, 55, 66, 65, 64):
+        assert axel.decide_response(bid).action == "syna", f"koden synar inte {rules.name(bid)}"
+    for bid in (63, 62, 61, 54, 53, 52, 51, 43, 42):
+        assert axel.decide_response(bid).action == "skicka", f"koden skickar inte {rules.name(bid)}"
+    for bid in (41, 32, 31):
+        assert axel.decide_response(bid).action == "slå", f"koden slår inte på {rules.name(bid)}"
+
+    # Blint slag: alltid minsta lagliga höjning.
+    for bid in (31, 32, 41, 42, 43, 51, 52, 53, 54, 61, 62, 63, 64, 65, 66):
+        assert axel.decide_raise(bid).bid == rules.next_higher(bid), (
+            f"koden höjer inte minimalt över {rules.name(bid)}"
+        )
