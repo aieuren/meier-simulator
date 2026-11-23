@@ -225,11 +225,18 @@ CALL_PRIOR: dict[int, float] = {
 CALL_INERTIA_BASE = 0.13
 CALL_INERTIA_CAUTION = 0.10
 
-#: Värdet av att ett påstående står obesvarat, i liv. **Fast**, inte en parameter.
+#: Värdet av att en bluff står obesvarat, i liv. **Fast**, inte en parameter.
 #:
 #: Bluffen är ett nödvändigt ont i Meier: den som slår måste alltid säga ett högre
 #: påstående, och då blir en del påståenden lögnar vad spelaren än vill. Därför finns
 #: det ingen bluffparameter att skruva på.
+#:
+#: Talet är **inte** hämtat ur reglerna. Reglerna säger bara vad som händer vid en
+#: syn; de säger ingenting om vad ett påstående som ingen synar är värt. Att sätta
+#: ett tal här är alltså ett antagande om bordet, inte en regel. Det är medvetet
+#: hållet fast: maskinens uppgift är att visa vad agenterna gör, inte att hitta den
+#: bästa strategin. Vill man undersöka bluffandet är det här ratten sitter, men
+#: ändra den inte för att "rätta" ett spel som ser fel ut.
 BLUFF_GAIN = 0.5
 
 #: Den platta tron på ``P(synaren vinner | påstående)`` som en agent med
@@ -454,13 +461,22 @@ class BasePolicy:
         # ``shown`` om det är lagligt, annars minsta lagliga höjning.
         safe = shown if shown in legal else legal[-1]
 
+        # Ett sant påstående kan synas utan att synaren vinner: då förlorar synaren
+        # livet och jag vinner det. Värdet är därför synsannolikheten gånger
+        # synarens förlust. Utan den termen jämfördes bluffen mot noll och vann
+        # över ett påstående som i själva verket är bättre.
+        safe_p_called = self._p_called(safe, opponent_factor)
+        safe_gain = safe_p_called * CALL_ODDS[safe].l_lose
+
         best_bluff: int | None = None
-        best_gain = 0.0
+        best_gain = safe_gain
         for cand in legal:
             if rules.compare(cand, shown) <= 0:
                 continue
             p_called = self._p_called(cand, opponent_factor)
-            gain = (1.0 - p_called) * BLUFF_GAIN - p_called * CALL_ODDS[cand].l_lose
+            # Synas bluffen förlorar jag mina egna liv, alltså ``l_win``. ``l_lose``
+            # är synarens förlust, det vill säga min vinst.
+            gain = (1.0 - p_called) * BLUFF_GAIN - p_called * CALL_ODDS[cand].l_win
             if gain > best_gain:
                 best_gain, best_bluff = gain, cand
 

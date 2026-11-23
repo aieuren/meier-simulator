@@ -79,6 +79,33 @@ def test_bluffing_is_not_a_parameter():
     assert len(counts) == 1, f"bluffantalet varierade med profilerna: {counts}"
 
 
+def test_true_bid_is_compared_with_its_own_value(base):
+    """Ett sant påstående är inte värt noll.
+
+    Buggen: ``decide_bid`` satte det säkra påståendet till ``shown`` men gav det
+    aldrig ett värde. Bluffloopen jämförde mot noll, så en bluff som var sämre än
+    sanningen ändå vann. Här krävs att sanningen väljs när den är bättre.
+    """
+    # 52: sant påstående vinner 1 liv när det synas, vilket slår varje bluff.
+    assert base.decide_bid(52).bid == 52
+    # Hela spannet av höga utfall ska stanna på sanningen.
+    for shown in (51, 52, 53, 54, 61, 62, 63, 64, 65, 66):
+        assert base.decide_bid(shown).bid == shown, f"bluffade på {rules.name(shown)}"
+
+
+def test_bluffing_is_limited_to_weak_dice(base):
+    """Bluffen ska bara förekomma på låga tärningar.
+
+    På låga utfall är det sanna påståendet svagt och en bluff höjer ribban. På
+    höga utfall är sanningen redan stark, och då lönar sig ingen bluff. Testet
+    låser att fixen inte bara bytte håll.
+    """
+    bluffar = {
+        shown for shown in rules.RANKING if rules.compare(base.decide_bid(shown).bid, shown) > 0
+    }
+    assert bluffar <= {31, 32, 41, 42, 43}, f"bluffade på {sorted(bluffar)}"
+
+
 def test_never_bids_below_shown_when_it_could_bid_truth(base):
     # Att bjuda under det man ser är aldrig värt något.
     for shown in rules.RANKING:

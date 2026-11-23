@@ -73,6 +73,21 @@ def test_announce_detects_lie():
     assert ann.truth is False
 
 
+def test_lower_bid_under_the_dice_counts_as_true():
+    """Ett påstående under tärningarna är sant, inte en bluff.
+
+    Reglerna: visar tärningarna minst påståendet förlorar synaren. Att säga 31 när
+    man har 52 är alltså sant, bara svagare. Koden krävde förut exakt likhet och
+    märkte det som bluff, vilket blåste upp bluffstatistiken.
+    """
+    agent = make_agent({"bid": 31, "reasoning": "svag sanning"})
+    ann = agent.announce((2, 5))
+    assert ann.shown == 52
+    assert ann.bid == 31
+    assert ann.truth is True
+    assert ann.to_dict()["lie"] is False
+
+
 def test_announce_falls_back_to_truth_on_invalid_bid():
     agent = make_agent({"bid": "trams", "line": "?", "reasoning": ""})
     ann = agent.announce((3, 4))

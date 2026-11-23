@@ -146,6 +146,16 @@ def is_higher(a: int, b: int) -> bool:
     return compare(a, b) > 0
 
 
+def is_true_bid(bid: int, shown: int) -> bool:
+    """Är påståendet sant, alltså högst vad tärningarna visar?
+
+    Ett påstående på eller under tärningarna kan ingen syna utan att förlora, så
+    det är sant. Det gäller även ett *svagare* påstående: att säga 31 när man har
+    52 är sant, bara lägre. Bluff är det bara när påståendet ligger över tärningarna.
+    """
+    return compare(bid, shown) <= 0
+
+
 def next_higher(value: int) -> int | None:
     """Nästa utfall som är strikt högre än ``value`` (eller None om högst)."""
     idx = rank(value)

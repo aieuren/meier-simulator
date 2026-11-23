@@ -467,6 +467,17 @@ Three rules that keep the companion doc honest:
   61, 54, 53, 52, 51, 43, 42, 41, 32, 31. Meier (21) is highest and costs double.
 - Agents must always respond with a JSON object; parsing tolerates code fences
   and surrounding text (`llm.parse_json_object`).
+- `truth` on an announcement means the bid is at or below the dice
+  (`rules.is_true_bid`), not that it equals them. Saying 31 while holding 52 is
+  true, just weaker — a call on it still loses for the caller. Only a bid
+  *above* the dice is a bluff.
+- `decide_bid` values the safe bid as `p_called * l_lose` (the caller loses
+  their lives, I win them). Bluff losses use `l_win` — *my* lives. `l_lose` is
+  the caller's loss, i.e. my gain; swapping them makes bluffs look free.
+- `BLUFF_GAIN` is a fixed assumption about the table, not a rule. Meier's rules
+  say nothing about what an uncalled bid is worth. Do not "fix" it to make the
+  agents play better — the goal is to show what they do, not to find the best
+  strategy.
 - The bid prompt lists every legal bid with its direction against the dice
   (`StrategicAgent._legal_bids_listed`): "högre, alltså bluff", "exakt dina
   tärningar", or "lägre, alltså sant men svagare". Models rank Meier values
