@@ -46,7 +46,7 @@ def test_game_call_resolution_reduces_lives():
     # Spelare A säger 65, spelare B synar. Tärningarna visar 62 -> A förlorar ett liv.
     a = ScriptedAgent("A", [65], [])
     b = ScriptedAgent("B", [11], [("syna", None)])
-    game = Game.new([a, b], seed=0)
+    game = Game.new([a, b])
     # Tvinga fram ett bestämt slag: 6 och 2 -> 62.
     game.roll = lambda: (6, 2)
     winner = game.play()
@@ -58,7 +58,7 @@ def test_game_call_when_shown_higher_loses_caller():
     # A säger 31, B synar. Tärningarna visar 62 -> B (synaren) förlorar ett liv.
     a = ScriptedAgent("A", [31], [])
     b = ScriptedAgent("B", [11], [("syna", None)])
-    game = Game.new([a, b], seed=0)
+    game = Game.new([a, b])
     game.roll = lambda: (6, 2)
     game.play()
     assert game.players[1].lives == 2  # B förlorade ett liv
@@ -68,7 +68,7 @@ def test_game_meier_costs_double():
     # A säger 21 (Meier), B synar. Tärningarna visar 31 -> A förlorar två liv.
     a = ScriptedAgent("A", [21], [])
     b = ScriptedAgent("B", [11], [("syna", None)])
-    game = Game.new([a, b], seed=0)
+    game = Game.new([a, b])
     game.roll = lambda: (3, 1)
     game.play()
     assert game.players[0].lives == 1  # 3 - 2 = 1
@@ -78,7 +78,7 @@ def test_full_loop_forces_bidder_to_raise():
     # B skickar vidare så bägaren går tillbaka till A, som tvingas höja.
     a = ScriptedAgent("A", [62], [])
     b = ScriptedAgent("B", [11], [("skicka", None), ("syna", None)])
-    game = Game.new([a, b], seed=0)
+    game = Game.new([a, b])
     game.roll = lambda: (6, 2)  # -> 62
     game.play()
     log = "\n".join(game.log)
@@ -90,7 +90,7 @@ def test_forced_raise_rerolls_the_dice():
     # Vid tvingad höjning slås tärningarna om, och det nya slaget avgör en syn.
     a = ScriptedAgent("A", [62], [])
     b = ScriptedAgent("B", [11], [("skicka", None), ("syna", None)])
-    game = Game.new([a, b], seed=0)
+    game = Game.new([a, b])
     rolls = iter([(6, 2), (5, 1)])  # först 62, sedan 51 vid omslaget
     game.roll = lambda: next(rolls, (3, 1))  # därefter ny runda
     game.play(max_rounds=1)
@@ -105,7 +105,7 @@ def test_game_terminates_with_passive_agents():
     # Båda skickar alltid; skyddsnätet tvingar fram en syn så spelet tar slut.
     a = ScriptedAgent("A", [], [("skicka", None)] * 500)
     b = ScriptedAgent("B", [], [("skicka", None)] * 500)
-    game = Game.new([a, b], seed=42)
+    game = Game.new([a, b])
     winner = game.play(max_rounds=50)
     assert winner is not None
 
@@ -114,7 +114,7 @@ def test_meier_full_loop_triggers_reroll():
     # A säger Meier (21), B skickar vidare -> bägaren tillbaka, A slår om.
     a = ScriptedAgent("A", [21], [])
     b = ScriptedAgent("B", [11], [("skicka", None), ("syna", None)])
-    game = Game.new([a, b], seed=0)
+    game = Game.new([a, b])
     game.roll = lambda: (2, 1)  # -> 21 (Meier)
     game.play()
     log = "\n".join(game.log)
@@ -132,9 +132,9 @@ def test_bag_goes_to_previous_active_player_every_round():
     from meier.agents.roster import make_players
 
     checks = 0
-    for seed in range(40):
+    for _ in range(40):
         players, _ = make_players(["axel", "berit", "cecilia", "david"])
-        game = Game.new(players, seed=seed)
+        game = Game.new(players)
         game.play()
         names = [p.name for p in game.players]
         out: set[str] = set()
@@ -159,7 +159,7 @@ def test_bag_goes_to_previous_active_player_every_round():
                         if names[(idx - off) % len(names)] not in out
                     )
                 assert starter == expected, (
-                    f"seed {seed}: {loser} förlorade, men {starter} började "
+                    f"{loser} förlorade, men {starter} började "
                     f"(väntat {expected})"
                 )
                 checks += 1
@@ -211,9 +211,9 @@ def test_pass_is_blind_the_dice_never_reach_the_chooser():
             seen_calls.append({"bid": bid, **kw})
             return self._inner.decide(bid, **kw)
 
-    for seed in range(5):
+    for _ in range(5):
         spied = [Spy(p) for p in make_players(["axel", "berit", "cecilia", "david"])[0]]
-        Game.new(spied, seed=seed).play()
+        Game.new(spied).play()
 
     assert len(seen_calls) > 100, "för få beslut för att testet ska betyda något"
     for call in seen_calls:

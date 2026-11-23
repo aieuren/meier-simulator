@@ -57,11 +57,11 @@ class Game:
     on_log: "Callable[[str], None] | None" = None
 
     @classmethod
-    def new(cls, agents: list[MeierPlayerAgent], *, seed: int | None = None) -> "Game":
+    def new(cls, agents: list[MeierPlayerAgent]) -> "Game":
         if len(agents) < 2:
             raise GameError("Meier kräver minst två spelare")
         players = [PlayerState(name=a.name, agent=a) for a in agents]
-        return cls(players=players, rng=random.Random(seed))
+        return cls(players=players)
 
     def _record(self, text: str) -> None:
         self.log.append(text)

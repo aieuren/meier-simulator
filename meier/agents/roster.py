@@ -1,21 +1,31 @@
-"""Spelarregistret: de fyra profilerna som möts i matcherna.
+"""Spelarregistret: de fem profilerna som möts i matcherna.
 
-Spelarens egen profil bor i **parametrarna** (``risk``, ``press``, ``reading``),
-inte i namnet. Namnen är neutrala med flit. En värderande etikett som "Rackar-Rakel"
-säger åt modellen vem den *ska vara*, och då spelar den en karikatyr i stället
-för att spela spelet. Det gör det omöjligt att veta om en profil vinner på sin
-taktik eller på sin etikett. Neutrala namn tar bort den signalen.
+Spelarens egen profil bor i **parametrarna** (``caution``, ``statistics``,
+``unpredictability``, ``reading``), inte i namnet. Namnen är neutrala med flit.
+En värderande etikett som "Rackar-Rakel" säger åt modellen vem den *ska vara*,
+och då spelar den en karikatyr i stället för att spela spelet.
 
-Fyra profiler:
+Fem profiler, byggda som **två baslinjer och tre varianter**:
 
-- **Axel** är grundtaktiken: deterministisk, icke-läsande, utan LLM. Han är den
-  fasta mätstickan de andra jämförs mot (se ``docs/agent-model.md``).
-- **Berit**, **Cecilia** och **David** är samma policykärna med milda
-  profiler ovanpå: försiktig, kalkylerande och djärv. Ingen av dem är så
-  extrem som de gamla rollerna var — de historiska loggarna visade att en
-  extremt pressande profil (``press`` ≈ 0,9) förlorade varje match.
+- **Axel** är grundtaktiken: utan LLM, med ``reading = 0``. Han är den fasta
+  mätstickan de andra jämförs mot.
+- **Berit** har exakt samma parametrar som Axel men använder LLM. Skillnaden
+  mellan dem visar effekten av att byta beslutsmotor från regler till
+  språkmodell — inget annat skiljer dem.
+- **Cecilia**, **David** och **Elsa** lyfter en dimension var: försiktighet,
+  statistik respektive oförutsägbarhet. Alla tre har ``reading = 0,5``, alltså
+  samma läsförmåga som varandra. De jämförs med varandra, inte med baslinjen,
+  eftersom de skiljer sig från baslinjen i två avseenden (den lyfta dimensionen
+  *och* läsförmågan).
 
-Alla fyra går genom samma :class:`~meier.agents.strategic.StrategicAgent`. LLM:en,
+``reading = 0`` betyder att agenten inte använder motståndarnas historik alls.
+Det är därför Axel och Berit får ``reading = 0`` och varianterna ``0,5``.
+
+Bluffandet finns inte som parameter. I Meier måste den som slår alltid höja över
+det som står, och då blir en del påståenden lögner vad spelaren än vill. Bluffen
+är ett nödvändigt ont i spelet, inte en personlighetsegenskap att skruva på.
+
+Alla fem går genom samma :class:`~meier.agents.strategic.StrategicAgent`. LLM:en,
 när den finns, äger draget. Repliken byggs i stället lokalt ur draget, så att
 modellen aldrig behöver hitta på vad spelaren säger. Utan LLM faller agenten
 tillbaka på :class:`~meier.policy.BasePolicy`.
@@ -44,33 +54,52 @@ class Profile:
         return Role(key=self.key, name=self.name, description=self.description, style="")
 
 
-#: Parametrarna är en startpunkt, kalibrerade mot de historiska loggarna och
-#: avsiktligt milda. De justeras när vi utvärderar tillsammans.
+#: Baslinjen: grundtaktiken utan LLM, ingen läsning.
+_BASE = AgentParams(
+    caution=0.50, statistics=0.50, unpredictability=0.20, reading=0.00
+)
+
+#: Varianternas gemensamma läsförmåga. Lika för alla tre, så att deras inbördes
+#: jämförelse bara handlar om den dimension de lyfter.
+_READING = 0.50
+
 ROSTER: dict[str, Profile] = {
     "axel": Profile(
         key="axel",
         name="Axel",
-        description="Grundtaktiken. Fast, läser ingen motståndare och ändrar sig aldrig.",
-        params=AgentParams(risk=0.50, press=0.50, reading=0.00),
+        description="Grundtaktiken. Regelstyrd utan språkmodell, läser ingen motståndare.",
+        params=_BASE,
         uses_llm=False,
     ),
     "berit": Profile(
         key="berit",
         name="Berit",
-        description="Försiktig. Påstår nära sanningen och synar sällan.",
-        params=AgentParams(risk=0.25, press=0.25, reading=0.15),
+        description="Samma grundtaktik som Axel, men besluten fattas av en språkmodell.",
+        params=_BASE,
     ),
     "cecilia": Profile(
         key="cecilia",
         name="Cecilia",
-        description="Kalkylerande. Väger risk mot vinst och läser motståndaren.",
-        params=AgentParams(risk=0.50, press=0.45, reading=0.50),
+        description="Försiktig. Undviker risk och låter andra ta besluten.",
+        params=AgentParams(
+            caution=0.80, statistics=0.50, unpredictability=0.20, reading=_READING
+        ),
     ),
     "david": Profile(
         key="david",
         name="David",
-        description="Djärv. Pressar påståendet högre och tar fler risker än de andra.",
-        params=AgentParams(risk=0.65, press=0.60, reading=0.35),
+        description="Statistisk. Håller sig hårt till sannolikheterna.",
+        params=AgentParams(
+            caution=0.50, statistics=0.80, unpredictability=0.20, reading=_READING
+        ),
+    ),
+    "elsa": Profile(
+        key="elsa",
+        name="Elsa",
+        description="Oförutsägbar. Varierar sitt spel för att vara svår att läsa.",
+        params=AgentParams(
+            caution=0.50, statistics=0.50, unpredictability=0.80, reading=_READING
+        ),
     ),
 }
 
@@ -94,7 +123,10 @@ def make_player(key: str, *, llm=None):
 
     ``llm`` är valfri. Med den äger LLM:en draget; utan den spelar agenten enligt
     ``BasePolicy``. Repliken byggs alltid lokalt ur draget. Axel får aldrig en LLM
-    — han är den deterministiska referensen.
+    — han är referensen utan språkmodell.
+
+    Slumpen bakom ``unpredictability`` skapas inuti agenten. Den behöver ingen
+    yttre styrning: varje spelare ska bete sig olika från gång till gång.
     """
     from .strategic import StrategicAgent
 
@@ -114,10 +146,7 @@ def make_players(keys, *, llm_factory=None):
     ``llm_factory`` kallas en gång per LLM-spelare för att ge var och en sin
     egen klient (så tokenräkningen per spelare hålls åtskild). Axel får ingen.
 
-    En läsande spelare får dessutom en **läsare** med sin egen LLM-klient: det är
-    den som tolkar motståndarnas beteende. Utan klient (``llm_factory=None``)
-    faller läsaren tillbaka på sekreterarens aritmetik, så utvärderingsläget
-    spelar exakt som förut men utan nätverk.
+    Antalet spelare är fritt: ``keys`` får innehålla två eller fler roller.
     """
     from ..opponents import OpponentTracker
 

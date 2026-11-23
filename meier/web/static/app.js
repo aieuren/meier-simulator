@@ -99,8 +99,9 @@ function playerCard(r) {
   div.className = "player-card";
   const p = r.params || {};
   const numbers = [
-    `risk ${Math.round((p.risk ?? 0) * 100)} %`,
-    `press ${Math.round((p.press ?? 0) * 100)} %`,
+    `försiktighet ${Math.round((p.caution ?? 0) * 100)} %`,
+    `statistik ${Math.round((p.statistics ?? 0) * 100)} %`,
+    `oförutsägbarhet ${Math.round((p.unpredictability ?? 0) * 100)} %`,
     `läsning ${Math.round((p.reading ?? 0) * 100)} %`,
   ].join(" · ");
   const style = r.style_text || numbers;
@@ -246,7 +247,7 @@ async function newSession() {
     const res = await fetch("/api/session/new", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ roles: ["axel", "berit", "cecilia", "david"] }),
+      body: JSON.stringify({ roles: ["axel", "berit", "cecilia", "david", "elsa"] }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || "Fel");
@@ -736,8 +737,6 @@ async function runMatchSeries() {
   const count = parseInt($("matchCount").value, 10) || 1;
   const lives = parseInt($("matchLives").value, 10) || 3;
   const workers = parseInt($("matchWorkers").value, 10) || 1;
-  const seedRaw = $("matchSeed").value.trim();
-  const baseSeed = seedRaw === "" ? null : parseInt(seedRaw, 10);
   const checkIn = $("matchCheckIn").checked;
 
   btn.disabled = true;
@@ -749,7 +748,7 @@ async function runMatchSeries() {
     const res = await fetch("/api/matches/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ count, lives, workers, base_seed: baseSeed, check_in: checkIn }),
+      body: JSON.stringify({ count, lives, workers, check_in: checkIn }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));

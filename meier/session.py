@@ -189,22 +189,18 @@ class Session:
         cls,
         players: list[MeierPlayerAgent],
         *,
-        seed: int | None = None,
         lives: int = 3,
     ) -> "Session":
         if len(players) < 2:
             raise ValueError("En Meier-session kräver minst två spelare")
-        rng = random.Random(seed)
-        # Slumpen avgör ordningen på spelarna (och därmed vem som börjar).
-        order = list(range(len(players)))
-        rng.shuffle(order)
         session = cls(
             players=players,
-            order=order,
+            order=list(range(len(players))),
             lives=[lives] * len(players),
-            rng=rng,
         )
-        session._prepare_round(starter=order[0])
+        # Slumpen avgör ordningen på spelarna (och därmed vem som börjar).
+        session.rng.shuffle(session.order)
+        session._prepare_round(starter=session.order[0])
         return session
 
     # -- Hjälpare -----------------------------------------------------------

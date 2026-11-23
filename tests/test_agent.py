@@ -144,8 +144,8 @@ def test_decide_cannot_raise_over_meier():
     assert decision.bid is None
 
 
-def test_roster_has_the_four_players():
-    assert set(ROSTER) == {"axel", "berit", "cecilia", "david"}
+def test_roster_has_the_five_players():
+    assert set(ROSTER) == {"axel", "berit", "cecilia", "david", "elsa"}
     names = {p.name for p in ROSTER.values()}
     assert len(names) == len(ROSTER)
 
@@ -154,6 +154,8 @@ def test_axel_is_the_llm_free_base_model():
     axel = ROSTER["axel"]
     assert axel.uses_llm is False
     assert axel.params.reading == 0.0
+    # Axel och Berit delar taktik; bara beslutsmotorn skiljer dem.
+    assert axel.params == ROSTER["berit"].params
 
 
 def test_get_profile_unknown_raises():

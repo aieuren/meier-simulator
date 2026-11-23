@@ -53,7 +53,7 @@ def _cmd_decide(args: argparse.Namespace) -> int:
 
 def _cmd_play(args: argparse.Namespace) -> int:
     agents, _tracker = make_players(args.roles)
-    game = Game.new(agents, seed=args.seed)
+    game = Game.new(agents)
     game.on_log = lambda line: print(line, flush=True)
     winner = game.play()
     print(f"\nVinnare: {winner.name}")
@@ -97,7 +97,7 @@ def _print_entry(entry) -> None:
 def _cmd_session(args: argparse.Namespace) -> int:
     roles = args.roles or role_keys()
     players, tracker = make_players(roles)
-    session = Session.new(players, seed=args.seed)
+    session = Session.new(players)
     session.tracker = tracker
 
     print("Spelordning: " + " → ".join(players[i].name for i in session.order))
@@ -156,7 +156,6 @@ def _cmd_match(args: argparse.Namespace) -> int:
         run_matches(
             roles,
             args.count,
-            base_seed=args.seed,
             lives=args.lives,
             workers=args.workers,
             with_llm=not args.no_llm,
@@ -216,14 +215,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_play = sub.add_parser("play", help="Spela ett helt spel med flera agenter")
     p_play.add_argument("roles", nargs="+", choices=role_keys())
-    p_play.add_argument("--seed", type=int, default=None)
     p_play.set_defaults(func=_cmd_play)
 
     p_sess = sub.add_parser(
         "session", help="Interaktiv session: OK-grind på tärningsslaget och logg"
     )
     p_sess.add_argument("roles", nargs="*", choices=role_keys())
-    p_sess.add_argument("--seed", type=int, default=None)
     p_sess.set_defaults(func=_cmd_session)
 
     p_match = sub.add_parser(
@@ -232,7 +229,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_match.add_argument("roles", nargs="*", choices=role_keys())
     p_match.add_argument("--count", type=int, default=10, help="Antal matcher")
     p_match.add_argument("--out", default="matches.jsonl", help="Utfil (JSONL)")
-    p_match.add_argument("--seed", type=int, default=None, help="Basfrö")
     p_match.add_argument("--lives", type=int, default=3)
     p_match.add_argument(
         "--workers", type=int, default=1, help="Antal matcher som spelas samtidigt"

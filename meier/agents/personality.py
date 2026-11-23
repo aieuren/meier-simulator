@@ -32,20 +32,28 @@ def _scale(value: float) -> str:
 
 
 #: Vad respektive nivå betyder i ord, per egenskap.
-_RISK = {
-    "mycket låg": "Du synar nästan bara när du är säker, och lägger dig hellre än chansar.",
-    "låg": "Du undviker att förlora liv och synar helst när du är ganska säker.",
+_CAUTION = {
+    "mycket låg": "Du tar stora risker och synar hellre än lägger dig.",
+    "låg": "Du tar gärna chansen även när det kan kosta ett liv.",
     "medel": "Du väger chansen att vinna mot risken att förlora ett liv.",
-    "hög": "Du tar gärna chansen även när det kan kosta ett liv.",
-    "mycket hög": "Du synar och chansar nästan vad som helst för att vinna rundan.",
+    "hög": "Du undviker att förlora liv och synar helst när du är ganska säker.",
+    "mycket hög": "Du synar nästan bara när du är säker, och lägger dig hellre än chansar.",
 }
 
-_PRESS = {
-    "mycket låg": "Du påstår nästan alltid sanningen och bluffar i stort sett aldrig.",
-    "låg": "Du påstår nära vad tärningarna visar och bluffar sällan.",
-    "medel": "Du bluffar ibland, mest när det är billigt att bli synad.",
-    "hög": "Du pressar påståendet uppåt och bluffar ofta för att sätta press.",
-    "mycket hög": "Du påstår hårt över tärningarna nästan varje gång.",
+_STATISTICS = {
+    "mycket låg": "Du spelar på känsla och bryr dig inte om hur sannolikt något är.",
+    "låg": "Du lutar åt känslan och räknar sällan på oddsen.",
+    "medel": "Du väger in sannolikheterna när du tvekar.",
+    "hög": "Du håller dig till sannolikheterna och låter dem styra dina val.",
+    "mycket hög": "Du räknar hårt på sannolikheterna och följer dem även när känslan säger annat.",
+}
+
+_UNPREDICTABILITY = {
+    "mycket låg": "Du spelar likadant varje gång och är lätt att läsa.",
+    "låg": "Du varierar dig sällan och håller dig till ditt invanda mönster.",
+    "medel": "Du varierar ditt spel då och då så att det inte blir förutsägbart.",
+    "hög": "Du byter taktik ofta för att motståndarna inte ska kunna läsa dig.",
+    "mycket hög": "Du byter spel hela tiden; ingen ska kunna förutse vad du gör härnäst.",
 }
 
 _READING = {
@@ -59,17 +67,23 @@ _READING = {
 
 def describe(params: AgentParams) -> str:
     """Beskriv spelarens sätt att spela, i löpande svensk text."""
-    risk, press, reading = _level(params.risk), _level(params.press), _level(params.reading)
+    caution = _level(params.caution)
+    statistics = _level(params.statistics)
+    unpredictability = _level(params.unpredictability)
+    reading = _level(params.reading)
     return (
-        f"- Risktagande: {risk} ({_scale(params.risk)} av 100). {_RISK[risk]}\n"
-        f"- Press och bluff: {press} ({_scale(params.press)} av 100). {_PRESS[press]}\n"
+        f"- Försiktighet: {caution} ({_scale(params.caution)} av 100). {_CAUTION[caution]}\n"
+        f"- Statistik: {statistics} ({_scale(params.statistics)} av 100). "
+        f"{_STATISTICS[statistics]}\n"
+        f"- Oförutsägbarhet: {unpredictability} "
+        f"({_scale(params.unpredictability)} av 100). {_UNPREDICTABILITY[unpredictability]}\n"
         f"- Läsning av motståndare: {reading} ({_scale(params.reading)} av 100). "
         f"{_READING[reading]}"
     )
 
 
 def describe_opponent(
-    *, kind: str, risk: float, press: float, confidence: float
+    *, kind: str, call_tendency: float, bluff_tendency: float, confidence: float
 ) -> str:
     """Beskriv en motståndare som spelaren har läst, i ord.
 
@@ -84,5 +98,6 @@ def describe_opponent(
         hedge = "Du har sett henne spela ett tag nu."
     return (
         f"{hedge} Hon verkar vara av typen \"{kind}\", med "
-        f"{_level(risk)} riskbenägenhet och {_level(press)} benägenhet att pressa."
+        f"{_level(call_tendency)} benägenhet att syna och "
+        f"{_level(bluff_tendency)} benägenhet att bluffa."
     )

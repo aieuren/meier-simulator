@@ -27,9 +27,9 @@ roller kan spela hela spel mot varandra.
   - Matchserie – kör många matcher och få statistik + ett JSONL-protokoll för analys.
   - Analys – ladda upp en eller flera JSONL-filer och ställ frågor mot materialet.
     Svaren kommer från en LLM och kan innehålla diagram (stapel, linje eller tabell).
-- Fyra spelare – Axel, Berit, Cecilia och David. Berit, Cecilia och David är
-  LLM-agenter som fattar sina egna beslut inom spelets regler. Axel är den
-  deterministiska referensen utan LLM.
+- Fem spelare – Axel, Berit, Cecilia, David och Elsa. Fyra av dem är
+  LLM-agenter som fattar sina egna beslut inom spelets regler. Axel är
+  referensen utan LLM.
 - Interaktiv spelsession – fyra spelare spelar mot varandra i ett fullt flöde
   fram till en syn. Slumpen avgör ordningen och vem som börjar. Varje steg
   bekräftas med Ett drag, eller så körs flödet vidare med Till syn
@@ -128,20 +128,27 @@ python -m meier.cli summarize matches.jsonl
 
 ### Roller
 
-Spelarens egen profil bor i tre parametrar, inte i namnet. Skalan är 0–1.
+Spelarens egen profil bor i fyra parametrar, inte i namnet. Skalan är 0–1.
 Namnen på parametrarna är korta; här är vad de står för:
 
 | Parameter | Enkelt namn | Betydelse |
 |---|---|---|
-| `risk` | Riskbenägenhet | Hur gärna spelaren synar och tar en osäker chans |
-| `press` | Press | Hur ofta spelaren bluffar, och hur högt den lägger blinda påståenden |
+| `caution` | Försiktighet | Hur gärna spelaren undviker risk. Hög försiktighet ger färre synar |
+| `statistics` | Statistik | Hur mycket spelaren styr sina beslut av sannolikheter |
+| `unpredictability` | Oförutsägbarhet | Hur mycket spelaren varierar sitt spel för att vara svår att läsa |
 | `reading` | Läsförmåga | Hur mycket spelaren använder information om andras tidigare spel |
+
+Bluffandet är **inte** en parameter. I Meier måste den som slår alltid höja över
+det som står, och då blir en del påståenden lögner vad spelaren än vill. Bluffen
+är ett nödvändigt ont i spelet, inte en personlighetsegenskap att skruva på.
+Vikten av att motståndaren lägger sig är därför en fast konstant (`BLUFF_GAIN`).
 
 Skilj på tre saker:
 
-- Egen profil — spelarens egna `risk`, `press` och `reading`.
-- Motståndarprofil — spelarens *gissning* om en annan spelares `risk` och
-  `press`, byggd enbart på offentligt beteende (`OpponentProfile`).
+- Egen profil — spelarens egna fyra parametrar.
+- Motståndarprofil — spelarens *gissning* om en annan spelares benägenhet att
+  syna och att bluffa, byggd enbart på offentligt beteende
+  (`OpponentProfile`).
 - Motståndartyp — kort etikett som sammanfattar motståndarprofilen,
   exempelvis "bluffbenägen".
 
@@ -150,25 +157,38 @@ En spelare får aldrig veta en motståndares verkliga parametrar. Läsaren
 
 `BASE` kallas grundtaktik: den kalla grundstrategin utan läsning.
 
-Registret (`ROSTER`) sätter värdena:
+Registret (`ROSTER`) sätter värdena. Det är två baslinjer och tre varianter:
 
-| Nyckel | Namn | Risk | Press | Läsning | LLM | Profil |
-|---|---|---:|---:|---:|---|---|
-| `axel` | Axel | 0,50 | 0,50 | 0,00 | nej | Grundtaktiken; fast mätsticka |
-| `berit` | Berit | 0,25 | 0,25 | 0,15 | ja | Försiktig; påstår nära sanningen |
-| `cecilia` | Cecilia | 0,50 | 0,45 | 0,50 | ja | Kalkylerande; läser motståndaren |
-| `david` | David | 0,65 | 0,60 | 0,35 | ja | Djärv; pressar påståendet högre |
+| Nyckel | Namn | Försiktighet | Statistik | Oförutsägbarhet | Läsning | LLM | Profil |
+|---|---|---:|---:|---:|---:|---|---|
+| `axel` | Axel | 0,50 | 0,50 | 0,20 | 0,00 | nej | Grundtaktiken; referens utan LLM |
+| `berit` | Berit | 0,50 | 0,50 | 0,20 | 0,00 | ja | Samma taktik som Axel, men med LLM |
+| `cecilia` | Cecilia | 0,80 | 0,50 | 0,20 | 0,50 | ja | Lyfter försiktigheten |
+| `david` | David | 0,50 | 0,80 | 0,20 | 0,50 | ja | Lyfter statistiken |
+| `elsa` | Elsa | 0,50 | 0,50 | 0,80 | 0,50 | ja | Lyfter oförutsägbarheten |
+
+Axel och Berit har exakt samma parametrar. Skillnaden mellan dem är bara
+beslutsmotorn: regler mot språkmodell. Cecilia, David och Elsa har samma
+läsförmåga som varandra, så deras inbördes jämförelse handlar bara om den
+dimension de lyfter.
 
 Samma tabell i klartext, som webbappen visar den:
 
-- Axel – Synar ibland, bluffar lagom mycket och läser ingen motståndare
-  (risk 50 %, press 50 %, läsning 0 %).
-- Berit – Synar sällan, bluffar sällan och läser motståndarna lite
-  (risk 25 %, press 25 %, läsning 15 %).
-- Cecilia – Synar ibland, bluffar lagom mycket och läser motståndarna
-  (risk 50 %, press 45 %, läsning 50 %).
-- David – Synar ofta, bluffar ofta och läser motståndarna
-  (risk 65 %, press 60 %, läsning 35 %).
+- Axel – Väger risk mot vinst, väger in sannolikheter och spelar förutsägbart;
+  läser ingen motståndare
+  (försiktighet 50 %, statistik 50 %, oförutsägbarhet 20 %, läsning 0 %).
+- Berit – Väger risk mot vinst, väger in sannolikheter och spelar förutsägbart;
+  läser ingen motståndare
+  (försiktighet 50 %, statistik 50 %, oförutsägbarhet 20 %, läsning 0 %).
+- Cecilia – Undviker risk nästan alltid, väger in sannolikheter och spelar
+  förutsägbart; läser motståndarna
+  (försiktighet 80 %, statistik 50 %, oförutsägbarhet 20 %, läsning 50 %).
+- David – Väger risk mot vinst, räknar hårt på sannolikheterna och spelar
+  förutsägbart; läser motståndarna
+  (försiktighet 50 %, statistik 80 %, oförutsägbarhet 20 %, läsning 50 %).
+- Elsa – Väger risk mot vinst, väger in sannolikheter och byter spel hela
+  tiden; läser motståndarna
+  (försiktighet 50 %, statistik 50 %, oförutsägbarhet 80 %, läsning 50 %).
 
 Klartexten räknas fram ur siffrorna av `describe_params()`. Den är en
 presentation av tabellen, inte en egen sanning: ändrar du en parameter ändras
@@ -179,8 +199,9 @@ hur en människa brukar spela, och beskrivningen går in i LLM:ens prompt
 (`meier/agents/personality.py`). Modellen väljer sedan själv bland de lagliga
 dragen. Reglerna ägs av koden (`meier/legality.py`); taktiken ägs av modellen.
 
-Axel har ingen LLM med flit — han är den deterministiska referensen som de
-andra mäts mot.
+Axel har ingen LLM med flit — han är referensen som de andra mäts mot. Hans
+taktik innehåller ingen språkmodell. Däremot behöver hans enskilda drag inte
+vara reproducerbara ner på slumpnivå.
 
 Hela modellen, med formler och mätvärden, står i
 [`docs/agent-model.md`](docs/agent-model.md).

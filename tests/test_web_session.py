@@ -23,7 +23,7 @@ def _client(monkeypatch) -> TestClient:
 
 def test_session_end_plays_whole_match(monkeypatch):
     client = _client(monkeypatch)
-    start = client.post("/api/session/new", json={"seed": 11})
+    start = client.post("/api/session/new", json={})
     assert start.status_code == 200
     assert start.json()["phase"] == "awaiting_ok"
 

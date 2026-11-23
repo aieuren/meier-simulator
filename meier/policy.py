@@ -1,11 +1,11 @@
-"""Deterministisk policy-kärna för Meier.
+"""Regelstyrd policy-kärna för Meier.
 
 Den här modulen är ryggraden i agentmodellen (se ``docs/agent-model.md``).
 Den räknar fram ett drag ur speltillståndet och agentens parametrar. Den är
-medvetet **deterministisk och frikopplad från LLM:en**: LLM:en får föreslå och
-motivera, men draget som spelas ägs av policyn. Annars går det inte att avgöra
-om en profil vinner på grund av sina parametrar, på promptformuleringen eller
-på slumpen.
+medvetet **frikopplad från LLM:en**: LLM:en får föreslå och motivera, men
+draget som spelas ägs av policyn. Annars går det inte att avgöra om en profil
+vinner på grund av sina parametrar, på promptformuleringen eller på slumpen.
+Slumpen i sig är liten och styrs av ``unpredictability``.
 
 Tre delar:
 
@@ -23,6 +23,7 @@ liv, inte "poäng nästa steg".
 
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass, field
 from itertools import product
 
@@ -119,27 +120,37 @@ CALL_ODDS: dict[int, CallOdds] = {value: _call_odds(value) for value in rules.RA
 
 @dataclass(frozen=True)
 class AgentParams:
-    """En agents beteendeprofil.
+    """En agents beteendeprofil: fyra oberoende dimensioner på skalan 0–1.
 
-    ``risk``    – hur mycket säkerhet som offras för chansen att vinna mer.
-    ``press``   – hur ofta agenten bluffar/höjer och pressar motståndaren.
-    ``reading`` – hur mycket motståndarnas tidigare beteende får styra.
+    ``caution``           – hur gärna agenten undviker risk och låter andra ta
+                            besluten. Hög försiktighet höjer tröskeln för att syna.
+    ``statistics``        – hur mycket agenten styr sina beslut av sannolikheter.
+                            Noll betyder en enda fast tro; ett betyder fullt ut
+                            den påståendespecifika tabellen.
+    ``unpredictability``  – hur mycket agenten varierar sitt spel för att vara
+                            svår att läsa.
+    ``reading``           – hur mycket motståndarnas tidigare beteende får styra.
+
+    Bluffandet är **inte** en parameter. I Meier måste man höja över det som
+    står, och då blir en del påståenden lögner vad man än vill. Bluffen är ett
+    nödvändigt ont i spelet, inte en personlighetsegenskap att skruva på.
     """
 
-    risk: float = 0.5
-    press: float = 0.5
+    caution: float = 0.5
+    statistics: float = 0.5
+    unpredictability: float = 0.2
     reading: float = 0.0
 
     def __post_init__(self) -> None:
-        for name in ("risk", "press", "reading"):
+        for name in ("caution", "statistics", "unpredictability", "reading"):
             v = getattr(self, name)
             if not 0.0 <= v <= 1.0:
                 raise ValueError(f"{name} måste vara mellan 0 och 1, fick {v}")
 
 
-#: De fyra spelarna och deras egna profiler bor i ``meier/agents/roster.py``.
-#: Parametrarna (risk/press/reading) är den enda platsen profilen får bo —
-#: inte i ett namn. Se registret för värdena och motiveringen.
+#: Spelarna och deras egna profiler bor i ``meier/agents/roster.py``.
+#: Parametrarna är den enda platsen profilen får bo — inte i ett namn. Se
+#: registret för värdena och motiveringen.
 
 
 # -- Beslut -----------------------------------------------------------------
@@ -204,15 +215,36 @@ CALL_PRIOR: dict[int, float] = {
     52: 0.319, 51: 0.399, 43: 0.240, 42: 0.287, 41: 0.273, 32: 0.331, 31: 0.000,
 }
 
-#: Tröghetströskel för synen: ``inertia = CALL_INERTIA_BASE + CALL_INERTIA_RISK * risk``.
+#: Tröghetströskel för synen, i liv:
+#: ``inertia = CALL_INERTIA_BASE + CALL_INERTIA_CAUTION * (0.5 - caution)``.
 #:
-#: En syn som ligger nära break-even är ett lotteri om livet, och i Meier räknas
-#: överlevnad, inte vunna rundor. Tröskeln gör agenten konservativ; en högre
-#: ``risk`` sänker den och synar mer. Tröskeln är den *andra* hälften av samma
-#: avvägning som tabellen: den håller nere marginal-synar som tabellen ensam
-#: skulle bjuda in till.
-CALL_INERTIA_BASE = 0.10
-CALL_INERTIA_RISK = 0.06
+#: Tröskeln är det försprång en syn får: den läggs på synens värde, så ett högre
+#: tal betyder att agenten synar oftare. En försiktig agent ska syna *mindre*,
+#: alltså får ``caution`` dra åt andra hållet. Vid ``caution = 0,5`` blir värdet
+#: exakt ``CALL_INERTIA_BASE``, så baslinjen spelar som förut.
+CALL_INERTIA_BASE = 0.13
+CALL_INERTIA_CAUTION = 0.10
+
+#: Värdet av att ett påstående står obesvarat, i liv. **Fast**, inte en parameter.
+#:
+#: Bluffen är ett nödvändigt ont i Meier: den som slår måste alltid säga ett högre
+#: påstående, och då blir en del påståenden lögnar vad spelaren än vill. Därför finns
+#: det ingen ``press``-parameter att skruva på. Talet är det samma som den gamla
+#: baslinjen använde (``press = 0,5``), så en agent med ``caution = 0,5`` spelar
+#: precis som förut.
+BLUFF_GAIN = 0.5
+
+#: Den platta tron på ``P(synaren vinner | påstående)`` som en agent med
+#: ``statistics = 0`` använder. Medelvärdet av ``CALL_PRIOR``: agenten bortser från
+#: påståendenivån och tror samma sak oavsett vad som står.
+FLAT_Q = 0.45
+
+#: Hur stort bruset från ``unpredictability`` är, i liv, vid värdet 1,0.
+#:
+#: Värdena som jämförs ligger typiskt mellan −0,5 och +0,5 liv. Bruset måste vara
+#: stort nog att byta ut två nästan lika bra drag, men litet nog att aldrig göra
+#: ett uppenbart dåligt drag. 0,15 liv gör precis det.
+UNPREDICTABILITY_SPAN = 0.15
 
 #: Golv och lutning för ``P(påståendet blir synat)``. Högre påståenden synas oftare. Golvet
 #: hindrar att ett lågt påstående ser ut att vara gratis att bluffa till.
@@ -228,14 +260,48 @@ SAFE_POSITION = 0.25
 
 @dataclass
 class BasePolicy:
-    """Stark, fryst, icke-läsande referensagent.
+    """Stark, icke-läsande referensagent.
 
     Den maximerar förväntad överlevnad och har en enda global tro ``q`` på
     motståndarens bluffbenägenhet. Den läser aldrig enskilda motståndare.
+
+    ``rng`` styr bara hur mycket agenten varierar sitt spel
+    (``unpredictability``). Varje policy får en egen slumptalare.
     """
 
-    params: AgentParams = field(default_factory=lambda: AgentParams(0.5, 0.5, 0.0))
+    params: AgentParams = field(default_factory=AgentParams)
     q: float = DEFAULT_Q
+    rng: random.Random = field(default_factory=random.Random)
+
+    # -- Trons beroende av påståendenivån ----------------------------------
+    def belief(self, bid: int, opponent_q: float | None = None) -> float:
+        """Tron på att en syn vinner, vägd enligt ``statistics``.
+
+        ``statistics = 1`` ger fullt ut den påståendespecifika tabellen
+        (eller motståndarens skattning, om en sådan finns). ``statistics = 0``
+        ger en enda platt tro: agenten struntar i vilket påstående som står och
+        tror samma sak varje gång. Däremellan blandas de två linjärt.
+        """
+        specific = CALL_PRIOR[bid] if opponent_q is None else opponent_q
+        weight = self.params.statistics
+        return weight * specific + (1.0 - weight) * FLAT_Q
+
+    def inertia(self) -> float:
+        """Försprånget en syn får. ``caution`` minskar det, alltså synas mindre."""
+        return CALL_INERTIA_BASE + CALL_INERTIA_CAUTION * (0.5 - self.params.caution)
+
+    # -- Oförutsägbarhet ---------------------------------------------------
+    def jitter(self) -> float:
+        """Ett litet avvikelsebelopp som gör draget svårare att läsa.
+
+        Agenten väljer inte slumpmässigt bland alternativen — det vore att kasta
+        bort spelet. Den lägger i stället ett brus på sina värderingar, så att två
+        nästan lika bra drag ibland byts ut mot varandra. Med
+        ``unpredictability = 0`` blir bruset noll och agenten helt mekanisk.
+        """
+        if self.params.unpredictability <= 0.0:
+            return 0.0
+        return self.rng.uniform(-1.0, 1.0) * self.params.unpredictability * UNPREDICTABILITY_SPAN
 
     # -- Beslut 3: syna eller skicka ------------------------------------
     def decide_call(
@@ -244,7 +310,8 @@ class BasePolicy:
         """Ska agenten syna påståendet ``bid``? Agenten ser inte sina tärningar här.
 
         ``opponent_q`` är en motståndarspecifik bluffskattning (för läsande
-        agenter). Utan den används den **påståendespecifika** tron ``CALL_PRIOR[bid]``.
+        agenter). Utan den används den **påståendespecifika** tron ``CALL_PRIOR[bid]``,
+        blandad med den platta tron enligt ``statistics``.
 
         Synen avgörs av det förväntade livsöverskottet, med en liten
         tröghetströskel: att skicka vidare ger noll chans att vinna rundan, så
@@ -254,13 +321,13 @@ class BasePolicy:
         :meth:`decide_response`, som även väger in att slå.
         """
         odds = CALL_ODDS[bid]
-        q = CALL_PRIOR[bid] if opponent_q is None else opponent_q
+        q = self.belief(bid, opponent_q)
         ev = odds.ev_call(q)
         # En syn är bara värd att ta om livsöverskottet är klart positivt. En syn
         # som ligger nära break-even är ett lotteri om livet, och i Meier är det
         # *att överleva* som räknas — inte att vinna enskilda rundor. Tröskeln
-        # ``inertia`` gör agenten konservativ, och ``risk`` sänker den.
-        inertia = CALL_INERTIA_BASE + CALL_INERTIA_RISK * self.params.risk
+        # ``inertia`` gör agenten konservativ, och ``caution`` höjer den.
+        inertia = self.inertia()
         if ev > -inertia:
             return Decision(
                 "syna",
@@ -293,26 +360,28 @@ class BasePolicy:
 
         Ingen av de tre tvingas fram. ``slå`` väljs bara när det slår båda
         andra, och ``syna`` behåller sin tröghetströskel så att en syn nära
-        break-even inte blir ett lotteri om livet.
+        break-even inte blir ett lotteri om livet. ``unpredictability`` lägger
+        ett litet brus på värdena, så nästan lika bra drag ibland byts ut.
         """
         odds = CALL_ODDS[bid]
-        q = CALL_PRIOR[bid] if opponent_q is None else opponent_q
+        q = self.belief(bid, opponent_q)
 
         call_ev = odds.ev_call(q)
-        inertia = CALL_INERTIA_BASE + CALL_INERTIA_RISK * self.params.risk
+        inertia = self.inertia()
+        noise = self.jitter()
 
         hold_ev = self._hold_value(bid)
 
         options: list[tuple[str, float, str]] = [
-            ("syna", call_ev + inertia, f"EV={call_ev:+.3f} liv (tröskel −{inertia:.3f})"),
-            ("skicka", hold_ev, f"hållarvärde={hold_ev:+.3f} liv"),
+            ("syna", call_ev + inertia + noise, f"EV={call_ev:+.3f} liv (tröskel −{inertia:.3f})"),
+            ("skicka", hold_ev - noise, f"hållarvärde={hold_ev:+.3f} liv"),
         ]
 
         shake = self.decide_raise(bid)
         if shake.action == "slå" and shake.bid is not None:
             shake_ev = self._hold_value(shake.bid)
             options.append(
-                ("slå", shake_ev, f"slå till {rules.name(shake.bid)}: {shake_ev:+.3f} liv")
+                ("slå", shake_ev + noise, f"slå till {rules.name(shake.bid)}: {shake_ev:+.3f} liv")
             )
 
         action, _, why = max(options, key=lambda opt: opt[1])
@@ -336,14 +405,18 @@ class BasePolicy:
         """Vilket påstående ska agenten säga när den slår (blint) över ``bid``?
 
         Eftersom agenten inte ser sina tärningar är den minsta lagliga höjningen
-        säkrast (minst chans att tärningarna visar lägre). ``press`` driver påståendet
-        högre för att sätta motståndaren under press.
+        säkrast (minst chans att tärningarna visar lägre). En oförutsägbar agent
+        hoppar ibland högre ändå, just för att den inte ska gå att läsa: en
+        motståndare som vet att budet alltid är det minsta kan planera efter det.
         """
         higher = rules.higher_options(bid)
         if not higher:
             return Decision("syna", reason="Inget högre påstående finns; enda svar är att syna.")
         # higher[0] är högst (Meier), higher[-1] är minsta höjning.
-        steps = int(round(self.params.press * (len(higher) - 1)))
+        steps = 0
+        if self.params.unpredictability > 0.0:
+            if self.rng.random() < self.params.unpredictability:
+                steps = self.rng.randint(1, len(higher) - 1) if len(higher) > 1 else 0
         new_bid = higher[-(steps + 1)]
         return Decision("slå", bid=new_bid, reason=f"Slår till {rules.name(new_bid)}.")
 
@@ -363,8 +436,9 @@ class BasePolicy:
         Ett påstående **över** ``shown`` är en bluff. Den vinner bara om motståndaren
         lägger sig (sannolikhet ``1 − p_called``) och förlorar liv om den synas.
         En bluff lönar sig därför bara när den är *billig att bli synad på* — alltså
-        på påståendenivåer som sällan synas. ``press`` väger vinsten av att lägga sig;
-        vid låg press påstår agenten sanning, vid hög press tar den chansen.
+        på påståendenivåer som sällan synas. Vikten av att motståndaren lägger sig
+        är den fasta ``BLUFF_GAIN``: bluffen är ett nödvändigt ont i Meier, inte en
+        personlighetsegenskap.
 
         ``previous_bid`` är påståendet som ligger när spelaren måste höja. Utan det
         valde agenten påståenden som om bordet var tomt, och motorn fick sedan tyst
@@ -393,9 +467,16 @@ class BasePolicy:
             if rules.compare(cand, shown) <= 0:
                 continue
             p_called = self._p_called(cand, opponent_factor)
-            gain = (1.0 - p_called) * self.params.press - p_called * CALL_ODDS[cand].l_lose
+            gain = (1.0 - p_called) * BLUFF_GAIN - p_called * CALL_ODDS[cand].l_lose
             if gain > best_gain:
                 best_gain, best_bluff = gain, cand
+
+        # En oförutsägbar spelare tar ibland den säkra vägen även när en bluff
+        # räknas som marginellt bättre, så att motståndaren inte kan läsa
+        # mönstret "bluffar bara på höga påståenden".
+        if best_bluff is not None:
+            if self.rng.random() < self.params.unpredictability * 0.25:
+                best_bluff = None
 
         if best_bluff is not None:
             return Decision(
@@ -423,7 +504,7 @@ class BasePolicy:
         if cmp <= 0:
             return SAFE_BASE + _strength(bid) * SAFE_POSITION
         p_called = self._p_called(bid)
-        return (1.0 - p_called) * self.params.press - p_called * CALL_ODDS[bid].l_lose
+        return (1.0 - p_called) * BLUFF_GAIN - p_called * CALL_ODDS[bid].l_lose
 
     def _p_called(self, bid: int, opponent_factor: float = 1.0) -> float:
         """Uppskattad sannolikhet att ett påstående blir synat.
@@ -434,7 +515,7 @@ class BasePolicy:
         lågt påstående ut att vara gratis, och agenten bluffar ihjäl sig.
 
         ``opponent_factor`` skalar uppskattningen med motståndarens kända
-        synbenägenhet (se :meth:`OpponentTracker.risk_factor`). Den som möter en
+        synbenägenhet (se :meth:`OpponentTracker.call_factor`). Den som möter en
         synbenägen motståndare räknar med att bli synad oftare — och bluffar
         därför mindre.
         """
@@ -443,11 +524,15 @@ class BasePolicy:
 
     # -- Beslut 4: tvingad höjning (titta eller blint) ------------------
     def decide_forced(self, bid: int) -> Decision:
-        """Titta på de nya tärningarna eller påstå blint? Fattas utan att titta."""
+        """Titta på de nya tärningarna eller påstå blint? Fattas utan att titta.
+
+        Att titta är tryggare: då kan spelaren påstå något tärningarna faktiskt
+        bär. Att påstå blint döljer informationen för bordet. En försiktig spelare
+        väljer det trygga, en oförutsägbar väljer ibland det som inte går att läsa.
+        """
         if not rules.higher_options(bid):
             return Decision("syna", reason="Meier är högst; kan inte höja.")
-        # En pressande profil påstår hellre blint (döljer information);
-        # en försiktig profil tittar hellre (kan påstå nära sanningen).
-        if self.params.press > self.params.risk:
-            return Decision("blint", reason="Pressande profil: påstår blint.")
+        if self.params.unpredictability > 0.0:
+            if self.rng.random() < self.params.unpredictability * 0.5:
+                return Decision("blint", reason="Oförutsägbar profil: påstår blint.")
         return Decision("titta", reason="Försiktig profil: tittar på tärningarna.")

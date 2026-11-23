@@ -90,29 +90,42 @@ tärningarna visar påståendet eller mindre, och det är just det en syn avgör
 
 ---
 
-## De fyra spelarna
+## De fem spelarna
 
-Spelarens egen profil sitter i tre parametrar, inte i namnet. Varje parameter
+Spelarens egen profil sitter i fyra parametrar, inte i namnet. Varje parameter
 går från 0 till 1.
 
-- `risk` – riskbenägenhet: hur gärna spelaren synar och tar en chans
-- `press` – press: hur hårt spelaren driver upp sina påståenden, alltså hur
-  ofta hen bluffar och hur högt hen lägger sig när hen slår
+- `caution` – försiktighet: hur gärna spelaren undviker risk. Hög försiktighet
+  ger färre synar
+- `statistics` – statistik: hur mycket spelaren styr sina beslut av
+  sannolikheter
+- `unpredictability` – oförutsägbarhet: hur mycket spelaren varierar sitt spel
+  för att vara svår att läsa
 - `reading` – läsförmåga: hur mycket spelaren låter information om andras
   tidigare spel styra
 
-| Spelare | risk | press | läsförmåga | LLM | Profil |
-|---|---:|---:|---:|---|---|
-| **Axel** | 0,50 | 0,50 | 0,00 | nej | Grundtaktik. Fast mätsticka. |
-| **Berit** | 0,25 | 0,25 | 0,15 | ja | Försiktig. Påstår nära sanningen. |
-| **Cecilia** | 0,50 | 0,45 | 0,50 | ja | Kalkylerande. Läser motståndaren. |
-| **David** | 0,65 | 0,60 | 0,35 | ja | Djärv. Pressar påståendet högre. |
+Bluffandet är ingen parameter. I Meier måste den som slår alltid höja över det
+som står, och då blir en del påståenden lögner vad spelaren än vill. Bluffen är
+ett nödvändigt ont i spelet, inte en egenskap att skruva på.
 
-Axel är referensen. Han har ingen språkmodell utan spelar en fast räkneregel.
-Samma läge ger alltid samma drag: han lär sig inget om motståndarna under
-matchens gång och anpassar sig inte efter dem. Det är hela poängen. De andras
-resultat mäts mot en spelare som inte förändras, så att skillnader går att
-härleda till profilen och inte till tur i inlärningen.
+| Spelare | försiktighet | statistik | oförutsägbarhet | läsförmåga | LLM | Profil |
+|---|---:|---:|---:|---:|---|---|
+| **Axel** | 0,50 | 0,50 | 0,20 | 0,00 | nej | Grundtaktik. Referens utan språkmodell. |
+| **Berit** | 0,50 | 0,50 | 0,20 | 0,00 | ja | Samma taktik som Axel, men med LLM. |
+| **Cecilia** | 0,80 | 0,50 | 0,20 | 0,50 | ja | Lyfter försiktigheten. |
+| **David** | 0,50 | 0,80 | 0,20 | 0,50 | ja | Lyfter statistiken. |
+| **Elsa** | 0,50 | 0,50 | 0,80 | 0,50 | ja | Lyfter oförutsägbarheten. |
+
+Upplägget är två baslinjer och tre varianter. Axel är referensen: han har ingen
+språkmodell utan spelar en fast räkneregel, och han läser ingen motståndare.
+Berit har exakt samma parametrar som Axel. Skillnaden mellan dem är bara
+beslutsmotorn, regler mot språkmodell. Cecilia, David och Elsa lyfter en
+dimension var, och alla tre har samma läsförmåga som varandra. Därför handlar
+deras inbördes jämförelse bara om den dimension de lyfter.
+
+Kravet på Axel är att taktiken inte innehåller någon språkmodell. Han lär sig
+inget om motståndarna under matchens gång och anpassar sig inte efter dem.
+Däremot behöver hans enskilda drag inte vara reproducerbara ner på slumpnivå.
 
 Han är byggd för att vara tillräckligt bra, inte optimerad. Hans uppsättning
 kallas grundtaktik.
@@ -121,8 +134,8 @@ Tre begrepp:
 
 | Begrepp | Vad det är |
 |---|---|
-| **Egen profil** | Spelarens egna `risk`, `press` och `reading`. Känd för spelaren själv. |
-| **Motståndarprofil** | Spelarens gissning om en annan spelares `risk` och `press`. Byggd enbart på offentligt beteende. |
+| **Egen profil** | Spelarens egna fyra parametrar. Känd för spelaren själv. |
+| **Motståndarprofil** | Spelarens gissning om en annan spelares benägenhet att syna och att bluffa. Byggd enbart på offentligt beteende. |
 | **Motståndartyp** | Kort etikett som sammanfattar motståndarprofilen, till exempel "bluffbenägen". |
 
 Spelaren känner aldrig en motståndares verkliga parametrar. Den gissar, och

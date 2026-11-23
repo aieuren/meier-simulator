@@ -31,13 +31,12 @@ De fyra situationerna:
    sanningen) eller påstå blint (och dölja information).
 
 Det viktigaste: hon gör alltid exakt samma sak i samma läge. Slumpen finns bara
-i tärningarna, aldrig i hennes beslut. Därför kan en match köras om med samma
-resultat, och därför kan de andra agenterna jämföras mot henne och veta att
-skillnaden beror på dem.
+i tärningarna, aldrig i hennes beslut.
 
-Hon är inte bäst, och det är meningen. Hon är en fast mätsticka som de andra
-slår genom att lägga till sådant hon inte har: en egen profil, läsning av
-motståndare och anpassning.
+Hon är inte bäst, och det är meningen. Hon är en referens som de andra slår
+genom att lägga till sådant hon inte har: en egen profil, läsning av
+motståndare och anpassning. Kravet på henne är att taktiken saknar
+språkmodell, inte att varje drag är reproducerbart ner på slumpnivå.
 
 ---
 
@@ -102,10 +101,11 @@ spelaren säger, och ett JSON-svar med `"line"` ignoreras. Det håller repliken
 kort, förutsägbar och fri från påhittade termer.
 
 Konsekvensen är praktisk: en match kan köras utan LLM (`--no-llm`). Då faller
-varje spelare tillbaka på `BasePolicy`, som väljer bland samma lagliga drag. Det
-läget är deterministiskt och används av `axel` (den fasta mätstickan) samt av
-tester som ska gå på millisekunder utan nätverk. Det är en referens, inte en
-beskrivning av hur de andra spelarna fungerar.
+varje spelare tillbaka på `BasePolicy`, som väljer bland samma lagliga drag.
+Det läget används av `axel` (referensen utan språkmodell) samt av tester som ska
+gå på millisekunder utan nätverk. Det är en referens, inte en beskrivning av hur
+de andra spelarna fungerar. Kravet på Axel är att taktiken inte innehåller någon
+LLM — inte att varje drag är reproducerbart in i minsta slumpval.
 
 ---
 
@@ -716,14 +716,15 @@ explicita parametrar, aldrig av namnet.
 
 | Namn | Roll | Risk | Press | Läsning | LLM | Kort beskrivning |
 |---|---|---:|---:|---:|---|---|
-| Axel | `axel` | 0,50 | 0,50 | 0,00 | nej | Basmodellen; fast mätsticka |
+| Axel | `axel` | 0,50 | 0,50 | 0,00 | nej | Basmodellen; referens utan LLM |
 | Berit | `berit` | 0,25 | 0,25 | 0,15 | ja | Försiktig; påstår nära sanningen |
 | Cecilia | `cecilia` | 0,50 | 0,45 | 0,50 | ja | Kalkylerande; läser motståndaren |
 | David | `david` | 0,65 | 0,60 | 0,35 | ja | Djärv; pressar påståendet högre |
 
-Axel är basmodellen (BASE): deterministisk, icke-läsande, utan LLM. Han är
-den fasta mätstickan — de andra jämförs mot honom, och han får förlora ofta. Han
-är avsiktligt "good enough", inte optimerad.
+Axel är basmodellen (BASE): icke-läsande och utan LLM. Han är referensen — de
+andra jämförs mot honom, och han får förlora ofta. Han är avsiktligt "good
+enough", inte optimerad. Hans taktik innehåller ingen språkmodell; däremot
+behöver hans enskilda drag inte vara reproducerbara ner på slumpnivå.
 
 De tre LLM-spelarna är samma policykärna med milda profiler ovanpå.
 Ingen av dem är så extrem som de gamla rollerna var. De historiska loggarna
@@ -784,7 +785,7 @@ publicerad text; Suspicion-Agent = Guo et al., 2023.)*
 |---|---|---|
 | **1** | Exakt sannolikhetsmodell, BASE, parametrar + presets, läckagefri motståndarmodell | Nej |
 | 2 | LLM-lager: persona, `reasoning`, A1–A4 i prompten; LLM:en väljer draget | Ja |
-| 3 | Batchkörning + statistik per parameter (fixerade seeds, roterande start) | Nej |
+| 3 | Batchkörning + statistik per parameter (roterande start) | Nej |
 | 4 | Web-UI för de nya profilerna | Nej |
 | 5 | Kalibrering av presets och `q` mot färsk serie | Nej |
 | senare | CFR / approximativ lösning som teoretisk baslinje | Nej |

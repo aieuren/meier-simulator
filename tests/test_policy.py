@@ -25,7 +25,7 @@ from meier.policy import (
 
 @pytest.fixture
 def base():
-    return BasePolicy(AgentParams(risk=0.5, press=0.5, reading=0.0))
+    return BasePolicy(AgentParams())
 
 
 # -- Bud (beslut 1) --------------------------------------------------------
@@ -41,22 +41,39 @@ def test_meier_shown_is_bid_as_meier(base):
     assert decision.bid == rules.MEIER
 
 
-def test_low_press_bids_the_truth():
-    policy = BasePolicy(AgentParams(risk=0.5, press=0.0, reading=0.0))
-    for shown in rules.RANKING:
-        assert policy.decide_bid(shown).bid == shown
+def test_bluffing_is_not_a_parameter():
+    """Bluffen ska inte gå att skruva på: den följer av reglerna, inte profilen.
+
+    Alla fyra dimensionerna varieras, men antalet bluffar ska vara detsamma —
+    annars har bluffandet smygit in som en femte, oavsiktlig parameter.
+    """
+    counts = set()
+    for caution in (0.0, 0.5, 1.0):
+        for statistics in (0.0, 0.5, 1.0):
+            for unpredictability in (0.0,):
+                p = BasePolicy(
+                    AgentParams(
+                        caution=caution,
+                        statistics=statistics,
+                        unpredictability=unpredictability,
+                        reading=0.0,
+                    )
+                )
+                counts.add(
+                    sum(
+                        rules.compare(p.decide_bid(s).bid, s) > 0
+                        for s in rules.RANKING
+                    )
+                )
+    assert len(counts) == 1, f"bluffantalet varierade med profilerna: {counts}"
 
 
-def test_high_press_bluffs_more_than_low_press():
-    low = BasePolicy(AgentParams(risk=0.5, press=0.05, reading=0.0))
-    high = BasePolicy(AgentParams(risk=0.5, press=0.9, reading=0.0))
-    low_bluffs = sum(
-        rules.compare(low.decide_bid(s).bid, s) > 0 for s in rules.RANKING
-    )
-    high_bluffs = sum(
-        rules.compare(high.decide_bid(s).bid, s) > 0 for s in rules.RANKING
-    )
-    assert high_bluffs > low_bluffs
+def test_bluff_gain_is_a_fixed_constant():
+    """Bluffens värde ska vara en konstant, inte ett parameterfält."""
+    from meier.policy import BLUFF_GAIN
+
+    assert BLUFF_GAIN > 0.0
+    assert "press" not in {f.name for f in AgentParams.__dataclass_fields__.values()}
 
 
 def test_never_bids_below_shown_when_it_could_bid_truth(base):
@@ -114,20 +131,23 @@ def test_opponent_prior_can_shift_the_call(base):
 # -- Svar: syna, skicka eller slå (beslut 3b) -----------------------------
 
 def test_response_offers_all_three_actions():
-    # Alla tre åtgärderna måste vara nåbara. Vilken som väljs beror på profilen,
-    # så svepet går över parametrarna i stället för att kräva alla tre hos en.
+    # Alla tre åtgärderna måste vara nåbara. Vilken som väljs beror på profilen
+    # och på slumpen, så svepet går över parametrarna i stället för att kräva
+    # alla tre hos en enda agent.
     seen = set()
-    for press in (0.0, 0.25, 0.5, 0.75, 1.0):
-        for risk in (0.0, 0.5, 1.0):
-            policy = BasePolicy(AgentParams(risk=risk, press=press, reading=0.0))
+    for caution in (0.0, 0.5, 1.0):
+        for statistics in (0.0, 0.5, 1.0):
+            policy = BasePolicy(
+                AgentParams(caution=caution, statistics=statistics, reading=0.0)
+            )
             seen |= {policy.decide_response(bid).action for bid in rules.RANKING}
     assert seen == {"syna", "skicka", "slå"}
 
 
 def test_response_can_shake_when_shaking_is_best():
-    # Låg press: blindslaget blir det minsta lagliga höjningen, och då är
-    # hållarvärdet bättre än att skicka vidare 31.
-    calm = BasePolicy(AgentParams(risk=0.5, press=0.0, reading=0.0))
+    # Blindslaget blir det minsta lagliga höjningen, och då är hållarvärdet
+    # bättre än att skicka vidare 31.
+    calm = BasePolicy(AgentParams(unpredictability=0.0))
     assert calm.decide_response(31).action == "slå"
 
 
@@ -140,8 +160,8 @@ def test_response_meier_is_not_forced_to_call():
         def _hold_value(self, bid: int) -> float:
             return 1.0
 
-    assert GenerousHold(AgentParams(0.5, 0.5, 0.0)).decide_response(rules.MEIER).action == "skicka"
-    assert BasePolicy(AgentParams(0.5, 0.5, 0.0)).decide_response(rules.MEIER).action == "syna"
+    assert GenerousHold(AgentParams()).decide_response(rules.MEIER).action == "skicka"
+    assert BasePolicy(AgentParams()).decide_response(rules.MEIER).action == "syna"
 
 
 def test_response_never_invents_a_bid(base):
@@ -151,8 +171,10 @@ def test_response_never_invents_a_bid(base):
         assert decision.bid is None
 
 
-def test_response_picks_the_best_available_option(base):
-    # Slå får bara väljas när det faktiskt är bäst av de tre.
+def test_response_picks_the_best_available_option():
+    # Slå får bara väljas när det faktiskt är bäst av de tre. Bruset stängs av
+    # här: testet mäter värderingen, inte variationen.
+    base = BasePolicy(AgentParams(unpredictability=0.0))
     for bid in rules.RANKING:
         decision = base.decide_response(bid)
         hold = base._hold_value(bid)
@@ -173,11 +195,15 @@ def test_forced_choice_is_titta_or_blint(base):
         assert base.decide_forced(bid).action in {"titta", "blint"}
 
 
-def test_forced_choice_follows_press():
-    calm = BasePolicy(AgentParams(risk=0.5, press=0.0, reading=0.0))
-    bold = BasePolicy(AgentParams(risk=0.5, press=1.0, reading=0.0))
+def test_forced_choice_follows_unpredictability():
+    import random
+
+    calm = BasePolicy(AgentParams(unpredictability=0.0))
     assert calm.decide_forced(54).action == "titta"
-    assert bold.decide_forced(54).action == "blint"
+
+    bold = BasePolicy(AgentParams(unpredictability=1.0))
+    seen = {bold.decide_forced(54).action for _ in range(40)}
+    assert "blint" in seen, "en oförutsägbar profil ska ibland påstå blint"
 
 
 # -- Den budspecifika tron -------------------------------------------------
@@ -200,41 +226,76 @@ def test_call_odds_break_even_is_sane():
 # -- Parametervalidering ---------------------------------------------------
 
 def test_params_must_be_in_unit_range():
-    with pytest.raises(ValueError):
-        AgentParams(risk=1.5, press=0.5, reading=0.0)
+    for field in ("caution", "statistics", "unpredictability", "reading"):
+        with pytest.raises(ValueError):
+            AgentParams(**{field: 1.5})
 
 
-def test_profiles_are_distinct():
-    keys = {p.params.press for p in ROSTER.values()}
-    assert len(keys) == len(ROSTER)
+def test_baseline_pair_share_every_parameter():
+    """Axel och Berit ska bara skilja sig i om de använder LLM."""
+    assert ROSTER["axel"].params == ROSTER["berit"].params
+    assert ROSTER["axel"].uses_llm is False
+    assert ROSTER["berit"].uses_llm is True
+
+
+def test_each_variant_lifts_exactly_one_dimension():
+    """Cecilia, David och Elsa ska skilja sig från baslinjen i en dimension var.
+
+    Alla tre delar samma ``reading``, så deras inbördes jämförelse handlar bara
+    om den dimension de lyfter.
+    """
+    base = ROSTER["axel"].params
+    variants = {key: ROSTER[key].params for key in ("cecilia", "david", "elsa")}
+    dimensions = ("caution", "statistics", "unpredictability")
+
+    readings = {v.reading for v in variants.values()}
+    assert readings == {0.5}, f"varianterna ska dela läsförmåga: {readings}"
+
+    for key, params in variants.items():
+        differs = {
+            d for d in dimensions if getattr(params, d) != getattr(base, d)
+        }
+        assert len(differs) == 1, f"{key} skiljer sig i {differs}, ska vara en"
+    lifted = {
+        next(d for d in dimensions if getattr(p, d) != getattr(base, d))
+        for p in variants.values()
+    }
+    assert lifted == set(dimensions), "varianterna ska lyfta olika dimensioner"
+
+
+def test_axel_reads_no_opponent():
+    assert ROSTER["axel"].params.reading == 0.0
+    assert ROSTER["berit"].params.reading == 0.0
 
 
 # -- Höjningens längd: två olika beslut, två olika regler ------------------
 
-def test_blind_raise_grows_with_press():
-    """Blind höjning styrs av `press`, inte av "alltid ett steg".
+def test_blind_raise_is_minimum_without_unpredictability():
+    """Utan oförutsägbarhet är blindslaget alltid minsta lagliga höjning.
 
-    ``decide_raise`` räknar ``steps = round(press * (len(higher) - 1))``. Låg
-    press ligger på minimum, hög press kan hoppa till Meier. Dokumentationen
-    påstod tidigare att höjningen alltid är ett steg; det gällde bara
-    ``decide_bid``, där spelaren har sett tärningarna.
+    Spelaren ser inte tärningarna, så det minsta steget är det säkraste. Det är
+    bara ``unpredictability`` som får agenten att hoppa högre.
     """
     opts = rules.higher_options(31)
-    steps_for = {}
-    for press in (0.0, 0.5, 1.0):
-        p = BasePolicy(AgentParams(risk=0.5, press=press, reading=0.0))
-        d = p.decide_raise(31)
-        steps_for[press] = len(opts) - 1 - opts.index(d.bid)
+    p = BasePolicy(AgentParams(unpredictability=0.0))
+    assert p.decide_raise(31).bid == opts[-1]
 
-    assert steps_for[0.0] == 0, "press 0 ska lägga sig på minsta lagliga höjning"
-    assert steps_for[1.0] == len(opts) - 1, "press 1 ska kunna hoppa till Meier"
-    assert steps_for[0.0] < steps_for[0.5] < steps_for[1.0], "höjden ska öka med press"
+
+def test_unpredictability_makes_blind_raises_vary():
+    """En oförutsägbar agent ska inte alltid välja samma höjning."""
+    opts = rules.higher_options(31)
+    bids = set()
+    for _ in range(40):
+        p = BasePolicy(AgentParams(unpredictability=0.8))
+        bids.add(p.decide_raise(31).bid)
+    assert len(bids) > 1, "höjningen ska variera mellan anrop"
+    assert bids <= set(opts), "alla höjningar ska vara lagliga"
 
 
 def test_seen_bid_bluff_is_always_exactly_one_step():
-    """Bluff över *sedda* tärningar är alltid exakt ett steg, oavsett press."""
-    for press in (0.0, 0.25, 0.5, 0.75, 1.0):
-        p = BasePolicy(AgentParams(risk=0.5, press=press, reading=0.0))
+    """Bluff över *sedda* tärningar är alltid exakt ett steg, oavsett profil."""
+    for statistics in (0.0, 0.5, 1.0):
+        p = BasePolicy(AgentParams(statistics=statistics, unpredictability=0.0))
         for shown in rules.RANKING:
             d = p.decide_bid(shown)
             if d.bid is None or d.bid == shown:
@@ -244,6 +305,6 @@ def test_seen_bid_bluff_is_always_exactly_one_step():
                 continue
             steps = len(opts) - opts.index(d.bid)
             assert steps == 1, (
-                f"press={press} visar {rules.name(shown)} bjöd {rules.name(d.bid)} "
+                f"statistics={statistics} visar {rules.name(shown)} bjöd {rules.name(d.bid)} "
                 f"({steps} steg) — bluffen ska vara exakt ett steg"
             )

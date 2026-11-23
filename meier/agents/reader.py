@@ -47,14 +47,14 @@ _SYSTEM = (
     "Du ser bara offentliga händelser — aldrig motståndarens tärningar eller "
     "dess interna inställningar. Gissa utifrån beteendet.\n"
     "Bedöm på en skala 0–1:\n"
-    "  estimated_risk: hur gärna motståndaren tar en osäker chans (synar).\n"
-    "  estimated_press: hur ofta motståndaren bluffar och pressar påståendet.\n"
+    "  estimated_call: hur ofta motståndaren synar, jämfört med bordet.\n"
+    "  estimated_bluff: hur ofta motståndaren bluffar, jämfört med bordet.\n"
     "  estimated_predictability: hur förutsägbar motståndaren är.\n"
     "  confidence: hur säker du är, givet hur mycket data som finns. Lite data "
     "ger låg confidence.\n"
     "  type: en kort etikett på svenska, t.ex. 'bluffbenägen', 'försiktig', "
     "'oförutsägbar' eller 'okänd'.\n"
-    'Svara med JSON: {"estimated_risk": 0.5, "estimated_press": 0.5, '
+    'Svara med JSON: {"estimated_call": 0.5, "estimated_bluff": 0.5, '
     '"estimated_predictability": 0.5, "type": "...", "confidence": 0.0}'
 )
 
@@ -158,8 +158,8 @@ class OpponentReader:
         # modellens självförtroende, och det växer när fler synar avslöjas.
         asked = _clamp01(data.get("confidence", 0.0))
         return OpponentProfile(
-            risk=_clamp01(data.get("estimated_risk", 0.5)),
-            press=_clamp01(data.get("estimated_press", 0.5)),
+            call_tendency=_clamp01(data.get("estimated_call", 0.5)),
+            bluff_tendency=_clamp01(data.get("estimated_bluff", 0.5)),
             predictability=_clamp01(data.get("estimated_predictability", 0.5)),
             kind=str(data.get("type") or "okänd")[:32],
             confidence=min(asked, strength),

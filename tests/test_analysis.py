@@ -13,7 +13,7 @@ from tests.test_match import make_agents
 
 def _records(n: int = 3) -> list[dict]:
     match._new_agents = make_agents
-    return [match.play_match(["a", "b"], seed=s, game=s + 1).to_dict() for s in range(n)]
+    return [match.play_match(["a", "b"], game=g + 1).to_dict() for g in range(n)]
 
 
 # -- analysis.py ------------------------------------------------------------

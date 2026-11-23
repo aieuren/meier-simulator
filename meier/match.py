@@ -33,7 +33,7 @@ def _new_agents(role_keys: Iterable[str]):
     """Bygg spelarna för en match, med LLM-klienter för replikerna.
 
     Varje LLM-spelare får sin egen klient så att tokenräkningen hålls åtskild.
-    Axel får ingen klient — han är den deterministiska referensen.
+    Axel får ingen klient — han är referensen utan språkmodell.
     """
     players, _tracker = make_players(role_keys, llm_factory=LLMClient)
     return players
@@ -133,7 +133,6 @@ class GameRecord:
     """Ett strukturerat protokoll för en spelad match."""
 
     game: int
-    seed: int | None
     provider: str
     model: str
     players: list[dict[str, Any]]
@@ -152,7 +151,6 @@ class GameRecord:
     def to_dict(self) -> dict[str, Any]:
         return {
             "game": self.game,
-            "seed": self.seed,
             "started_at": self.started_at,
             "provider": self.provider,
             "model": self.model,
@@ -174,20 +172,22 @@ def play_match(
     role_keys: list[str],
     *,
     game: int = 1,
-    seed: int | None = None,
     lives: int = 3,
     with_llm: bool = True,
 ) -> GameRecord:
     """Spela en hel match mellan rollerna och returnera protokollet.
 
     ``with_llm`` styr om spelarna får en LLM-klient för replikerna. Draget ägs
-    ändå av policyn, så med ``with_llm=False`` blir matchen helt deterministisk
-    och går på millisekunder — det är läget för utvärdering och statistik.
+    ändå av policyn, så med ``with_llm=False`` blir matchen mekanisk och går på
+    millisekunder — det är läget för utvärdering och statistik. En profil med
+    ``unpredictability`` över noll varierar sig ändå.
+
+    Antalet spelare är fritt: ``role_keys`` får innehålla två eller fler roller.
     """
     build = _new_agents if with_llm else _new_agents_no_llm
     agents = build(role_keys)
     tracker = _attach_tracker(agents)
-    session = Session.new(agents, seed=seed, lives=lives)
+    session = Session.new(agents, lives=lives)
     session.tracker = tracker
     session.play_to_end()
 
@@ -206,7 +206,6 @@ def play_match(
     model = getattr(cfg, "model", "none")
     return GameRecord(
         game=game,
-        seed=seed,
         provider=provider,
         model=model,
         players=[
@@ -254,7 +253,6 @@ def run_matches(
     role_keys: list[str],
     count: int,
     *,
-    base_seed: int | None = None,
     lives: int = 3,
     workers: int = 1,
     with_llm: bool = True,
@@ -272,21 +270,15 @@ def run_matches(
     """
     if workers <= 1:
         for i in range(count):
-            seed = None if base_seed is None else base_seed + i
             if progress is not None:
                 progress(i + 1, count)
-            yield play_match(
-                role_keys, game=i + 1, seed=seed, lives=lives, with_llm=with_llm
-            )
+            yield play_match(role_keys, game=i + 1, lives=lives, with_llm=with_llm)
         return
 
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     def _one(i: int) -> GameRecord:
-        seed = None if base_seed is None else base_seed + i
-        return play_match(
-            role_keys, game=i + 1, seed=seed, lives=lives, with_llm=with_llm
-        )
+        return play_match(role_keys, game=i + 1, lives=lives, with_llm=with_llm)
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {pool.submit(_one, i): i for i in range(count)}

@@ -95,12 +95,16 @@ def list_roles() -> dict:
                 "description": p.description,
                 "uses_llm": p.uses_llm,
                 "params": {
-                    "risk": p.params.risk,
-                    "press": p.params.press,
+                    "caution": p.params.caution,
+                    "statistics": p.params.statistics,
+                    "unpredictability": p.params.unpredictability,
                     "reading": p.params.reading,
                 },
                 "style_text": describe_params(
-                    p.params.risk, p.params.press, p.params.reading
+                    p.params.caution,
+                    p.params.statistics,
+                    p.params.unpredictability,
+                    p.params.reading,
                 ),
             }
             for p in ROSTER.values()
@@ -182,9 +186,8 @@ def health() -> dict:
 class NewSessionRequest(BaseModel):
     roles: list[str] = Field(
         default_factory=role_keys,
-        description="Roller som spelar. Standard: alla fyra.",
+        description="Roller som spelar. Standard: alla fem.",
     )
-    seed: int | None = Field(None, description="Slumpfrö för reproducerbarhet")
 
 
 def _require_session() -> Session:
@@ -209,7 +212,7 @@ def session_new(req: NewSessionRequest) -> dict:
     for p in players:
         if getattr(p, "params", None) is not None and p.params.reading > 0.0:
             p.tracker = tracker
-    _session = Session.new(players, seed=req.seed)
+    _session = Session.new(players)
     _session.tracker = tracker
     return _session.to_dict()
 
@@ -292,7 +295,6 @@ class MatchRequest(BaseModel):
         description="Roller som spelar. Standard: alla fyra.",
     )
     count: int = Field(5, ge=1, le=200, description="Antal matcher")
-    base_seed: int | None = Field(None, description="Basfrö för reproducerbarhet")
     lives: int = Field(3, ge=1, le=10)
     workers: int = Field(
         3, ge=1, le=8, description="Antal matcher som spelas samtidigt"
@@ -310,14 +312,12 @@ class _MatchJob:
         self,
         roles: list[str],
         count: int,
-        base_seed: int | None,
         lives: int,
         workers: int = 1,
         check_in: bool = False,
     ):
         self.roles = roles
         self.count = count
-        self.base_seed = base_seed
         self.lives = lives
         self.workers = workers
         self.check_in = check_in
@@ -359,7 +359,6 @@ class _MatchJob:
                 for rec in run_matches(
                     self.roles,
                     self.count,
-                    base_seed=self.base_seed,
                     lives=self.lives,
                     workers=self.workers,
                 ):
@@ -380,7 +379,7 @@ class _MatchJob:
     def _check_in(self, repo: logrepo.LogRepo, rec: GameRecord) -> None:
         """Commit + push efter en färdig match. Får aldrig fälla körningen."""
         winner = rec.winner_role or rec.winner
-        msg = f"Meier: match {self.done}/{self.count} klar (seed {rec.seed}, vinnare {winner})"
+        msg = f"Meier: match {self.done}/{self.count} klar (vinnare {winner})"
         status = repo.commit_and_push(self.file, msg)
         with self.lock:
             self.push_status = status
@@ -420,7 +419,7 @@ def matches_run(req: MatchRequest) -> dict:
         raise HTTPException(status_code=409, detail="En matchserie kör redan.")
 
     _match_job = _MatchJob(
-        roles, req.count, req.base_seed, req.lives, req.workers,
+        roles, req.count, req.lives, req.workers,
         check_in=req.check_in,
     )
     _match_job.thread.start()

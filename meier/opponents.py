@@ -29,16 +29,16 @@ PRIOR_STRENGTH = 4.0
 #: fortfarande en lögn motståndarna ser, så det väger mer än noll.
 BLIND_WEIGHT = 0.5
 
-#: Namnet på den nominella spelaren i motståndarprofilen. Profilens tal är
-#: **relativa** mot detta: ``press = 0,5`` betyder "bluffar som folk gör mest".
-#: Talet är medvetet inte samma som ``DEFAULT_Q`` — ``DEFAULT_Q`` är en
-#: uppmätt *bluff-frekvens*, medan profilens tal är en *benägenhet* på en
-#: neutral skala där 0,5 är mitten. Översättningen sker i
-#: :meth:`OpponentTracker.profile_factor`.
-NEUTRAL_PRESS = 0.5
+#: Neutral bluffbenägenhet i motståndarprofilen. Profilens tal är **relativa**
+#: mot detta: ``bluff_tendency = 0,5`` betyder "bluffar som folk gör mest".
+#: Talet är medvetet inte samma som ``DEFAULT_Q`` — ``DEFAULT_Q`` är en uppmätt
+#: *bluff-frekvens*, medan profilens tal är en *benägenhet* på en neutral skala
+#: där 0,5 är mitten. Översättningen sker i
+#: :meth:`OpponentTracker.bluff_factor`.
+NEUTRAL_BLUFF = 0.5
 
-#: Neutral riskbenägenhet i :meth:`OpponentTracker.risk_factor`.
-NEUTRAL_RISK = 0.5
+#: Neutral synbenägenhet i :meth:`OpponentTracker.call_factor`.
+NEUTRAL_CALL = 0.5
 
 #: Typisk synfrekvens vid bordet, uppmätt över 500 matcher utan LLM (alla fyra
 #: rollerna låg på 26–27 %). Används av :meth:`OpponentTracker.call_ratio` för att
@@ -64,8 +64,8 @@ class OpponentProfile:
     Detta är en gissning byggd ur offentligt observerbart beteende — aldrig ur
     motståndarens verkliga parametrar. Varje tal ligger mellan 0 och 1.
 
-    ``risk``           – hur gärna motståndaren tar en osäker chans.
-    ``press``          – hur ofta motståndaren bluffar och pressar.
+    ``call_tendency``  – hur ofta motståndaren synar, relativt bordet.
+    ``bluff_tendency`` – hur ofta motståndaren bluffar, relativt bordet.
     ``predictability`` – hur förutsägbar motståndaren är.
     ``kind``           – kort etikett, t.ex. "bluffbenägen" eller "försiktig".
     ``confidence``     – hur säker uppskattningen är.
@@ -74,21 +74,21 @@ class OpponentProfile:
                          ``"population"`` (ingen data alls).
     """
 
-    risk: float = 0.5
-    press: float = NEUTRAL_PRESS
+    call_tendency: float = NEUTRAL_CALL
+    bluff_tendency: float = NEUTRAL_BLUFF
     predictability: float = 0.5
     kind: str = "okänd"
     confidence: float = 0.0
     source: str = "population"
 
     def __post_init__(self) -> None:
-        for name in ("risk", "press", "predictability", "confidence"):
+        for name in ("call_tendency", "bluff_tendency", "predictability", "confidence"):
             object.__setattr__(self, name, _clamp01(getattr(self, name)))
 
     def to_dict(self) -> dict:
         return {
-            "risk": round(self.risk, 3),
-            "press": round(self.press, 3),
+            "call_tendency": round(self.call_tendency, 3),
+            "bluff_tendency": round(self.bluff_tendency, 3),
             "predictability": round(self.predictability, 3),
             "kind": self.kind,
             "confidence": round(self.confidence, 3),
@@ -108,9 +108,9 @@ class OpponentProfile:
                 "motståndaren."
             )
         return (
-            f"{self.kind.capitalize()}: {_press_words(self.press)}, "
-            f"{_risk_words(self.risk)} och {_predict_words(self.predictability)} "
-            f"(risk {pct(self.risk)}, press {pct(self.press)}, "
+            f"{self.kind.capitalize()}: {_bluff_words(self.bluff_tendency)}, "
+            f"{_call_words(self.call_tendency)} och {_predict_words(self.predictability)} "
+            f"(bluff {pct(self.bluff_tendency)}, syn {pct(self.call_tendency)}, "
             f"förutsägbarhet {pct(self.predictability)}; "
             f"{_confidence_words(self.confidence)})."
         )
@@ -121,7 +121,12 @@ def pct(value: float) -> str:
     return f"{round(value * 100)} %"
 
 
-def describe_params(risk: float, press: float, reading: float) -> str:
+def describe_params(
+    caution: float,
+    statistics: float,
+    unpredictability: float,
+    reading: float,
+) -> str:
     """En spelares **egna profil** i klartext, med siffrorna i parentes.
 
     Används i spelarlistan. Detta är spelarens kända inställning, till skillnad
@@ -136,32 +141,70 @@ def describe_params(risk: float, press: float, reading: float) -> str:
     else:
         reading_words = "läser motståndarna noga"
     return (
-        f"{_risk_words(risk).capitalize()}, {_press_words(press)} och "
-        f"{reading_words} "
-        f"(risk {pct(risk)}, press {pct(press)}, läsning {pct(reading)})."
+        f"{_caution_words(caution).capitalize()}, "
+        f"{_statistics_words(statistics)} och "
+        f"{_unpredictability_words(unpredictability)}; {reading_words} "
+        f"(försiktighet {pct(caution)}, statistik {pct(statistics)}, "
+        f"oförutsägbarhet {pct(unpredictability)}, läsning {pct(reading)})."
     )
 
 
-def _risk_words(risk: float) -> str:
-    if risk < 0.25:
+def _caution_words(caution: float) -> str:
+    if caution < 0.25:
+        return "tar stora risker"
+    if caution < 0.45:
+        return "tar gärna chanser"
+    if caution < 0.6:
+        return "väger risk mot vinst"
+    if caution < 0.75:
+        return "undviker risk"
+    return "undviker risk nästan alltid"
+
+
+def _statistics_words(statistics: float) -> str:
+    if statistics < 0.25:
+        return "spelar på känsla"
+    if statistics < 0.45:
+        return "lutar åt känslan"
+    if statistics < 0.6:
+        return "väger in sannolikheter"
+    if statistics < 0.75:
+        return "håller sig till sannolikheterna"
+    return "räknar hårt på sannolikheterna"
+
+
+def _unpredictability_words(unpredictability: float) -> str:
+    if unpredictability < 0.25:
+        return "spelar förutsägbart"
+    if unpredictability < 0.45:
+        return "varierar sig lite"
+    if unpredictability < 0.6:
+        return "varierar sitt spel"
+    if unpredictability < 0.75:
+        return "är svår att läsa"
+    return "byter spel hela tiden"
+
+
+def _call_words(call_tendency: float) -> str:
+    if call_tendency < 0.25:
         return "synar nästan aldrig"
-    if risk < 0.45:
+    if call_tendency < 0.45:
         return "synar sällan"
-    if risk < 0.6:
+    if call_tendency < 0.6:
         return "synar ibland"
-    if risk < 0.75:
+    if call_tendency < 0.75:
         return "synar ofta"
     return "synar nästan alltid"
 
 
-def _press_words(press: float) -> str:
-    if press < 0.25:
+def _bluff_words(bluff_tendency: float) -> str:
+    if bluff_tendency < 0.25:
         return "bluffar nästan aldrig"
-    if press < 0.45:
+    if bluff_tendency < 0.45:
         return "bluffar sällan"
-    if press < 0.6:
+    if bluff_tendency < 0.6:
         return "bluffar lagom mycket"
-    if press < 0.75:
+    if bluff_tendency < 0.75:
         return "bluffar ofta"
     return "bluffar nästan jämt"
 
@@ -460,63 +503,63 @@ class OpponentTracker:
         # Samma tak som LLM-läsningen: underlaget över hela bordet sätter
         # konfidensen, så en bild byggd på en enda syn inte räknas som säker.
         confidence = self.evidence_strength()
-        # Skalan är centrerad kring NEUTRAL_PRESS = "bluffar som folk gör mest".
+        # Skalan är centrerad kring NEUTRAL_BLUFF = "bluffar som folk gör mest".
         # En rå bluff-frekvens (~0,72 för en vanlig spelare) skulle annars lägga
         # varje spelare över mitten och skruva upp tron i onödan. Därför skalas
         # benägenheten **relativt** populationen, precis som ``bluff_ratio``.
-        press = (
-            NEUTRAL_PRESS * self.bluff_ratio(player)
+        bluff_tendency = (
+            NEUTRAL_BLUFF * self.bluff_ratio(player)
             if ev["bluff_rate"] is not None
-            else NEUTRAL_PRESS
+            else NEUTRAL_BLUFF
         )
-        # Risk skalas **relativt** populationen, av samma skäl som pressen: den
-        # råa synfrekvensen ligger kring ``POPULATION_CALL_RATE`` för alla, så att sätta in den rakt
-        # på 0–1-skalan (där 0,5 är neutral) skulle få varje motståndare att se
-        # extremt försiktig ut. Ratio 1,0 = synar som folk mest.
-        risk = (
-            NEUTRAL_RISK * self.call_ratio(player)
+        # Synbenägenheten skalas **relativt** populationen, av samma skäl: den
+        # råa synfrekvensen ligger kring ``POPULATION_CALL_RATE`` för alla, så att
+        # sätta in den rakt på 0–1-skalan (där 0,5 är neutral) skulle få varje
+        # motståndare att se extremt försiktig ut. Ratio 1,0 = synar som folk mest.
+        call_tendency = (
+            NEUTRAL_CALL * self.call_ratio(player)
             if ev["call_rate"] is not None
-            else NEUTRAL_RISK
+            else NEUTRAL_CALL
         )
         if ev["bluff_rate"] is None and ev["call_rate"] is None:
             return OpponentProfile()
         return OpponentProfile(
-            risk=risk,
-            press=press,
+            call_tendency=call_tendency,
+            bluff_tendency=bluff_tendency,
             predictability=0.5,
             kind="okänd",
             confidence=confidence,
             source="statistik",
         )
 
-    def profile_factor(self, profile: OpponentProfile) -> float:
-        """Översätt en motståndarprofils ``press`` till en **relativ** faktor.
+    def bluff_factor(self, profile: OpponentProfile) -> float:
+        """Översätt en motståndarprofils ``bluff_tendency`` till en **relativ** faktor.
 
         Faktorn är kring 1,0 och multipliceras på den påståendespecifika tron, precis
-        som :meth:`bluff_ratio`. ``press = 0,5`` (neutralt) ger 1,0; en spelare
-        som bedöms bluffa dubbelt så ofta ger 2,0. Faktorn dämpas av profilens
-        konfidens, så en osäker gissning inte får slå över populationstron.
+        som :meth:`bluff_ratio`. ``bluff_tendency = 0,5`` (neutralt) ger 1,0; en
+        spelare som bedöms bluffa dubbelt så ofta ger 2,0. Faktorn dämpas av
+        profilens konfidens, så en osäker gissning inte får slå över populationstron.
         """
-        span = max(1e-9, 1.0 - NEUTRAL_PRESS)
-        raw = 1.0 + (profile.press - NEUTRAL_PRESS) / span
+        span = max(1e-9, 1.0 - NEUTRAL_BLUFF)
+        raw = 1.0 + (profile.bluff_tendency - NEUTRAL_BLUFF) / span
         raw = max(0.25, min(4.0, raw))
         c = profile.confidence
         return 1.0 + c * (raw - 1.0)
 
-    def risk_factor(self, profile: OpponentProfile) -> float:
-        """Översätt motståndarens ``risk`` till en faktor på **synbenägenheten**.
+    def call_factor(self, profile: OpponentProfile) -> float:
+        """Översätt motståndarens ``call_tendency`` till en faktor på **synbenägenheten**.
 
-        Skild från :meth:`profile_factor`, som handlar om hur ofta motståndaren
+        Skild från :meth:`bluff_factor`, som handlar om hur ofta motståndaren
         *ljuger*. Den här handlar om hur ofta den *synar*. Skillnaden spelar
         roll: en ärlig spelare kan vara synbenägen, och en lögnare kan vara
         feg. Faktorn är kring 1,0 och multipliceras på ``p_called`` i påståendebeslutet.
 
-        ``risk = 0,5`` (neutralt) ger 1,0. En motståndare som bedöms syna
+        ``call_tendency = 0,5`` (neutralt) ger 1,0. En motståndare som bedöms syna
         dubbelt så ofta ger 2,0. Faktorn dämpas av konfidensen, precis som
-        :meth:`profile_factor`, så en tunn gissning knappt märks.
+        :meth:`bluff_factor`, så en tunn gissning knappt märks.
         """
-        span = max(1e-9, 1.0 - NEUTRAL_RISK)
-        raw = 1.0 + (profile.risk - NEUTRAL_RISK) / span
+        span = max(1e-9, 1.0 - NEUTRAL_CALL)
+        raw = 1.0 + (profile.call_tendency - NEUTRAL_CALL) / span
         raw = max(0.25, min(4.0, raw))
         c = profile.confidence
         return 1.0 + c * (raw - 1.0)

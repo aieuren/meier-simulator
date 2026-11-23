@@ -34,7 +34,7 @@ def _wait_done(client: TestClient, timeout: float = 10.0) -> dict:
 
 def test_run_series_and_fetch_status(monkeypatch):
     client = _client(monkeypatch)
-    start = client.post("/api/matches/run", json={"count": 2, "base_seed": 1})
+    start = client.post("/api/matches/run", json={"count": 2})
     assert start.status_code == 200
     assert start.json()["running"] is True
 
@@ -71,13 +71,13 @@ def test_unknown_role_is_rejected(monkeypatch):
 
 def test_parallel_workers_series(monkeypatch):
     client = _client(monkeypatch)
-    start = client.post("/api/matches/run", json={"count": 3, "base_seed": 5, "workers": 3})
+    start = client.post("/api/matches/run", json={"count": 3, "workers": 3})
     assert start.status_code == 200
 
     data = _wait_done(client)
     assert data["error"] is None
     assert data["done"] == 3
-    assert sorted(r["seed"] for r in data["records"]) == [5, 6, 7]
+    assert sorted(r["game"] for r in data["records"]) == [1, 2, 3]
 
 
 def test_second_series_while_running_conflicts(monkeypatch):
@@ -118,7 +118,7 @@ def test_check_in_writes_file_to_log_repo(monkeypatch, tmp_path):
     monkeypatch.setenv("MEIER_LOGS_TOKEN_FILE", str(token))
 
     client = _client(monkeypatch)
-    client.post("/api/matches/run", json={"count": 2, "base_seed": 1, "check_in": True})
+    client.post("/api/matches/run", json={"count": 2, "check_in": True})
     data = _wait_done(client)
 
     assert data["error"] is None

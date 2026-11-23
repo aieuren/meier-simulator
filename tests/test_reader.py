@@ -16,7 +16,7 @@ import pytest
 
 from meier import rules
 from meier.agents.reader import OpponentReader
-from meier.opponents import NEUTRAL_PRESS, OpponentProfile, OpponentTracker
+from meier.opponents import NEUTRAL_BLUFF, OpponentProfile, OpponentTracker
 
 
 @dataclass
@@ -35,7 +35,7 @@ class FakeLLM:
         self.calls += 1
         self.last_user = user
         return (
-            '{"estimated_risk": 0.7, "estimated_press": 0.9, '
+            '{"estimated_call": 0.7, "estimated_bluff": 0.9, '
             '"estimated_predictability": 0.3, "type": "bluffbenägen", '
             f'"confidence": {self.confidence}}}'
         )
@@ -65,17 +65,17 @@ def _tracker_with_bluffer() -> OpponentTracker:
 
 def test_profile_clamps_out_of_range_values():
     # En LLM kan svara vad som helst; profilen får aldrig sprida skräp vidare.
-    p = OpponentProfile(risk=1.7, press=-0.4, predictability=2.0, confidence=9.0)
-    assert p.risk == 1.0
-    assert p.press == 0.0
+    p = OpponentProfile(call_tendency=1.7, bluff_tendency=-0.4, predictability=2.0, confidence=9.0)
+    assert p.call_tendency == 1.0
+    assert p.bluff_tendency == 0.0
     assert p.predictability == 1.0
     assert p.confidence == 1.0
 
 
 def test_profile_survives_garbage_from_the_model():
-    p = OpponentProfile(risk="mycket", press=None, confidence=float("nan"))
-    assert 0.0 <= p.risk <= 1.0
-    assert 0.0 <= p.press <= 1.0
+    p = OpponentProfile(call_tendency="mycket", bluff_tendency=None, confidence=float("nan"))
+    assert 0.0 <= p.call_tendency <= 1.0
+    assert 0.0 <= p.bluff_tendency <= 1.0
     assert p.confidence == 0.5
 
 
@@ -110,7 +110,7 @@ def test_reader_uses_the_llm_when_available():
     assert llm.calls == 1
     assert profile.source == "llm"
     assert profile.kind == "bluffbenägen"
-    assert profile.press == 0.9
+    assert profile.bluff_tendency == 0.9
     # Sex synar har avgjorts vid bordet: 6/(6+3) = 0,667. Modellen bad om 0,8,
     # men underlaget sätter taket — en bild får inte vara säkrare än facit medger.
     assert profile.confidence == pytest.approx(6 / 9)
@@ -172,7 +172,7 @@ def test_reader_asks_nothing_before_there_is_evidence():
     profile = reader.profile(tracker, "okänd")
     assert llm.calls == 0, "inget att tolka: inget anrop"
     assert profile.source == "population"
-    assert profile.press == NEUTRAL_PRESS
+    assert profile.bluff_tendency == NEUTRAL_BLUFF
 
 
 # -- Fallback ---------------------------------------------------------------
@@ -182,7 +182,7 @@ def test_reader_falls_back_to_statistics_without_llm():
     reader = OpponentReader(llm=None)
     profile = reader.profile(tracker, "bluffare")
     assert profile.source == "statistik"
-    assert profile.press > NEUTRAL_PRESS, "en känd bluffare ska bedömas högre"
+    assert profile.bluff_tendency > NEUTRAL_BLUFF, "en känd bluffare ska bedömas högre"
     assert profile.confidence > 0.0
 
 
@@ -200,51 +200,51 @@ def test_statistical_profile_is_population_without_data():
     tracker = OpponentTracker()
     profile = tracker.statistical_profile("okänd")
     assert profile.source == "population"
-    assert profile.press == NEUTRAL_PRESS
+    assert profile.bluff_tendency == NEUTRAL_BLUFF
 
 
 # -- Översättningen till beslut ---------------------------------------------
 
-def test_profile_factor_is_one_for_a_neutral_profile():
+def test_bluff_factor_is_one_for_a_neutral_profile():
     tracker = OpponentTracker()
-    assert tracker.profile_factor(OpponentProfile()) == 1.0
+    assert tracker.bluff_factor(OpponentProfile()) == 1.0
 
 
-def test_profile_factor_grows_with_press_and_confidence():
+def test_bluff_factor_grows_with_press_and_confidence():
     tracker = OpponentTracker()
-    low = tracker.profile_factor(OpponentProfile(press=0.9, confidence=0.2))
-    high = tracker.profile_factor(OpponentProfile(press=0.9, confidence=1.0))
+    low = tracker.bluff_factor(OpponentProfile(bluff_tendency=0.9, confidence=0.2))
+    high = tracker.bluff_factor(OpponentProfile(bluff_tendency=0.9, confidence=1.0))
     assert 1.0 < low < high, "högre konfidens ska ge starkare genomslag"
 
 
-def test_profile_factor_is_damped_by_confidence():
+def test_bluff_factor_is_damped_by_confidence():
     tracker = OpponentTracker()
     # Samma press, olika konfidens: en osäker gissning får inte slå över tron.
-    unsure = tracker.profile_factor(OpponentProfile(press=0.9, confidence=0.0))
-    sure = tracker.profile_factor(OpponentProfile(press=0.9, confidence=1.0))
+    unsure = tracker.bluff_factor(OpponentProfile(bluff_tendency=0.9, confidence=0.0))
+    sure = tracker.bluff_factor(OpponentProfile(bluff_tendency=0.9, confidence=1.0))
     assert unsure == 1.0
     assert sure > unsure
 
 
 # -- Risk: motståndarens synbenägenhet --------------------------------------
 
-def test_risk_factor_is_one_for_a_neutral_profile():
+def test_call_factor_is_one_for_a_neutral_profile():
     tracker = OpponentTracker()
-    assert tracker.risk_factor(OpponentProfile()) == 1.0
+    assert tracker.call_factor(OpponentProfile()) == 1.0
 
 
-def test_risk_factor_tracks_risk_not_press():
+def test_call_factor_tracks_calls_not_bluffs():
     """Risk handlar om att syna, press om att ljuga. De får inte blandas."""
     tracker = OpponentTracker()
-    synbenägen = tracker.risk_factor(OpponentProfile(risk=0.9, press=0.1, confidence=1.0))
-    lögnaktig = tracker.risk_factor(OpponentProfile(risk=0.1, press=0.9, confidence=1.0))
+    synbenägen = tracker.call_factor(OpponentProfile(call_tendency=0.9, bluff_tendency=0.1, confidence=1.0))
+    lögnaktig = tracker.call_factor(OpponentProfile(call_tendency=0.1, bluff_tendency=0.9, confidence=1.0))
     assert synbenägen > 1.0 > lögnaktig
 
 
-def test_risk_factor_is_damped_by_confidence():
+def test_call_factor_is_damped_by_confidence():
     tracker = OpponentTracker()
-    unsure = tracker.risk_factor(OpponentProfile(risk=0.9, confidence=0.0))
-    sure = tracker.risk_factor(OpponentProfile(risk=0.9, confidence=1.0))
+    unsure = tracker.call_factor(OpponentProfile(call_tendency=0.9, confidence=0.0))
+    sure = tracker.call_factor(OpponentProfile(call_tendency=0.9, confidence=1.0))
     assert unsure == 1.0
     assert sure > unsure
 
@@ -308,7 +308,11 @@ def test_risk_reaches_the_bid_through_the_agent():
         for i in range(n):
             tracker.observe_decision("X", "syna" if i < int(call_rate * n) else "skicka")
         role = Role(key="t", name="Test", description="", style="")
-        return StrategicAgent(role, AgentParams(0.5, 0.7, 1.0), tracker=tracker)
+        return StrategicAgent(
+            role,
+            AgentParams(caution=0.5, statistics=0.5, unpredictability=0.0, reading=1.0),
+            tracker=tracker,
+        )
 
     timid = agent_for(0.03)
     caller = agent_for(0.50)
@@ -346,7 +350,7 @@ def test_profile_describe_has_words_and_numbers():
     from meier.opponents import OpponentProfile
 
     p = OpponentProfile(
-        kind="bluffbenägen", risk=0.7, press=0.9, confidence=0.7, source="llm"
+        kind="bluffbenägen", call_tendency=0.7, bluff_tendency=0.9, confidence=0.7, source="llm"
     )
     text = p.describe()
     assert "bluffbenägen" in text.lower()
@@ -367,7 +371,7 @@ def test_session_views_show_agents_picture_of_the_others():
     from meier.session import Session
 
     players, tracker = make_players(["axel", "berit", "cecilia", "david"])
-    session = Session.new(players, seed=7)
+    session = Session.new(players)
     session.tracker = tracker
     session.play_to_end()
 
@@ -385,11 +389,11 @@ def test_session_views_show_agents_picture_of_the_others():
 def test_describe_params_reads_as_a_character():
     from meier.opponents import describe_params
 
-    cautious = describe_params(0.25, 0.25, 0.15)
-    bold = describe_params(0.65, 0.60, 0.35)
-    assert "sällan" in cautious
-    assert "ofta" in bold
+    cautious = describe_params(0.80, 0.50, 0.20, 0.50)
+    bold = describe_params(0.10, 0.50, 0.20, 0.50)
+    assert "ndviker risk" in cautious
+    assert "ar stora risker" in bold
     # Siffrorna finns kvar i parentesen.
-    assert "25 %" in cautious and "65 %" in bold
+    assert "80 %" in cautious and "10 %" in bold
     # Ingen läsning ska sägas rakt ut, inte som "0 %".
-    assert "läser ingen motståndare" in describe_params(0.5, 0.5, 0.0)
+    assert "läser ingen motståndare" in describe_params(0.5, 0.5, 0.2, 0.0)

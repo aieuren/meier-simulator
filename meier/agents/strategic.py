@@ -15,8 +15,10 @@ algoritm med olika konstanter, och ``press`` styrde ett påståendeval som model
 aldrig fick påverka.
 
 Utan LLM-klient faller agenten tillbaka på :class:`~meier.policy.BasePolicy`.
-Det läget är deterministiskt och används av ``axel`` (den fasta mätstickan) samt
-av tester som ska gå på millisekunder utan nätverk.
+Det läget används av ``axel`` (referensen utan språkmodell) samt av tester som
+ska gå på millisekunder utan nätverk. Kravet på Axel är att taktiken inte
+innehåller någon LLM — inte att varje drag är reproducerbart in i minsta
+slumpval.
 """
 
 from __future__ import annotations
@@ -66,8 +68,8 @@ class StrategicAgent(Agent):
     beskrivs i ord för modellen; den matas aldrig in i en formel.
 
     ``llm`` är valfri. Utan den spelar agenten enligt
-    :class:`~meier.policy.BasePolicy`, vilket är deterministiskt och
-    nätverksfritt. Det är ``axel``s läge.
+    :class:`~meier.policy.BasePolicy`, vilket är nätverksfritt. Det är
+    ``axel``s läge: taktiken innehåller ingen språkmodell.
     """
 
     def __init__(
@@ -124,8 +126,8 @@ class StrategicAgent(Agent):
             return ""
         text = personality.describe_opponent(
             kind=profile.kind,
-            risk=profile.risk,
-            press=profile.press,
+            call_tendency=profile.call_tendency,
+            bluff_tendency=profile.bluff_tendency,
             confidence=profile.confidence,
         )
         return f"\nMOTSTÅNDAREN {opponent}\n{text}\n"
@@ -141,7 +143,7 @@ class StrategicAgent(Agent):
         if profile is None:
             return None
         base = CALL_PRIOR[bid]
-        factor = self.tracker.profile_factor(profile)
+        factor = self.tracker.bluff_factor(profile)
         factor = 1.0 + self.params.reading * (factor - 1.0)
         return min(0.95, base * factor)
 
@@ -150,7 +152,7 @@ class StrategicAgent(Agent):
         profile = self.opponent_profile(opponent)
         if profile is None:
             return 1.0
-        factor = self.tracker.risk_factor(profile)
+        factor = self.tracker.call_factor(profile)
         return 1.0 + self.params.reading * (factor - 1.0)
 
     # -- LLM-anropet -------------------------------------------------------
@@ -431,7 +433,8 @@ class StrategicAgent(Agent):
             if profile is not None:
                 reason = (
                     f"{reason} | bild av {opponent}: {profile.kind} "
-                    f"(press {profile.press:.2f}, konf {profile.confidence:.2f})"
+                    f"(bluff {profile.bluff_tendency:.2f}, "
+                    f"konf {profile.confidence:.2f})"
                 )
 
         return ActionDecision(

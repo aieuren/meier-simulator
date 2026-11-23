@@ -49,14 +49,13 @@ def make_agents(role_keys):
 
 def test_play_match_records_structure(monkeypatch):
     monkeypatch.setattr(match, "_new_agents", make_agents)
-    rec = match.play_match(["a", "b", "c"], seed=7, game=1)
+    rec = match.play_match(["a", "b", "c"], game=1)
     d = rec.to_dict()
 
     # Går att serialisera till JSON (kravet för analysfilen).
     json.dumps(d, ensure_ascii=False)
 
     assert d["game"] == 1
-    assert d["seed"] == 7
     assert len(d["players"]) == 3
     assert d["winner"] in [p["name"] for p in d["players"]]
     assert d["rounds"] >= 1
@@ -73,7 +72,7 @@ def test_play_match_records_structure(monkeypatch):
 
 def test_events_carry_analysis_fields(monkeypatch):
     monkeypatch.setattr(match, "_new_agents", make_agents)
-    rec = match.play_match(["a", "b"], seed=3).to_dict()
+    rec = match.play_match(["a", "b"]).to_dict()
     call = next(e for e in rec["events"] if e.get("action") == "syna")
     # Synen ska bära med sig vem som förlorade och livsställningen.
     assert call["caller_loses"] in (True, False)
@@ -84,7 +83,7 @@ def test_events_carry_analysis_fields(monkeypatch):
 
 def test_summarize_aggregates_roles(monkeypatch):
     monkeypatch.setattr(match, "_new_agents", make_agents)
-    records = [match.play_match(["a", "b"], seed=s, game=s).to_dict() for s in range(4)]
+    records = [match.play_match(["a", "b"], game=g).to_dict() for g in range(4)]
     stats = match.summarize(records)
 
     assert stats["games"] == 4
@@ -101,7 +100,7 @@ def test_summarize_aggregates_roles(monkeypatch):
 
 def test_jsonl_roundtrip(tmp_path, monkeypatch):
     monkeypatch.setattr(match, "_new_agents", make_agents)
-    records = [match.play_match(["a", "b"], seed=s, game=s) for s in range(3)]
+    records = [match.play_match(["a", "b"], game=g) for g in range(3)]
     path = tmp_path / "m.jsonl"
     n = match.write_jsonl(records, path)
     assert n == 3
@@ -112,18 +111,16 @@ def test_jsonl_roundtrip(tmp_path, monkeypatch):
     assert match.summarize(back)["games"] == 3
 
 
-def test_run_matches_seeds_are_sequential(monkeypatch):
+def test_run_matches_numbers_the_games(monkeypatch):
     monkeypatch.setattr(match, "_new_agents", make_agents)
-    recs = list(match.run_matches(["a", "b"], 3, base_seed=100))
-    assert [r.seed for r in recs] == [100, 101, 102]
+    recs = list(match.run_matches(["a", "b"], 3))
     assert [r.game for r in recs] == [1, 2, 3]
 
 
 def test_run_matches_parallel_workers(monkeypatch):
     monkeypatch.setattr(match, "_new_agents", make_agents)
-    recs = list(match.run_matches(["a", "b"], 4, base_seed=10, workers=4))
-    # Alla matcher blir klara och får unika, sekventiella frön (ordningen kan
-    # variera eftersom de spelas samtidigt).
+    recs = list(match.run_matches(["a", "b"], 4, workers=4))
+    # Alla matcher blir klara och får var sitt matchnummer. Ordningen kan
+    # variera eftersom de spelas samtidigt.
     assert len(recs) == 4
-    assert sorted(r.seed for r in recs) == [10, 11, 12, 13]
     assert sorted(r.game for r in recs) == [1, 2, 3, 4]

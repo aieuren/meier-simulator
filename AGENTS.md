@@ -87,8 +87,7 @@ lower bid). Multiple agents with distinct roles can also play full games.
 - `meier/match.py` – batch play of many full matches between the roles, for
   strategy analysis. `play_match` plays one match to the end via
   `Session.play_to_end()` and returns a `GameRecord`; `run_matches` yields a
-  series (optional sequential seeds, and `workers>1` plays matches in parallel
-  threads); `write_jsonl`/`read_jsonl` persist one
+  series (`workers>1` plays matches in parallel threads); `write_jsonl`/`read_jsonl` persist one
   match per line; `summarize` aggregates a series per role (win rate, bluff
   rate, raise/call rates, call success, lives lost). `GameRecord.events` is the
   full session log (`LogEntry.to_dict()`), which carries the analysis fields
@@ -300,8 +299,8 @@ the local one; the cloud base is `https://app.all-hands.dev`.
   one client per agent, so `_match_usage()` sums them into `GameRecord.usage`
   (`total`, `calls`, `by_role`). `summarize()` aggregates this as `tokens`
   (`total`, `per_game`, `calls_per_game`), shown in the CLI and the web summary.
-- Real match via the web app (Gemini `gemini-3.1-flash-lite`, seed 11, 8
-  rounds): 62 018 tokens over 82 calls (~756 tokens/call). Earlier log
+- Real match via the web app (Gemini `gemini-3.1-flash-lite`, 8 rounds):
+  62 018 tokens over 82 calls (~756 tokens/call). Earlier log
   files show 94–197 calls per match (8–13 rounds), so budget ~60–120k tokens
   and ~100–200 calls per match. Roles that reason more (e.g. `kalkyl`) are
   the costliest.
@@ -445,7 +444,7 @@ Three rules that keep the companion doc honest:
 - Describe the machine, not its output. The companion doc says what is
   set up: dice weights, reading caps, roster parameters. It does not say who
   wins, how often players bluff, or how long a match runs. Those are results
-  of a simulation, they change with the seed, and the project is not hunting
+  of a simulation, they change from run to run, and the project is not hunting
   strategies. Results go in `docs/agent-model.md` or a separate report.
 - Every number that stays is a construction number. If a figure would
   change when the players play differently, it does not belong here.
@@ -830,7 +829,7 @@ gone — replaced by four neutral-named players in `meier/agents/roster.py`:
 
 ```bash
 # Fast, deterministic self-play (no LLM) — the default for measurement
-python3 -m meier.cli match axel berit cecilia david --count 200 --seed 1000 \
+python3 -m meier.cli match axel berit cecilia david --count 200 \
     --workers 4 --no-llm --out /tmp/meier_eval.jsonl
 ```
 

@@ -52,12 +52,16 @@ def test_readme_parameters_match_the_roster():
         )
         assert row is not None, f"README saknar tabellrad för {profile.name}"
         cells = [c.strip() for c in row.split("|")[1:-1]]
-        risk, press, reading = cells[2], cells[3], cells[4]
-        assert risk == f"{profile.params.risk:.2f}".replace(".", ","), (
-            f"risk för {profile.name}: README {risk} mot kod {profile.params.risk}"
+        shown = cells[2:6]
+        expected = [
+            f"{profile.params.caution:.2f}".replace(".", ","),
+            f"{profile.params.statistics:.2f}".replace(".", ","),
+            f"{profile.params.unpredictability:.2f}".replace(".", ","),
+            f"{profile.params.reading:.2f}".replace(".", ","),
+        ]
+        assert shown == expected, (
+            f"{profile.name}: README visar {shown}, koden har {expected}"
         )
-        assert press == f"{profile.params.press:.2f}".replace(".", ",")
-        assert reading == f"{profile.params.reading:.2f}".replace(".", ",")
 
 
 def test_readme_plain_language_matches_generated_text():
@@ -66,7 +70,10 @@ def test_readme_plain_language_matches_generated_text():
     for profile in ROSTER.values():
         expected = _flat(
             describe_params(
-                profile.params.risk, profile.params.press, profile.params.reading
+                profile.params.caution,
+                profile.params.statistics,
+                profile.params.unpredictability,
+                profile.params.reading,
             )
         )
         assert expected in text, (
@@ -123,8 +130,11 @@ def test_om_meier_player_table_matches_the_roster():
         )
         assert row is not None, f"Om meier-simulatorn saknar tabellrad för {profile.name}"
         cells = [c.strip() for c in row.split("|")[1:-1]]
-        for cell, value in zip(cells[1:4], (
-            profile.params.risk, profile.params.press, profile.params.reading
+        for cell, value in zip(cells[1:5], (
+            profile.params.caution,
+            profile.params.statistics,
+            profile.params.unpredictability,
+            profile.params.reading,
         )):
             assert cell == f"{value:.2f}".replace(".", ","), (
                 f"{profile.name}: Om meier-simulatorn visar {cell}, koden har {value}"
@@ -378,9 +388,9 @@ def test_om_meier_round_terminology_matches_the_engine():
 
     rounds_without_call = 0
     total_rounds = 0
-    for seed in range(40):
+    for _ in range(40):
         players, _ = make_players(["axel", "berit", "cecilia", "david"])
-        game = Game.new(players, seed=seed)
+        game = Game.new(players)
         game.play()
         for line in game.log:
             if line.startswith("Runda "):

@@ -83,4 +83,5 @@ python3 -m pytest tests/ -q
 ```
 
 Siffrorna ovan kommer från 40–200 matcher med `make_players(["axel", "berit",
-"cecilia", "david"])` och stigande `seed`. De är deterministiska.
+"cecilia", "david"])`. Slumpen styr ordning och tärningar, så siffrorna varierar
+något mellan körningar.
