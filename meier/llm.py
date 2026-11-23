@@ -37,6 +37,15 @@ class _RateLimited(_Transient):
     """Kvottak (429). Kräver längre väntan än ett vanligt tillfälligt fel."""
 
 
+class _Overloaded(LLMError):
+    """Modellen är överbelastad (503). Ingen idé att göra om samma anrop.
+
+    Googles svar är "currently experiencing high demand", och det håller i sig
+    i minuter. Att försöka igen mot samma modell kostar tre långa väntetider
+    utan att hjälpa. Bättre att byta modell direkt.
+    """
+
+
 def _env_float(name: str, default: float) -> float:
     """Läs en miljövariabel som flyttal, annars standardvärdet."""
     raw = os.environ.get(name, "").strip()
@@ -140,12 +149,26 @@ def _is_transient_exc(exc: Exception) -> bool:
     return "timed out" in text or "timeout" in text or "overloaded" in text
 
 
+def _fallback_models() -> tuple[str, ...]:
+    """Läs reservmodeller ur ``MEIER_FALLBACK_MODELS`` (kommaseparerat).
+
+    Tomt värde ger en tom tupel, så beteendet är oförändrat för den som inte
+    vill ha reserver.
+    """
+    raw = os.environ.get("MEIER_FALLBACK_MODELS", "")
+    return tuple(m.strip() for m in raw.split(",") if m.strip())
+
+
 @dataclass
 class LLMConfig:
     """Konfiguration för en LLM-anslutning."""
 
     provider: str  # alltid "gemini"
     model: str
+    #: Modeller att falla tillbaka på när den primära svarar 503 (överbelastad).
+    #: Googles flash-modeller slår i taket med jämna mellanrum; utan reserver
+    #: blir varje beslut en tyst återgång till baspolicyn.
+    fallback_models: tuple[str, ...] = ()
     api_key: str = ""
     base_url: str = ""
     max_tokens: int = 1024
@@ -191,6 +214,7 @@ class LLMConfig:
             return cls(
                 provider="gemini",
                 model=os.environ.get("MEIER_MODEL", "gemini-3.1-flash-lite"),
+                fallback_models=_fallback_models(),
                 api_key=gemini_key,
                 base_url=os.environ.get(
                     "MEIER_BASE_URL",
@@ -223,6 +247,9 @@ class LLMClient:
     #: Antal anrop som gjorts.
     calls: int = field(default=0, init=False)
 
+    #: Modellen som senast svarade. Går först i kön vid nästa anrop.
+    _active_model: str = field(default="", init=False, repr=False)
+
     def _record_usage(self, usage: dict[str, Any]) -> None:
         """Spara senaste anropets räkning och lägg den till summan."""
         self.last_usage = {
@@ -237,9 +264,40 @@ class LLMClient:
             self.total_usage[key] += self.last_usage.get(key, 0)
 
     def complete(self, system: str, user: str, *, json_mode: bool = False) -> str:
-        return self._with_retries(
-            lambda: self._complete_http(system, user, json_mode=json_mode)
+        errors: list[str] = []
+        for model in self._model_chain():
+            try:
+                text = self._with_retries(
+                    lambda m=model: self._complete_http(
+                        system, user, json_mode=json_mode, model=m
+                    )
+                )
+            except LLMError as exc:
+                errors.append(f"{model}: {exc}")
+                continue
+            self._active_model = model
+            return text
+        raise LLMError("Kunde inte nå LLM: " + "; ".join(errors))
+
+    def _model_chain(self) -> tuple[str, ...]:
+        """Modeller att försöka, i ordning.
+
+        Den modell som senast svarade går först. Utan den skulle varje beslut
+        betala hela retrykedjan mot en överbelastad modell innan reserven
+        används.
+        """
+        candidates = (
+            self._active_model,
+            self.config.model,
+            *self.config.fallback_models,
         )
+        seen: set[str] = set()
+        chain: list[str] = []
+        for model in candidates:
+            if model and model not in seen:
+                seen.add(model)
+                chain.append(model)
+        return tuple(chain)
 
     def _with_retries(self, call):
         """Kör ett LLM-anrop och gör om det vid tillfälliga fel.
@@ -271,7 +329,9 @@ class LLMClient:
         raise LLMError(f"Kunde inte nå LLM efter {attempts} försök: {last}") from last
 
     # -- Gemini via OpenAI-kompatibelt HTTP --------------------------------
-    def _complete_http(self, system: str, user: str, *, json_mode: bool) -> str:
+    def _complete_http(
+        self, system: str, user: str, *, json_mode: bool, model: str | None = None
+    ) -> str:
         base = self.config.base_url.rstrip("/")
         if base.endswith("/v1"):
             url = f"{base}/chat/completions"
@@ -279,7 +339,7 @@ class LLMClient:
             url = f"{base}/v1/chat/completions"
 
         payload: dict[str, Any] = {
-            "model": self.config.model,
+            "model": model or self.config.model,
             "max_tokens": self.config.max_tokens,
             "temperature": self.config.temperature,
             "messages": [
@@ -306,6 +366,10 @@ class LLMClient:
             return resp
         except httpx.HTTPStatusError as exc:
             status = exc.response.status_code
+            if status == 503:
+                raise _Overloaded(
+                    f"Modellen är överbelastad (503): {exc.response.text[:200]}"
+                ) from exc
             if status == 429 or status >= 500:
                 message = f"LLM-anropet avvisades tillfälligt ({status}): {exc.response.text[:200]}"
                 if status == 429:

@@ -39,6 +39,11 @@ fi
 # om utan att blockera hela matchen. Kort timeout + fler försök med kvotvila.
 export MEIER_TIMEOUT="${MEIER_TIMEOUT:-30}"
 export MEIER_RETRIES="${MEIER_RETRIES:-6}"
+# En flash-modell svarar 503 ("high demand") med jämna mellanrum. Reservlistan
+# gör att ett beslut byter modell i stället för att tyst falla tillbaka på
+# baspolicyn, som saknar språkmodell. Aliaset pekar på samma lilla flash-modell
+# och följer Googles ompekningar.
+export MEIER_FALLBACK_MODELS="${MEIER_FALLBACK_MODELS:-gemini-flash-lite-latest,gemini-3.5-flash-lite}"
 # Håll anropen under kvottaket (anrop/minut). Standard 15 för Gemini; sätt 0
 # för att stänga av. Marginalen (1.15) gör att vi ligger strax under taket.
 export MEIER_MAX_RPM="${MEIER_MAX_RPM:-15}"

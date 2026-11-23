@@ -99,3 +99,95 @@ def test_complete_retries_real_timeout_then_succeeds(monkeypatch):
     client = _client(max_retries=3)
     assert client.complete("system", "user") == '{"bid": 52}'
     assert calls["n"] == 2
+
+
+def _overloaded() -> httpx.HTTPStatusError:
+    request = httpx.Request("POST", "https://example.invalid")
+    response = httpx.Response(503, request=request, json={"error": {"code": 503}})
+    return httpx.HTTPStatusError("503", request=request, response=response)
+
+
+def test_overloaded_model_falls_back_without_retrying(monkeypatch):
+    """503 ska byta modell direkt, inte göra om samma anrop.
+
+    Googles "high demand" håller i sig i minuter. Att försöka igen mot samma
+    modell kostar tre väntetider utan att hjälpa.
+    """
+    models: list[str] = []
+
+    def fake_post(url, json=None, **kwargs):
+        models.append(json["model"])
+        if json["model"] == "primär":
+            raise _overloaded()
+        return _FakeResponse(
+            {"choices": [{"message": {"content": "svar"}}], "usage": {"total_tokens": 1}}
+        )
+
+    monkeypatch.setattr("meier.llm.httpx.post", fake_post)
+    cfg = LLMConfig(
+        provider="gemini",
+        model="primär",
+        fallback_models=("reserv",),
+        max_retries=3,
+        retry_backoff=0.0,
+    )
+    client = LLMClient(cfg)
+    assert client.complete("system", "user") == "svar"
+    assert models == ["primär", "reserv"], models
+
+
+def test_the_model_that_answered_is_tried_first_next_time(monkeypatch):
+    """Efter ett byte ska reserven gå först, så varje beslut inte betalar omvägen."""
+    models: list[str] = []
+
+    def fake_post(url, json=None, **kwargs):
+        models.append(json["model"])
+        if json["model"] == "primär":
+            raise _overloaded()
+        return _FakeResponse(
+            {"choices": [{"message": {"content": "svar"}}], "usage": {"total_tokens": 1}}
+        )
+
+    monkeypatch.setattr("meier.llm.httpx.post", fake_post)
+    cfg = LLMConfig(
+        provider="gemini",
+        model="primär",
+        fallback_models=("reserv",),
+        max_retries=1,
+        retry_backoff=0.0,
+    )
+    client = LLMClient(cfg)
+    client.complete("system", "user")
+    models.clear()
+    client.complete("system", "user")
+    assert models == ["reserv"], models
+
+
+def test_all_models_overloaded_raises_with_each_reason(monkeypatch):
+    def fake_post(url, **kwargs):
+        raise _overloaded()
+
+    monkeypatch.setattr("meier.llm.httpx.post", fake_post)
+    cfg = LLMConfig(
+        provider="gemini",
+        model="primär",
+        fallback_models=("reserv",),
+        max_retries=1,
+    )
+    with pytest.raises(LLMError) as exc:
+        LLMClient(cfg).complete("system", "user")
+    message = str(exc.value)
+    assert "primär" in message and "reserv" in message
+
+
+def test_fallback_models_are_read_from_env(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "nyckel")
+    monkeypatch.setenv("MEIER_FALLBACK_MODELS", " a , b ,, ")
+    cfg = LLMConfig.from_env()
+    assert cfg.fallback_models == ("a", "b")
+
+
+def test_fallback_models_default_to_empty(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "nyckel")
+    monkeypatch.delenv("MEIER_FALLBACK_MODELS", raising=False)
+    assert LLMConfig.from_env().fallback_models == ()

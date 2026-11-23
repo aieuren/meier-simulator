@@ -428,6 +428,7 @@ Miljövariabler:
 |---|---|
 | `GEMINI_API_KEY` / `GOOGLE_API_KEY` | Gemini-nyckel |
 | `MEIER_MODEL` | Modellnamn |
+| `MEIER_FALLBACK_MODELS` | Reservmodeller, kommaseparerade. Används när den primära svarar 503 (överbelastad). `run.sh` sätter `gemini-flash-lite-latest,gemini-3.5-flash-lite` |
 | `MEIER_BASE_URL` | Egen bas-URL för det OpenAI-kompatibla HTTP-anropet |
 | `MEIER_SECRETS_DIR` | Katalog med nyckelfilen `gemini.key` |
 | `MEIER_MAX_RPM` | Tak för anrop/minut (0 = av; standard 15) |

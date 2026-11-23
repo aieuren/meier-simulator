@@ -520,6 +520,17 @@ Watch the two traps when touching this:
   The key lives outside the repo at `/workspace/meier-secrets/gemini.key`
   (mode 600), which `run.sh` reads. `/workspace` is a persistent volume;
   `/home` and `/tmp` are wiped on restart.
+- A Gemini flash model answers `503 UNAVAILABLE` ("currently experiencing high
+  demand") in bursts that last minutes. Without a fallback the client retries
+  the same model three times, then raises `LLMError`, and the agent silently
+  falls back to `BasePolicy` — the UI still answers, but with `corrected: true`
+  and a one-line reasoning that no model wrote. That is easy to mistake for
+  "the LLM works". `MEIER_FALLBACK_MODELS` (comma-separated, set in `run.sh`)
+  makes `LLMClient` try the next model instead. A 503 raises `_Overloaded`,
+  which is deliberately *not* `_Transient`, so no retry is wasted on a model
+  that is down. The model that last answered goes first in the chain, so the
+  switch is paid once, not on every decision. Check `corrected` on any sample
+  response before concluding the LLM path is healthy.
 - Never print the session API key. Read it from the process env if needed.
 - The web app is served on port 12000 in this environment.
 - Long runs / sandbox lifetime: the runtime pauses an idle environment
