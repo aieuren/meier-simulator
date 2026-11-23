@@ -279,7 +279,7 @@ vet att motståndaren kommer att se dem vid en syn.
 Policy: `decide_raise` lägger påståendet på den minsta lagliga höjningen, som är
 säkrast (minst chans att tärningarna visar lägre). En oförutsägbar agent hoppar
 ibland högre ändå, just för att den inte ska gå att läsa: en motståndare som vet
-att budet alltid är det minsta kan planera efter det.
+att påståendet alltid är det minsta kan planera efter det.
 
 ```python
 steps = rng.randint(1, len(higher) − 1)   # bara om rng.random() < unpredictability
@@ -749,7 +749,7 @@ läsförmåga. Deras inbördes jämförelse handlar därför bara om den dimensi
 lyfter: försiktighet, statistik eller oförutsägbarhet.
 
 Värdena är startpunkter. De kalibreras när vi utvärderar tillsammans. En
-självspelning utan LLM (400 matcher, fyra spelare, baslinje 25 %) gav:
+självspelning utan LLM (400 matcher, fem spelare, baslinje 20 %) gav:
 Axel 31 %, Berit 28 %, Cecilia 22 %, David 19 %. Siffrorna gäller de fem
 nuvarande profilerna, med Axel och Berit på samma parametrar.
 

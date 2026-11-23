@@ -21,16 +21,16 @@ roller kan spela hela spel mot varandra.
 ## Vad som finns
 
 - Webbapp med fem flikar:
-  - Spelarna – de fyra spelarna och deras profilbeskrivningar.
+  - Rollerna – de fem spelarna och deras profilbeskrivningar.
   - Enskild spelare – skriv in tärningsutfallet (två tärningar) och se spelarens svar.
-  - Fyra spelare – fyra spelare spelar mot varandra i ett fullt flöde fram till en syn.
+  - Spelarna möter varandra – spelarna spelar mot varandra i ett fullt flöde fram till en syn.
   - Matchserie – kör många matcher och få statistik + ett JSONL-protokoll för analys.
   - Analys – ladda upp en eller flera JSONL-filer och ställ frågor mot materialet.
     Svaren kommer från en LLM och kan innehålla diagram (stapel, linje eller tabell).
 - Fem spelare – Axel, Berit, Cecilia, David och Elsa. Fyra av dem är
   LLM-agenter som fattar sina egna beslut inom spelets regler. Axel är
   referensen utan LLM.
-- Interaktiv spelsession – fyra spelare spelar mot varandra i ett fullt flöde
+- Interaktiv spelsession – spelarna möter varandra i ett fullt flöde
   fram till en syn. Slumpen avgör ordningen och vem som börjar. Varje steg
   bekräftas med Ett drag, eller så körs flödet vidare med Till syn
   eller Till slut på runda. Varje svar sparas i en logg.
@@ -208,7 +208,7 @@ Hela modellen, med formler och mätvärden, står i
 
 ## Interaktiv spelsession
 
-I webbappen finns sektionen "Fyra spelare spelar mot varandra":
+I webbappen finns sektionen "Spelarna möter varandra":
 
 1. Klicka Ny session. Slumpen avgör spelordningen och vem som börjar.
 2. Ett steg visas i taget. Klicka Ett drag för att utföra det,
@@ -470,7 +470,7 @@ meier/
   policy.py           Reservstrategin när ingen LLM svarar (Axels läge)
   agents/
     base.py           Agent-grundklass och roll
-    roster.py         De fyra spelarna och deras parametrar
+    roster.py         De fem spelarna och deras parametrar
     strategic.py      Spelaren: LLM:en väljer bland lagliga drag
     personality.py    Spelarprofilen som text till prompten
     reader.py         Läser motståndarna med LLM

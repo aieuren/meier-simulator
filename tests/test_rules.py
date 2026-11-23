@@ -63,14 +63,14 @@ def test_higher_options():
 
 
 def test_resolve_call_bidder_loses_when_shown_lower():
-    # Bud 65, tärningarna visar 62 (lägre) -> budgivaren förlorar ett liv.
+    # Påstående 65, tärningarna visar 62 (lägre) -> hållaren förlorar ett liv.
     result = rules.resolve_call(bid=65, shown=62)
     assert result.caller_loses is False
     assert result.lives == 1
 
 
 def test_resolve_call_caller_loses_when_shown_equal_or_higher():
-    # Bud 62, tärningarna visar 65 (högre) -> den som synade förlorar.
+    # Påstående 62, tärningarna visar 65 (högre) -> den som synade förlorar.
     result = rules.resolve_call(bid=62, shown=65)
     assert result.caller_loses is True
     assert result.lives == 1
@@ -84,11 +84,11 @@ def test_resolve_call_caller_loses_when_shown_equal_or_higher():
 def test_meier_costs_double_as_bid():
     result = rules.resolve_call(bid=21, shown=11)
     assert result.lives == 2
-    assert result.caller_loses is False  # visar lägre -> budgivaren förlorar
+    assert result.caller_loses is False  # visar lägre -> hållaren förlorar
 
 
 def test_meier_costs_double_when_shown():
-    # Bud 66 men tärningarna visar Meier -> den som synade förlorar två liv.
+    # Påstående 66 men tärningarna visar Meier -> den som synade förlorar två liv.
     result = rules.resolve_call(bid=66, shown=21)
     assert result.caller_loses is True
     assert result.lives == 2

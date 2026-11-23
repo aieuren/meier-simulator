@@ -188,7 +188,7 @@ class MeierPlayerAgent(Agent):
     def announce_forced(
         self, dice: tuple[int, int], *, previous_bid: int, opponent: str | None = None
     ) -> Announcement:
-        """Budgivaren måste höja när bägaren gått ett helt varv.
+        """Hållaren måste höja när bägaren gått ett helt varv.
 
         Tärningarna har redan slagits om av motorn. Spelaren får själv välja om
         den vill titta på dem (som vid ett vanligt påstående) eller påstå blint (som
@@ -401,7 +401,7 @@ class MeierPlayerAgent(Agent):
         new_bid: int | None = None
         if action == "slå":
             if not higher:
-                # Budet är redan högst (Meier) – går inte att slå.
+                # Påståendet är redan högst (Meier) – går inte att slå.
                 action = "skicka"
             else:
                 new_bid = self._coerce_bid(data.get("bid"), higher[-1], bid, higher)

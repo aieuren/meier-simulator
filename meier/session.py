@@ -214,7 +214,7 @@ class Session:
     def _prepare_round(self, *, starter: int) -> None:
         """Starta en ny runda: den som börjar slår och tittar i smyg.
 
-        Tärningsutfallet loggas direkt som en egen rad (indata). Budet läggs
+        Tärningsutfallet loggas direkt som en egen rad (indata). Påståendet läggs
         sedan på som en egen rad när spelaren har svarat.
         """
         self.pending_dice = rules.roll(self.rng)
@@ -247,7 +247,7 @@ class Session:
         self.step_kind = "action"
 
     def _prepare_raise(self) -> None:
-        """Budgivaren måste höja efter ett helt varv."""
+        """Hållaren måste höja efter ett helt varv."""
         self.actor = self.bidder
         self.step_kind = "raise"
 
@@ -507,7 +507,7 @@ class Session:
         bid = self.pending_bid
         assert bid is not None
         player = self.players[self.bidder]
-        # Tärningarna slås om när bägaren gått ett helt varv. Budgivaren väljer
+        # Tärningarna slås om när bägaren gått ett helt varv. Hållaren väljer
         # själv om den tittar på dem eller påstår blint (som vid ett slag).
         dice = rules.roll(self.rng)
         self._log_roll(player=player.name, dice=dice, shown=rules.read_dice(*dice))
@@ -558,7 +558,7 @@ class Session:
         nxt = self._next_actor(actor)
         if nxt == self.bidder:
             if rules.is_meier(self.pending_bid):
-                # Budet är Meier – den som påstod slår om och börjar en ny runda.
+                # Påståendet är Meier – den som påstod slår om och börjar en ny runda.
                 starter = self.bidder
                 self.round += 1
                 self._prepare_round(starter=starter)

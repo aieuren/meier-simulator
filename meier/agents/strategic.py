@@ -133,7 +133,7 @@ class StrategicAgent(Agent):
         return f"\nMOTSTÅNDAREN {opponent}\n{text}\n"
 
     def _opponent_prior(self, bid: int, opponent: str | None) -> float | None:
-        """Budspecifik tro, justerad för motståndaren — eller None (populationen).
+        """Påståendespecifik tro, justerad för motståndaren — eller None (populationen).
 
         Används bara av reservpolicyn. LLM:en får motståndaren i ord i stället.
         """
@@ -275,7 +275,7 @@ class StrategicAgent(Agent):
         lines += [
             "",
             "LAGLIGA PÅSTÅENDEN",
-            ", ".join(rules.name(v) for v in legal),
+            self._legal_bids_listed(shown, legal),
             "",
             "Du får säga sanningen, ett högre (en bluff) eller ett lägre. Tänk på vad "
             "du tjänar på: ett påstående under dina tärningar kan ingen syna utan att "
@@ -285,6 +285,24 @@ class StrategicAgent(Agent):
             '{"bid": <heltal ur listan ovan>, "reasoning": "<kort motivering>"}',
         ]
         return "\n".join(lines)
+
+    def _legal_bids_listed(self, shown: int, legal: list[int]) -> str:
+        """Lista de lagliga påståendena med riktning mot tärningarna.
+
+        Modellen kan Meiers ordning sämre än koden. Utan riktningen händer det att
+        den kallar ett högre påstående för "lägre" i motiveringen. Märkningen gör
+        att motiveringen och draget inte kan peka åt olika håll.
+        """
+        marked = []
+        for v in legal:
+            if v == shown:
+                tag = "exakt dina tärningar"
+            elif rules.is_higher(v, shown):
+                tag = "högre, alltså bluff"
+            else:
+                tag = "lägre, alltså sant men svagare"
+            marked.append(f"{rules.name(v)} ({tag})")
+        return "; ".join(marked)
 
     # -- Beslut 2: slå (spelaren ser inte tärningarna) ---------------------
     def announce_blind(
@@ -352,7 +370,7 @@ class StrategicAgent(Agent):
             raise ValueError(f"{previous_bid} är inte ett giltigt påstående")
         choices = legality.forced_choices(previous_bid=previous_bid)
         if not choices:
-            # Budet är Meier. Motorn slår om och börjar en ny runda i stället.
+            # Påståendet är Meier. Motorn slår om och börjar en ny runda i stället.
             raise ValueError(
                 f"Kan inte höja: {rules.name(previous_bid)} är högst, det finns inget högre påstående"
             )

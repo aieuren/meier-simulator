@@ -4,12 +4,12 @@ Policyn är spelets "source of truth" för värdering: den avgör vad en agent
 bjuder, hur den höjer och när den synar. Testerna låser de egenskaper som
 motorn och analysen bygger på, särskilt de som höll på att gå förlorade:
 
-- budet är alltid lagligt och strikt högre vid höjning,
-- svaret på ett bud har tre lagliga val (syna, skicka, slå) och ingen av dem
+- påståendet är alltid lagligt och strikt högre vid höjning,
+- svaret på ett påstående har tre lagliga val (syna, skicka, slå) och ingen av dem
   tvingas fram av en regel — bara av värderingen,
 - ``caution``, ``statistics``, ``unpredictability`` och ``reading`` är de enda
   personlighetsmåtten; bluffandet är ingen parameter,
-- den budspecifika tron följer den frysta tabellen.
+- den påståendespecifika tron följer den frysta tabellen.
 """
 
 import pytest
@@ -29,7 +29,7 @@ def base():
     return BasePolicy(AgentParams())
 
 
-# -- Bud (beslut 1) --------------------------------------------------------
+# -- Påstående (beslut 1) --------------------------------------------------
 
 def test_bid_is_always_a_valid_value(base):
     for shown in rules.RANKING:
@@ -95,7 +95,7 @@ def test_raise_is_strictly_higher(base):
 
 
 def test_raise_at_meier_has_no_option_but_call(base):
-    # Meier är högst: det finns inget högre bud.
+    # Meier är högst: det finns inget högre påstående.
     decision = base.decide_raise(rules.MEIER)
     assert decision.action in {"syna", "skicka"}
 
@@ -103,7 +103,7 @@ def test_raise_at_meier_has_no_option_but_call(base):
 # -- Syn (beslut 3) --------------------------------------------------------
 
 def test_meier_call_ev_never_forbids_calling(base):
-    # Meier är det dyraste budet att bära, så synen är alltid värd att ta i
+    # Meier är det dyraste påståendet att bära, så synen är alltid värd att ta i
     # tvåvägsvalet. Det är en egenskap hos EV-kurvan, inte en påtvingad regel:
     # spelaren får skicka vidare (se test_response_meier_can_be_passed_on).
     decision = base.decide_call(rules.MEIER)
@@ -116,14 +116,14 @@ def test_call_never_invents_a_bid(base):
 
 
 def test_low_bids_are_rarely_called(base):
-    # Empirin: bud ≤ 54 synas nästan aldrig (0/871 i de gamla loggarna).
+    # Empirin: påståenden ≤ 54 synas nästan aldrig (0/871 i de gamla loggarna).
     low = [b for b in rules.RANKING if rules.compare(b, 54) < 0]
     called = sum(base.decide_call(b).action == "syna" for b in low)
     assert called == 0
 
 
 def test_opponent_prior_can_shift_the_call(base):
-    # En högre tro på att synen vinner gör att fler bud synas.
+    # En högre tro på att synen vinner gör att fler påståenden synas.
     bid = 61
     normal = base.decide_call(bid)
     greedy = base.decide_call(bid, opponent_q=0.9)
@@ -155,7 +155,7 @@ def test_response_can_shake_when_shaking_is_best():
 
 
 def test_response_meier_is_not_forced_to_call():
-    # Meier synas i praktiken, men av ett skäl: att bära budet är dyrt
+    # Meier synas i praktiken, men av ett skäl: att bära påståendet är dyrt
     # (hållarvärde −0,92 liv). Ingen regel hindrar att det skickas vidare.
     # Om hållarvärdet vore högt ska valet falla på "skicka" — det bevisar att
     # tvånget är borta och att bara EV-kurvan styr.
@@ -190,8 +190,8 @@ def test_response_picks_the_best_available_option():
 # -- Tvingad höjning (beslut 4) -------------------------------------------
 
 def test_forced_choice_is_titta_or_blint(base):
-    # Vid Meier finns inget högre bud; då återstår bara att syna (motorn slår
-    # annars om och startar en ny runda). För alla andra bud är valet titta/blint.
+    # Vid Meier finns inget högre påstående; då återstår bara att syna (motorn slår
+    # annars om och startar en ny runda). För alla andra påståenden är valet titta/blint.
     for bid in rules.RANKING:
         if rules.is_meier(bid):
             continue
@@ -209,7 +209,7 @@ def test_forced_choice_follows_unpredictability():
     assert "blint" in seen, "en oförutsägbar profil ska ibland påstå blint"
 
 
-# -- Den budspecifika tron -------------------------------------------------
+# -- Den påståendespecifika tron -------------------------------------------
 
 def test_call_prior_covers_every_bid_level():
     assert set(CALL_PRIOR) == set(rules.RANKING)
@@ -217,7 +217,7 @@ def test_call_prior_covers_every_bid_level():
 
 
 def test_meier_is_the_hardest_bid_to_call_profitably():
-    # Meier är högst men svårast att syna: P(vinst) ska vara lägst av alla höga bud.
+    # Meier är högst men svårast att syna: P(vinst) ska vara lägst av alla höga påståenden.
     assert CALL_PRIOR[rules.MEIER] < CALL_PRIOR[11]
 
 

@@ -271,7 +271,7 @@ def test_opponent_factor_never_lowers_the_bid_below_the_truth():
         for factor in (2.0, 3.0):
             vs_caller = policy.decide_bid(shown, opponent_factor=factor)
             assert rules.compare(vs_caller.bid, neutral.bid) <= 0, (
-                f"faktor {factor} höjde budet på {rules.name(shown)}"
+                f"faktor {factor} höjde påståendet på {rules.name(shown)}"
             )
 
 
@@ -296,7 +296,7 @@ def test_call_ratio_is_relative_to_the_population():
 
 
 def test_call_tendency_reaches_the_bid_through_the_agent():
-    """Synbenägenheten ska faktiskt styra agentens bud, inte bara räknas ut."""
+    """Synbenägenheten ska faktiskt styra agentens påståenden, inte bara räknas ut."""
     from meier.agents.base import Role
     from meier.agents.strategic import StrategicAgent
     from meier.policy import AgentParams

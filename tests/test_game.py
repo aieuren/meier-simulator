@@ -23,7 +23,7 @@ class ScriptedAgent(Agent):
     def announce(self, dice, *, previous_bid=None, opponent=None):
         shown = rules.read_dice(*dice)
         if previous_bid is not None:
-            # Tvingad höjning: välj nästa högre bud.
+            # Tvingad höjning: välj nästa högre påstående.
             bid = rules.next_higher(previous_bid) or rules.MEIER
         else:
             bid = self._announcements.pop(0) if self._announcements else shown
@@ -50,7 +50,7 @@ def test_game_call_resolution_reduces_lives():
     # Tvinga fram ett bestämt slag: 6 och 2 -> 62.
     game.roll = lambda: (6, 2)
     winner = game.play()
-    assert game.players[0].lives == 2  # A (budgivaren) förlorade ett liv
+    assert game.players[0].lives == 2  # A (hållaren) förlorade ett liv
     assert winner in game.players
 
 
@@ -96,7 +96,7 @@ def test_forced_raise_rerolls_the_dice():
     game.play(max_rounds=1)
     log = "\n".join(game.log)
     # A slog om till 51 och höjde till 61; B synade och tärningarna (51) visade
-    # lägre än budet, alltså förlorar budgivaren A ett liv.
+    # lägre än påståendet, alltså förlorar hållaren A ett liv.
     assert "slår om" in log
     assert game.players[0].lives == 2
 
@@ -170,7 +170,7 @@ def test_bag_goes_to_previous_active_player_every_round():
 def test_engine_accepts_lower_first_bid():
     """Reglerna tillåter 'det sanna, ett högre eller ett lägre'.
 
-    Motorn ska acceptera ett lägre bud. Att policyn sedan aldrig väljer det är
+    Motorn ska acceptera ett lägre påstående. Att policyn sedan aldrig väljer det är
     ett strategival – se docs/regler/granskning.md.
     """
     from meier.agents.base import Role
@@ -218,7 +218,7 @@ def test_pass_is_blind_the_dice_never_reach_the_chooser():
     assert len(seen_calls) > 100, "för få beslut för att testet ska betyda något"
     for call in seen_calls:
         assert set(call) == {"bid", "lives"}, (
-            f"beslutsmottagaren fick mer än bud och liv: {sorted(call)}. "
+            f"beslutsmottagaren fick mer än påstående och liv: {sorted(call)}. "
             "Tärningarna får aldrig nå den som väljer handling – att titta är att syna."
         )
         assert isinstance(call["bid"], int)

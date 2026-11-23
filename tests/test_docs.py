@@ -367,7 +367,7 @@ def test_om_meier_bluffs_are_always_the_smallest_raise():
 def test_om_meier_round_terminology_matches_the_engine():
     """En runda tar slut vid syn, inte vid matchslut.
 
-    Dokumentet säger: "En runda är från första budet till dess att någon
+    Dokumentet säger: "En runda går från första påståendet till dess att någon
     synar." Testet spelar riktiga matcher och kontrollerar att varje runda
     slutar med en livsförlust (undantaget Meier-varvet, som startar en ny
     runda utan syn). Det fångar både feldelade rundor och en text som lovar
@@ -542,14 +542,14 @@ def test_om_meier_does_not_claim_raises_are_always_one_step():
 def test_agent_model_has_no_forced_meier_call_rule():
     """Agentmodellen får inte beskriva synen på Meier som en påtvingad regel.
 
-    Meier syns för att det är dyrt att bära budet, inte för att en regel säger
+    Meier syns för att det är dyrt att bära påståendet, inte för att en regel säger
     det. Dokumentet måste skilja på regel och konsekvens.
     """
     text = AGENT_MODEL.read_text(encoding="utf-8")
     flat = " ".join(text.split()).lower()
     for claim in (
         "meier synas alltid",
-        "ett meier-bud synas alltid",
+        "ett meier-påstående synas alltid",
         "obligatoriskt",
     ):
         assert claim not in flat, (
@@ -559,7 +559,7 @@ def test_agent_model_has_no_forced_meier_call_rule():
 
 
 def test_agent_model_describes_three_legal_responses():
-    """Dokumentet ska räkna upp alla tre lagliga svar på ett bud."""
+    """Dokumentet ska räkna upp alla tre lagliga svar på ett påstående."""
     text = AGENT_MODEL.read_text(encoding="utf-8")
     flat = " ".join(text.split()).lower()
     for word in ("syna", "skicka vidare", "slå"):

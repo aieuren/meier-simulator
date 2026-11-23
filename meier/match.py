@@ -77,7 +77,7 @@ def _player_stats(log: list[LogEntry], names: list[str]) -> dict[str, dict[str, 
     """Per-spelare-statistik för en enskild match, räknad ur loggen."""
     stats: dict[str, dict[str, Any]] = {
         name: {
-            "bids": 0,          # egna påståenden (bud/slå/höja)
+            "bids": 0,          # egna påståenden (påstående/slå/höja)
             "blinds": 0,        # egna påståenden efter ett blind slag (såg inte tärningarna)
             "bluffs": 0,        # egna påståenden där spelaren tittat och inte sa sanningen
             "truths": 0,        # egna påståenden där spelaren tittat och sa sanningen

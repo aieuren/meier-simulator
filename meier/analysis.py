@@ -149,7 +149,7 @@ def render_digest_text(digest: dict[str, Any]) -> str:
         f"synaren förlorade {co.get('caller_loses', 0)}"
     )
 
-    for label, key in (("ÅTGÄRDER", "actions"), ("BUD (vanligast)", "bids"),
+    for label, key in (("ÅTGÄRDER", "actions"), ("PÅSTÅENDEN (vanligast)", "bids"),
                        ("TÄRNINGSUTFALL (vanligast)", "outcomes")):
         dist = digest.get(key, {})
         if dist:

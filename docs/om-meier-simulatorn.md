@@ -299,9 +299,9 @@ synar är det friare fram; mot en som synar ofta lönar sig bara de påståenden
 
 ## Vad du kan göra i webbappen
 
-- Spelarna – de fyra spelarna och deras profiler.
+- Rollerna – de fem spelarna och deras profiler.
 - Enskild spelare – skriv in två tärningar och se vad en spelare svarar.
-- Fyra spelare – fyra spelare spelar mot varandra, ett steg i taget eller
+- Spelarna möter varandra – spelarna spelar mot varandra, ett steg i taget eller
   hela matchen. Loggen visar varje påstående, varje syn och vem som förlorade liv.
 - Matchserie – kör många matcher och få statistik.
 - Analys – välj bland loggarna och ställ frågor om materialet. Svaren kommer
@@ -327,7 +327,7 @@ läsförmågan inte syns i siffrorna är det en upplysning om modellen, inte om
 spelet.
 
 En viktig varning: enstaka matcher säger nästan ingenting. Meier har hög
-slump i sig, och fyra spelare med liv som tar slut gör att en enskild match kan
+slump i sig, och flera spelare med liv som tar slut gör att en enskild match kan
 vända på en enda syn. Kör hellre flera hundra matcher än tio.
 
 ---

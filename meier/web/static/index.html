@@ -13,22 +13,22 @@
 </header>
 
 <nav class="tabs" role="tablist" aria-label="Flikar">
-  <button class="tab active" data-tab="tab-spelarna" role="tab" aria-selected="true">Spelarna</button>
+  <button class="tab active" data-tab="tab-spelarna" role="tab" aria-selected="true">Rollerna</button>
   <button class="tab" data-tab="tab-spelare" role="tab" aria-selected="false">Enskild spelare</button>
-  <button class="tab" data-tab="tab-agenter" role="tab" aria-selected="false">Fyra spelare</button>
+  <button class="tab" data-tab="tab-agenter" role="tab" aria-selected="false">Spelarna möter varandra</button>
   <button class="tab" data-tab="tab-spel" role="tab" aria-selected="false">Matchserie</button>
   <button class="tab" data-tab="tab-analys" role="tab" aria-selected="false">Analys</button>
 </nav>
 
 <main>
-  <!-- Flik 1: de fyra spelarna och deras profiler -->
+  <!-- Flik 1: spelarna och deras profiler -->
   <div class="tab-panel" id="tab-spelarna">
     <section class="card">
-      <h2>De fyra spelarna</h2>
-      <p class="hint">
-        Fyra oberoende AI-agenter spelar mot varandra. Var och en har sin egen
+      <h2 id="playersHeading">Rollerna</h2>
+      <p class="hint" id="playersIntro">
+        Oberoende AI-agenter spelar mot varandra. Var och en har sin egen
         profil och spelstil, och ser bara den information en riktig spelare
-        skulle ha. Tre av dem fattar sina beslut med en språkmodell; Axel är
+        skulle ha. De flesta fattar sina beslut med en språkmodell; Axel är
         grundtaktiken. Repliken byggs alltid lokalt ur draget. Rollerna är
         desamma i alla flikar.
       </p>
@@ -91,10 +91,10 @@
     </section>
   </div>
 
-  <!-- Flik 3: fyra spelare spelar mot varandra, steg för steg -->
+  <!-- Flik 3: spelarna möter varandra, steg för steg -->
   <div class="tab-panel" id="tab-agenter" hidden>
     <section class="card" id="sessionCard">
-      <h2>Fyra spelare spelar mot varandra</h2>
+      <h2 id="sessionHeading">Spelarna möter varandra</h2>
       <p class="hint">
         Slumpen avgör ordningen och vem som börjar. <strong>Ett drag</strong>
         kör ett steg, <strong>Till slut på runda</strong> kör fram till rundans

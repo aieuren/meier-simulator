@@ -80,7 +80,7 @@ def test_announce_falls_back_to_truth_on_invalid_bid():
 
 
 def test_announce_forces_higher_bid_when_required():
-    # Modellen föreslår ett för lågt bud trots att den måste höja.
+    # Modellen föreslår ett för lågt påstående trots att den måste höja.
     from meier import rules
 
     agent = make_agent({"bid": 41, "line": "41", "reasoning": ""})
@@ -137,7 +137,7 @@ def test_decide_unknown_action_defaults_to_skicka():
 
 
 def test_decide_cannot_raise_over_meier():
-    # Budet är Meier (högst) – går inte att slå, agenten får skicka vidare.
+    # Påståendet är Meier (högst) – går inte att slå, agenten får skicka vidare.
     agent = make_agent({"action": "slå", "bid": 11, "line": "", "reasoning": ""})
     decision = agent.decide(21)
     assert decision.action == "skicka"

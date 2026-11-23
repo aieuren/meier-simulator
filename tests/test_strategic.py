@@ -53,7 +53,7 @@ def test_matches_always_terminate(run):
 def test_shaking_is_a_real_choice_in_matches():
     """``slå`` ska kunna spelas i en hel match, inte bara finnas i koden.
 
-    En lagpressprofil väljer det minsta lagliga budet, och då är hållarvärdet
+    En lagpressprofil väljer det minsta lagliga påståendet, och då är hållarvärdet
     bättre än att skicka vidare. Över flera matcher ska ``slå`` därför dyka upp
     i loggen — annars är det tredje valet död kod igen.
 
@@ -91,7 +91,7 @@ def test_tracker_receives_engine_events():
 
 
 def test_tracker_sees_bluffs_only_after_reveal():
-    # Varje avslöjat bud måste ha skett vid en syn, aldrig i förväg.
+    # Varje avslöjat påstående måste ha skett vid en syn, aldrig i förväg.
     session, tracker = play(["axel", "berit", "cecilia", "david"])
     calls = sum(1 for e in session.log if e.kind == "action" and e.action == "syna")
     revealed = sum(s.revealed for s in tracker.stats.values())
@@ -100,14 +100,14 @@ def test_tracker_sees_bluffs_only_after_reveal():
 
 def test_a_reading_agent_still_calls():
     # Den läsande agenten fick EV djupt negativ mot en "ärlig" motståndare och
-    # synade aldrig — matchen fastnade. Den ska fortfarande svara på bud.
+    # synade aldrig — matchen fastnade. Den ska fortfarande svara på påståenden.
     session, _ = play(["cecilia", "berit"])
     calls = sum(1 for e in session.log if e.kind == "action" and e.action == "syna")
     assert calls > 0
 
 
 def test_no_agent_passes_forever():
-    # Ingen agent får skicka vidare ett Meier-bud: det är bevisbart sämre.
+    # Ingen agent får skicka vidare ett Meier-påstående: det är bevisbart sämre.
     session, _ = play(["axel", "berit", "cecilia", "david"])
     for entry in session.log:
         if entry.kind == "action" and entry.action == "skicka":
@@ -144,7 +144,7 @@ def test_reading_changes_the_prior():
     assert tracker.bluff_ratio("bluffare") > tracker.bluff_ratio("ärlig")
     # En agent utan läsning faller tillbaka på populationen (inget omdöme).
     assert blind._opponent_prior(61, "bluffare") is None
-    # Den läsande agenten tror mer på ett högt bud från en känd bluffare än
+    # Den läsande agenten tror mer på ett högt påstående från en känd bluffare än
     # från en känd ärlig spelare.
     assert reader._opponent_prior(61, "bluffare") > reader._opponent_prior(61, "ärlig")
 
@@ -250,3 +250,18 @@ def test_player_count_is_free():
         assert len(played) == len(roles)
         assert [p["role"] for p in played] == roles
         assert rec.winner in {p["name"] for p in played}
+
+
+def test_bid_prompt_marks_each_legal_bid_as_higher_or_lower():
+    """Prompten ska säga vilka påståenden som är högre respektive lägre.
+
+    Utan märkningen hände det att modellen kallade ett högre påstående för
+    "lägre" i motiveringen, eftersom den inte höll Meiers ordning i huvudet.
+    Då pekade draget och motiveringen åt olika håll.
+    """
+    agent = make("elsa", ROSTER["elsa"].params, OpponentTracker())
+    context = agent._bid_context((2, 5), 52, None, [61, 52, 51], None)
+
+    assert "61 (högre, alltså bluff)" in context
+    assert "52 (exakt dina tärningar)" in context
+    assert "51 (lägre, alltså sant men svagare)" in context

@@ -27,10 +27,10 @@ def test_all_three_responses_are_legal_below_meier():
 
 
 def test_shaking_is_not_offered_against_meier():
-    """Mot Meier finns inget högre bud, så ``slå`` går inte att utföra.
+    """Mot Meier finns inget högre påstående, så ``slå`` går inte att utföra.
 
     Ett riktigt parti kraschade här: spelaren valde ``slå`` mot Meier och
-    motorn bad om ett bud över det högsta som finns.
+    motorn bad om ett påstående över det högsta som finns.
     """
     assert "slå" not in legality.response_actions(bid=rules.MEIER)
     assert "syna" in legality.response_actions(bid=rules.MEIER)
@@ -44,7 +44,7 @@ def test_llm_choosing_shake_against_meier_never_crashes():
 
 
 def test_first_bid_may_be_anything_in_the_ranking():
-    # Ingen undre gräns vid rundans första bud: även 31 är lagligt.
+    # Ingen undre gräns vid rundans första påstående: även 31 är lagligt.
     assert legality.legal_bids(shown=52) == list(rules.RANKING)
 
 
@@ -105,7 +105,7 @@ def test_llm_bid_is_used_when_legal():
 
 
 def test_llm_illegal_bid_is_rejected_and_asked_again():
-    # Först ett olagligt bud under det som ligger, sedan ett lagligt.
+    # Först ett olagligt påstående under det som ligger, sedan ett lagligt.
     agent = agent_with(['{"bid": 52}', '{"bid": 62}'])
     ann = agent.announce((1, 1), previous_bid=61)
     assert ann.bid == 62
@@ -202,10 +202,10 @@ def test_agent_without_llm_is_deterministic():
 
 
 def test_policy_never_silently_rewrites_the_bid():
-    """Budet ska vara spelarens eget, inte rättat i efterhand.
+    """Påståendet ska vara spelarens eget, inte rättat i efterhand.
 
-    Tidigare valde policyn bud utan att veta vad som låg, och motorn skrev tyst
-    om 48 % av alla bud. Nu väljer policyn bland de lagliga buden direkt.
+    Tidigare valde policyn påståenden utan att veta vad som låg, och motorn skrev tyst
+    om 48 % av alla påståenden. Nu väljer policyn bland de lagliga påståendena direkt.
     """
     role = Role(key="axel", name="Axel", description="", style="")
     agent = StrategicAgent(role, AgentParams())

@@ -3,8 +3,8 @@
 Det viktigaste testet är att modellen aldrig kan lära sig något ur framtiden:
 tärningarna får bara komma in via :meth:`OpponentTracker.reveal`, och bara efter
 att en syn redan avgjorts. Detta var ett verkligt problem — ``session.py`` loggar
-de faktiska tärningarna för varje bud, och bygger man profilen ur hela loggen
-"vet" agenten att ett bud var en bluff fast ingen kunde veta det än.
+de faktiska tärningarna för varje påstående, och bygger man profilen ur hela loggen
+"vet" agenten att ett påstående var en bluff fast ingen kunde veta det än.
 """
 
 from meier.opponents import OpponentTracker
@@ -13,7 +13,7 @@ from meier.opponents import OpponentTracker
 def test_blind_bids_are_not_promises():
     tracker = OpponentTracker()
     tracker.observe_bid("a", blind=True)
-    # Ett blint bud är inget löfte: ingen profil skapas alls för det.
+    # Ett blint påstående är inget löfte: ingen profil skapas alls för det.
     assert "a" not in tracker.stats
     tracker.observe_bid("a", blind=False)
     assert tracker.stats["a"].visible_bids == 1
@@ -27,7 +27,7 @@ def test_bluff_estimate_defaults_to_global_before_any_reveal():
 
 def test_bluff_estimate_uses_only_revealed_bids():
     tracker = OpponentTracker()
-    # Fyra synliga bud, men bara ett avslöjat — och det var en bluff.
+    # Fyra synliga påståenden, men bara ett avslöjat — och det var en bluff.
     for _ in range(4):
         tracker.observe_bid("a", blind=False)
     tracker.reveal("a", was_bluff=True)
@@ -72,8 +72,8 @@ def test_effective_prior_scales_relative_not_absolute():
     tracker = OpponentTracker()
     for _ in range(10):
         tracker.reveal("a", was_bluff=True)
-    # Lågt bud: den absoluta bluff-frekvensen är hög, men tron ska fortfarande
-    # vara låg — annars synar agenten bud som nästan alltid är sanna.
+    # Lågt påstående: den absoluta bluff-frekvensen är hög, men tron ska fortfarande
+    # vara låg — annars synar agenten påståenden som nästan alltid är sanna.
     low = tracker.effective_prior(41, "a", reading=1.0)
     assert low < 0.5
 

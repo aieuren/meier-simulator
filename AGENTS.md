@@ -67,10 +67,11 @@ lower bid). Multiple agents with distinct roles can also play full games.
   keep every bid valid and strictly higher, and `Session._enforce_bid` is the
   engine's backstop. The tests guard the rules.
 - `meier/web/app.py` + `meier/web/static/` – web UI and JSON API. The UI has
-  four tabs: *Spelarna* (the four player cards with name, description, and
+  five tabs: *Rollerna* (one card per player, with name, description, and
   style), *Enskild spelare* (one player answers a roll),
-  *Fyra spelare* (the interactive session), and *Matchserie* (run a series of
-  matches and show per-player statistics plus a downloadable JSONL protocol).
+  *Spelarna möter varandra* (the interactive session), *Matchserie* (run a
+  series of matches and show per-player statistics plus a downloadable JSONL
+  protocol), and *Analys* (ask questions about loaded protocols).
   `/api/roles` returns each role's `style` too, so the
   first tab can show the full character text. Tab switching just toggles
   `[hidden]` on `.tab-panel`; note the `.tab-panel[hidden] { display: none }`
@@ -466,6 +467,12 @@ Three rules that keep the companion doc honest:
   61, 54, 53, 52, 51, 43, 42, 41, 32, 31. Meier (21) is highest and costs double.
 - Agents must always respond with a JSON object; parsing tolerates code fences
   and surrounding text (`llm.parse_json_object`).
+- The bid prompt lists every legal bid with its direction against the dice
+  (`StrategicAgent._legal_bids_listed`): "högre, alltså bluff", "exakt dina
+  tärningar", or "lägre, alltså sant men svagare". Models rank Meier values
+  worse than the code does, and without the tags a model called a *higher* bid
+  "lägre" in its reasoning. Keep the tags: they stop the stated reasoning from
+  contradicting the move.
 - The engine coerces illegal model output back to legal moves (e.g. forces a
   higher bid when the rules require it). Keep that safety net.
 - A "slå" bid is blind: the player shakes their *own* cup and does not look

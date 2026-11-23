@@ -92,7 +92,7 @@ function setupTabs() {
   });
 }
 
-// -- Flik 1: de fyra spelarna och deras profiler -----------------------------
+// -- Flik 1: rollerna och deras profiler --------------------------------------
 
 function playerCard(r) {
   const div = document.createElement("div");
@@ -118,7 +118,27 @@ function renderPlayers(data) {
   const list = $("playerList");
   if (!list) return;
   list.innerHTML = "";
-  (data.roles || []).forEach((r) => list.appendChild(playerCard(r)));
+  const roles = data.roles || [];
+  roles.forEach((r) => list.appendChild(playerCard(r)));
+
+  const llm = roles.filter((r) => r.uses_llm).length;
+  const heading = $("playersHeading");
+  if (heading) heading.textContent = `De ${roles.length} rollerna`;
+  const intro = $("playersIntro");
+  if (intro) {
+    const modelText = llm === 0
+      ? "Ingen av dem använder språkmodell"
+      : llm === 1
+        ? "En av dem fattar sina beslut med en språkmodell"
+        : `${llm} av dem fattar sina beslut med en språkmodell`;
+    intro.textContent =
+      `${roles.length} oberoende AI-agenter spelar mot varandra. Var och en har sin egen ` +
+      `profil och spelstil, och ser bara den information en riktig spelare skulle ha. ` +
+      `${modelText}; resten är grundtaktik. Repliken byggs alltid lokalt ur draget. ` +
+      `Rollerna är desamma i alla flikar.`;
+  }
+  const sessionHeading = $("sessionHeading");
+  if (sessionHeading) sessionHeading.textContent = `De ${roles.length} spelarna möter varandra`;
 }
 
 function readDice(a, b) {

@@ -382,7 +382,7 @@ class BasePolicy:
     def _hold_value(self, bid: int) -> float:
         """Mitt förväntade livsöverskott av att bära påståendet ``bid``.
 
-        Budet synas med sannolikheten ``p_called``. Blir det synat vinner jag
+        Påståendet synas med sannolikheten ``p_called``. Blir det synat vinner jag
         om tärningarna visar lägre än påståendet — då förlorar synaren liv. Annars
         förlorar jag. Blir det inte synat händer ingenting i den här rundan.
         """
@@ -399,7 +399,7 @@ class BasePolicy:
         Eftersom agenten inte ser sina tärningar är den minsta lagliga höjningen
         säkrast (minst chans att tärningarna visar lägre). En oförutsägbar agent
         hoppar ibland högre ändå, just för att den inte ska gå att läsa: en
-        motståndare som vet att budet alltid är det minsta kan planera efter det.
+        motståndare som vet att påståendet alltid är det minsta kan planera efter det.
         """
         higher = rules.higher_options(bid)
         if not higher:

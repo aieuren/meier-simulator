@@ -59,7 +59,7 @@ def legal_bids(*, shown: int, previous_bid: int | None = None) -> list[int]:
 
 
 def blind_bids(*, previous_bid: int) -> list[int]:
-    """Bud som är lagliga när spelaren slår utan att titta.
+    """Påståenden som är lagliga när spelaren slår utan att titta.
 
     Samma krav som annars: strikt högre än påståendet som ligger. Att spelaren inte
     ser tärningarna ändrar inte vad som är lagligt, bara vad som är klokt.

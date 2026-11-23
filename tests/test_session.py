@@ -10,11 +10,27 @@ from meier.agents.player import MeierPlayerAgent
 from meier.session import Session
 
 
+class _FixedRoll(random.Random):
+    """RNG som alltid slår ett bestämt tärningspar.
+
+    ``Session.rng`` används både för att blanda ordningen och för att slå
+    tärningarna. Den här ger samma par varje gång, så ett test som handlar om
+    *att* tärningarna slås om inte faller på att de råkade bli lika.
+    """
+
+    def __init__(self, pair):
+        super().__init__()
+        self._pair = pair
+
+    def choices(self, population, weights=None, *, cum_weights=None, k=1):
+        return [self._pair[i % 2] for i in range(k)]
+
+
 class ScriptedLLM:
     """LLM som svarar enligt ett manus beroende på sammanhanget.
 
-    ``bids`` används i tur och ordning för bud (första bud och höjningar).
-    ``actions`` används i tur och ordning för beslut mot ett bud.
+    ``bids`` används i tur och ordning för påståenden (första påståendet och höjningar).
+    ``actions`` används i tur och ordning för beslut mot ett påstående.
     """
 
     def __init__(self, bids=None, actions=None, blind=False):
@@ -39,12 +55,12 @@ class ScriptedLLM:
                 % ("true" if self.blind else "false")
             )
 
-        # Slag (bägaren skakas på nytt) eller vanligt bud.
+        # Slag (bägaren skakas på nytt) eller vanligt påstående.
         if "MÅSTE säga" in user or "utan att titta" in user:
             bid = self._next_bid(52)
             return '{"bid": %s, "line": "Jag höjer.", "reasoning": "test"}' % bid
 
-        # Beslut mot ett bud.
+        # Beslut mot ett påstående.
         if "DITT VAL" in user:
             if self._act_i < len(self.actions):
                 act = self.actions[self._act_i]
@@ -59,7 +75,7 @@ class ScriptedLLM:
                 )
             return '{"action": "%s", "line": "Jag gör så.", "reasoning": "test"}' % act
 
-        # Första budet (tittat i smyg).
+        # Första påståendet (tittat i smyg).
         bid = self._next_bid(52)
         return '{"bid": %s, "line": "Jag säger så.", "reasoning": "test"}' % bid
 
@@ -127,11 +143,11 @@ def test_skicka_logs_accepted_bid_and_keeps_same_bid():
         make_player(k, ScriptedLLM(bids=[44], actions=["skicka"])) for k in ("a", "b")
     ]
     session = Session.new(players)
-    session.advance()  # bud 44
+    session.advance()  # påstående 44
     entry = session.advance()  # skickar vidare
 
     assert entry.action == "skicka"
-    # Budet spelaren svarar på, och det är oförändrat efter ett skickande.
+    # Påståendet spelaren svarar på, och det är oförändrat efter ett skickande.
     assert entry.accepted_bid == 44
     assert entry.bid == 44
     assert entry.to_dict()["accepted_bid_name"] == "44"
@@ -142,11 +158,11 @@ def test_slag_logs_accepted_bid_and_new_bid_separately():
         make_player(k, ScriptedLLM(bids=[44], actions=["slå"])) for k in ("a", "b")
     ]
     session = Session.new(players)
-    session.advance()  # bud 44
-    entry = session.advance()  # slår över 44 med ett nytt bud
+    session.advance()  # påstående 44
+    entry = session.advance()  # slår över 44 med ett nytt påstående
 
     assert entry.action == "slå"
-    # Budet spelaren svarar på är 44; det nya (sagda) budet är högre.
+    # Påståendet spelaren svarar på är 44; det nya (sagda) påståendet är högre.
     assert entry.accepted_bid == 44
     assert entry.bid != entry.accepted_bid
     assert rules.is_higher(entry.bid, entry.accepted_bid)
@@ -157,8 +173,8 @@ def test_syna_logs_accepted_bid():
         make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b")
     ]
     session = Session.new(players)
-    session.advance()  # bud 66
-    entry = session.advance()  # synar budet
+    session.advance()  # påstående 66
+    entry = session.advance()  # synar påståendet
 
     assert entry.action == "syna"
     assert entry.accepted_bid == 66
@@ -171,8 +187,8 @@ def test_syna_keeps_the_callers_reasoning():
         make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b")
     ]
     session = Session.new(players)
-    session.advance()  # bud 66
-    entry = session.advance()  # synar budet
+    session.advance()  # påstående 66
+    entry = session.advance()  # synar påståendet
 
     assert entry.action == "syna"
     assert entry.reasoning == "test"
@@ -190,28 +206,28 @@ def test_skicka_passes_bid_and_forces_raise_with_two_players():
     ]
     session = Session.new(players)
     order = session.order
-    session.advance()  # första budet
+    session.advance()  # första påståendet
     entry = session.advance()  # nästa spelare skickar vidare
 
     assert entry.action == "skicka"
     assert entry.bid == 44
-    # Nästa aktör är budgivaren (bara två spelare) -> tvingad höjning.
+    # Nästa aktör är hållaren (bara två spelare) -> tvingad höjning.
     assert session.to_dict()["step_kind"] == "raise"
     assert session.current_player.name == players[order[0]].name
 
 
 def test_full_loop_forces_bidder_to_raise():
-    # 33 är högre än 44 i Meier-ordningen, så budgivaren kan höja till 33.
+    # 33 är högre än 44 i Meier-ordningen, så hållaren kan höja till 33.
     players = [
         make_player(k, ScriptedLLM(bids=[44, 33], actions=["skicka"]))
         for k in ("a", "b")
     ]
     session = Session.new(players)
-    session.advance()  # bud 44
+    session.advance()  # påstående 44
     session.advance()  # skicka -> tvingad höjning
     assert session.to_dict()["step_kind"] == "raise"
 
-    entry = session.advance()  # budgivaren höjer
+    entry = session.advance()  # hållaren höjer
     assert entry.action == "höja"
     assert entry.bid == 33
     assert entry.previous_bid == 44
@@ -227,13 +243,23 @@ def test_forced_raise_rerolls_the_dice():
         for k in ("a", "b")
     ]
     session = Session.new(players)
-    session.advance()  # bud 44
+    session.advance()  # påstående 44
     old_dice = session.pending_dice
+
+    # Omslaget kan annars råka ge samma utfall som förra slaget (1 chans på 21),
+    # och då faller testet av ett skäl som inte har med saken att göra. Styr
+    # slaget till ett par som skiljer sig från det gamla.
+    other = next(
+        pair for pair in ((1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6))
+        if rules.read_dice(*pair) != rules.read_dice(*old_dice)
+    )
+    session.rng = _FixedRoll(other)
+
     session.advance()  # skicka -> tvingad höjning
     entry = session.advance()  # höjning: tärningarna slås om
 
     kinds = [row["kind"] for row in session.to_dict()["log"]]
-    # roll, action(bud), action(skicka), roll(omslag), action(höja)
+    # roll, action(påstående), action(skicka), roll(omslag), action(höja)
     assert kinds == ["roll", "action", "action", "roll", "action"]
     assert entry.dice == session.pending_dice
     assert session.pending_dice != old_dice
@@ -242,13 +268,13 @@ def test_forced_raise_rerolls_the_dice():
 
 
 def test_forced_raise_can_be_blind():
-    # Budgivaren får själv välja att bjuda blint på de omslagna tärningarna.
+    # Hållaren får själv välja att bjuda blint på de omslagna tärningarna.
     players = [
         make_player(k, ScriptedLLM(bids=[44, 33], actions=["skicka"], blind=True))
         for k in ("a", "b")
     ]
     session = Session.new(players)
-    session.advance()  # bud 44
+    session.advance()  # påstående 44
     session.advance()  # skicka -> tvingad höjning
     entry = session.advance()  # höjning, blint
 
@@ -269,7 +295,7 @@ def test_forced_raise_keeps_the_look_or_blind_reasoning():
         for k in ("a", "b")
     ]
     session = Session.new(players)
-    session.advance()  # bud 44
+    session.advance()  # påstående 44
     session.advance()  # skicka -> tvingad höjning
     entry = session.advance()  # höjning, blint
 
@@ -282,12 +308,12 @@ def test_forced_raise_keeps_the_look_or_blind_reasoning():
 
 
 def test_slag_logs_fresh_roll_before_action():
-    # Att slå är att skaka bägaren på nytt: ett färskt slag loggas före budet.
+    # Att slå är att skaka bägaren på nytt: ett färskt slag loggas före påståendet.
     players = [
         make_player(k, ScriptedLLM(bids=[44], actions=["slå"])) for k in ("a", "b")
     ]
     session = Session.new(players)
-    session.advance()  # bud 44
+    session.advance()  # påstående 44
     entry = session.advance()  # nästa spelare slår
     kinds = [row["kind"] for row in session.to_dict()["log"]]
     assert kinds == ["roll", "action", "roll", "action"]
@@ -302,7 +328,7 @@ def test_blind_slag_is_not_counted_as_bluff():
         make_player(k, ScriptedLLM(bids=[44], actions=["slå"])) for k in ("a", "b")
     ]
     session = Session.new(players)
-    session.advance()  # bud 44 (spelaren tittade)
+    session.advance()  # påstående 44 (spelaren tittade)
     entry = session.advance()  # nästa spelare slår blint
 
     assert entry.action == "slå"
@@ -328,21 +354,21 @@ def test_blind_flag_is_serialized():
 
 
 def test_illegal_slag_is_corrected_to_smallest_legal_raise():
-    # ScriptedLLM föreslår 66 när den slår, men 66 är lägre än budet 44.
-    # Budet som står rättas till minsta lagliga höjning.
+    # ScriptedLLM föreslår 66 när den slår, men 66 är lägre än påståendet 44.
+    # Påståendet som står rättas till minsta lagliga höjning.
     players = [
         make_player(k, ScriptedLLM(bids=[44], actions=["slå"])) for k in ("a", "b")
     ]
     session = Session.new(players)
-    session.advance()  # bud 44
-    entry = session.advance()  # slår med ett för lågt bud
+    session.advance()  # påstående 44
+    entry = session.advance()  # slår med ett för lågt påstående
 
     assert entry.action == "slå"
     assert entry.bid == 33  # minsta lagliga höjning över 44
     assert entry.previous_bid == 44
     assert rules.is_higher(entry.bid, entry.previous_bid)
     assert entry.corrected is True
-    # Budet som står i sessionen är det korrigerade.
+    # Påståendet som står i sessionen är det korrigerade.
     assert session.to_dict()["pending"]["bid"] == 33
 
 
@@ -351,7 +377,7 @@ def test_bid_never_decreases_when_slagging():
         make_player(k, ScriptedLLM(bids=[44], actions=["slå"])) for k in ("a", "b")
     ]
     session = Session.new(players)
-    session.advance()  # bud 44
+    session.advance()  # påstående 44
     for _ in range(6):
         state = session.to_dict()
         if state["phase"] == "finished" or state.get("result"):
@@ -363,13 +389,13 @@ def test_bid_never_decreases_when_slagging():
 
 
 def test_forced_raise_is_stopped_if_not_higher():
-    # Budgivaren måste höja men föreslår 43, som är lägre än 44.
+    # Hållaren måste höja men föreslår 43, som är lägre än 44.
     players = [
         make_player(k, ScriptedLLM(bids=[44, 43], actions=["skicka"]))
         for k in ("a", "b")
     ]
     session = Session.new(players)
-    session.advance()  # bud 44
+    session.advance()  # påstående 44
     session.advance()  # skicka -> tvingad höjning
     entry = session.advance()  # höjningen rättas till minsta lagliga höjning
     assert entry.action == "höja"
@@ -413,7 +439,7 @@ def test_lives_never_go_negative_on_meier_call():
         make_player(k, ScriptedLLM(bids=[21], actions=["syna"])) for k in ("a", "b")
     ]
     session = Session.new(players, lives=1)
-    session.advance()  # bud Meier
+    session.advance()  # påstående Meier
     session.advance()  # syn -> två livs kostnad, men bara ett finns
     assert all(lives >= 0 for lives in session.lives)
     assert session.to_dict()["phase"] == "finished"
@@ -424,7 +450,7 @@ def test_call_resolves_lives_and_result():
         make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b")
     ]
     session = Session.new(players)
-    session.advance()  # bud
+    session.advance()  # påstående
     entry = session.advance()  # syn
 
     assert entry.action == "syna"
@@ -443,7 +469,7 @@ def test_call_resolves_lives_and_result():
     total = sum(p["lives"] for p in state["order"])
     assert total == 6 - result.lives
 
-    # Syn-raden bär med sig vem som ansvarade för budet (för loggen).
+    # Syn-raden bär med sig vem som ansvarade för påståendet (för loggen).
     call_row = next(r for r in state["log"] if r["action"] == "syna")
     assert call_row["holder_name"] == result.holder
 
@@ -453,7 +479,7 @@ def test_meier_call_costs_two_lives():
         make_player(k, ScriptedLLM(bids=[21], actions=["syna"])) for k in ("a", "b")
     ]
     session = Session.new(players)
-    session.advance()  # bud Meier
+    session.advance()  # påstående Meier
     session.advance()  # syn
     assert session.result is not None
     assert session.result.lives == 2
@@ -513,7 +539,7 @@ def test_session_finishes_when_one_player_left():
         make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b")
     ]
     session = Session.new(players, lives=1)
-    session.advance()  # bud
+    session.advance()  # påstående
     session.advance()  # syn -> någon tappar sitt enda liv
     assert session.finished is True
     assert session.to_dict()["phase"] == "finished"
@@ -600,11 +626,11 @@ def test_roll_step_pending_has_dice_and_shown():
 def test_action_step_pending_has_bid_bidder_and_dice():
     players = [make_player(k, ScriptedLLM(bids=[44])) for k in ("a", "b")]
     session = Session.new(players)
-    session.advance()  # första budet -> action-steg
+    session.advance()  # första påståendet -> action-steg
     state = session.to_dict()
     assert state["step_kind"] == "action"
     pending = state["pending"]
-    # Både budet och tärningarna måste finnas: budet är indata till beslutet.
+    # Både påståendet och tärningarna måste finnas: påståendet är indata till beslutet.
     assert pending["bid"] == 44
     assert pending["bid_name"]
     assert pending["bidder"] == players[session.bidder].name
@@ -618,7 +644,7 @@ def test_raise_step_pending_has_bid_and_dice():
         for k in ("a", "b")
     ]
     session = Session.new(players)
-    session.advance()  # bud 44
+    session.advance()  # påstående 44
     session.advance()  # skicka -> tvingad höjning
     state = session.to_dict()
     assert state["step_kind"] == "raise"
@@ -635,7 +661,7 @@ def test_log_starts_with_roll_entry_before_any_bid():
     assert len(log) == 1
     assert log[0]["kind"] == "roll"
     assert log[0]["shown_name"]
-    # Ännu inget bud i loggen.
+    # Ännu inget påstående i loggen.
     assert all(row["kind"] == "roll" for row in log)
 
 
@@ -644,10 +670,10 @@ def test_new_round_logs_a_fresh_roll_entry():
         make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b")
     ]
     session = Session.new(players)
-    session.advance()  # bud
+    session.advance()  # påstående
     session.advance()  # syn -> livsrad, ny runda, nytt tärningsutfall
     kinds = [row["kind"] for row in session.to_dict()["log"]]
-    # roll, action(bud), action(syna), life(förlorat liv), roll(ny runda)
+    # roll, action(påstående), action(syna), life(förlorat liv), roll(ny runda)
     assert kinds == ["roll", "action", "action", "life", "roll"]
 
 
@@ -678,7 +704,7 @@ def test_log_entries_always_have_frontend_fields():
     session = Session.new(players)
     session.run_to_call()
     log = session.to_dict()["log"]
-    # Loggen byggs nedåt: tärningsutfallet kommer före budet på det.
+    # Loggen byggs nedåt: tärningsutfallet kommer före påståendet på det.
     kinds = [row["kind"] for row in log]
     assert kinds[0] == "roll"
     assert kinds[1] == "action"
@@ -689,7 +715,7 @@ def test_log_entries_always_have_frontend_fields():
 
     for row in log:
         if row["kind"] == "roll":
-            # Tärningsutfallet är ren indata: inget bud.
+            # Tärningsutfallet är ren indata: inget påstående.
             assert row["player_name"]
             assert row["bid"] is None
         elif row["kind"] == "life":
@@ -712,9 +738,9 @@ def _session_with_state(order, lives=(3, 3, 3, 3)):
 
 
 def test_pass_moves_call_responsibility_to_the_passer():
-    # A sätter budet, B och C skickar vidare, D synar. Tärningarna visar lägre
-    # än budet, så den som ansvarar för budet förlorar – och det är C, som
-    # skickade vidare sist, inte A som satte budet från början.
+    # A sätter påståendet, B och C skickar vidare, D synar. Tärningarna visar lägre
+    # än påståendet, så den som ansvarar för påståendet förlorar – och det är C, som
+    # skickade vidare sist, inte A som satte påståendet från början.
     session, players = _session_with_state([0, 1, 2, 3])
     session.pending_bid = 52
     session.pending_dice = (3, 1)  # visar 31, lägre än 52
@@ -734,7 +760,7 @@ def test_pass_moves_call_responsibility_to_the_passer():
 
 
 def test_caller_loses_when_dice_are_high_enough():
-    # Budet är lågt men tärningarna visar högre: den som synade förlorar.
+    # Påståendet är lågt men tärningarna visar högre: den som synade förlorar.
     session, players = _session_with_state([0, 1, 2, 3])
     session.pending_bid = 31
     session.pending_dice = (5, 2)  # visar 52, högre än 31
@@ -806,7 +832,7 @@ def test_standings_reflect_lives_after_a_call():
         make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b", "c")
     ]
     session = Session.new(players, lives=3)
-    session.advance()  # bud
+    session.advance()  # påstående
     session.advance()  # syn -> någon tappar ett liv
     standings = {p["name"]: p for p in session.to_dict()["standings"]}
     total = sum(p["lives"] for p in standings.values())
@@ -822,7 +848,7 @@ def test_standings_marks_eliminated_player_inactive():
         make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b")
     ]
     session = Session.new(players, lives=1)
-    session.advance()  # bud
+    session.advance()  # påstående
     session.advance()  # syn -> någon är ute
     standings = {p["name"]: p for p in session.to_dict()["standings"]}
     out = [p for p in standings.values() if not p["active"]]
@@ -840,7 +866,7 @@ def test_finished_match_logs_a_game_over_row_with_winner():
         make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b")
     ]
     session = Session.new(players, lives=1)
-    session.advance()  # bud
+    session.advance()  # påstående
     session.advance()  # syn -> matchen är slut
     assert session.finished is True
 

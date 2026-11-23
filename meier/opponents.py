@@ -402,7 +402,7 @@ class OpponentTracker:
         return self.bluff_estimate(player) / self.global_q
 
     def effective_prior(self, bid: int, player: str, *, reading: float) -> float:
-        """Budspecifik tro på att en syn vinner, justerad för spelaren.
+        """Påståendespecifik tro på att en syn vinner, justerad för spelaren.
 
         ``reading = 0`` ger den frysta populationstabellen (ingen läsning).
         ``reading = 1`` ger spelarens relativa benägenhet fullt ut. Resultatet
