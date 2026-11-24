@@ -42,15 +42,14 @@ def test_meier_shown_is_claim_as_meier(base):
     assert decision.claim == rules.MEIER
 
 
-def test_bluffing_is_not_a_parameter():
-    """Bluffen ska inte gå att skruva på: den följer av reglerna, inte profilen.
+def test_no_voluntary_bluffing():
+    """Grundtaktiken ljuger aldrig frivilligt, oavsett profil.
 
-    Alla fyra dimensionerna varieras, men antalet bluffar ska vara detsamma —
-    annars har bluffandet smygit in som en femte, oavsiktlig parameter.
+    Den säger vad tärningarna visar. Enda undantaget är när ett högre påstående
+    redan ligger: då måste den höja, och höjningen kan bli osann. Det är regeln
+    som tvingar fram den, inte ett val. Testet låser att ingen profil smyger in
+    en frivillig bluff.
     """
-    from meier.policy import BLUFF_GAIN
-
-    assert BLUFF_GAIN > 0.0
     assert {f.name for f in AgentParams.__dataclass_fields__.values()} == {
         "caution",
         "statistics",
@@ -58,10 +57,9 @@ def test_bluffing_is_not_a_parameter():
         "reading",
     }
 
-    counts = set()
     for caution in (0.0, 0.5, 1.0):
         for statistics in (0.0, 0.5, 1.0):
-            for unpredictability in (0.0,):
+            for unpredictability in (0.0, 0.5, 1.0):
                 p = BasePolicy(
                     AgentParams(
                         caution=caution,
@@ -70,40 +68,25 @@ def test_bluffing_is_not_a_parameter():
                         reading=0.0,
                     )
                 )
-                counts.add(
-                    sum(
-                        rules.compare(p.decide_claim(s).claim, s) > 0
-                        for s in rules.RANKING
+                for shown in rules.RANKING:
+                    claim = p.decide_claim(shown).claim
+                    assert claim == shown, (
+                        f"caution={caution} statistics={statistics} "
+                        f"unpredictability={unpredictability}: visar {rules.name(shown)} "
+                        f"men påstår {rules.name(claim)}"
                     )
-                )
-    assert len(counts) == 1, f"bluffantalet varierade med profilerna: {counts}"
 
 
-def test_true_claim_is_compared_with_its_own_value(base):
-    """Ett sant påstående är inte värt noll.
+def test_claim_is_always_the_shown_value_when_legal(base):
+    """Påståendet är tärningarnas värde, utan undantag.
 
-    Buggen: ``decide_claim`` satte det säkra påståendet till ``shown`` men gav det
-    aldrig ett värde. Bluffloopen jämförde mot noll, så en bluff som var sämre än
-    sanningen ändå vann. Här krävs att sanningen väljs när den är bättre.
+    Tidigare jämfördes en bluff mot det sanna påståendets värde. Nu finns ingen
+    bluff, så det finns inget att jämföra: varje utfall ger sig självt.
     """
-    # 52: sant påstående vinner 1 liv när det synas, vilket slår varje bluff.
-    assert base.decide_claim(52).claim == 52
-    # Hela spannet av höga utfall ska stanna på sanningen.
-    for shown in (51, 52, 53, 54, 61, 62, 63, 64, 65, 66):
-        assert base.decide_claim(shown).claim == shown, f"bluffade på {rules.name(shown)}"
-
-
-def test_bluffing_is_limited_to_weak_dice(base):
-    """Bluffen ska bara förekomma på låga tärningar.
-
-    På låga utfall är det sanna påståendet svagt och en bluff höjer ribban. På
-    höga utfall är sanningen redan stark, och då lönar sig ingen bluff. Testet
-    låser att fixen inte bara bytte håll.
-    """
-    bluffar = {
-        shown for shown in rules.RANKING if rules.compare(base.decide_claim(shown).claim, shown) > 0
-    }
-    assert bluffar <= {31, 32, 41, 42, 43}, f"bluffade på {sorted(bluffar)}"
+    for shown in rules.RANKING:
+        assert base.decide_claim(shown).claim == shown, (
+            f"visade {rules.name(shown)} men påstod något annat"
+        )
 
 
 def test_never_claims_below_shown_when_it_could_claim_truth(base):
@@ -322,19 +305,22 @@ def test_unpredictability_makes_unseen_raises_vary():
     assert claims <= set(opts), "alla höjningar ska vara lagliga"
 
 
-def test_seen_claim_bluff_is_always_exactly_one_step():
-    """Bluff över *sedda* tärningar är alltid exakt ett steg, oavsett profil."""
+def test_forced_raise_is_the_minimal_legal_step():
+    """När tärningarna inte täcker ett högre påstående, säg minsta lagliga höjning.
+
+    Det är den enda situationen där grundtaktiken säger något annat än tärningarna
+    visar. Den ska alltid ta det minsta steget, oavsett profil.
+    """
     for statistics in (0.0, 0.5, 1.0):
         p = BasePolicy(AgentParams(statistics=statistics, unpredictability=0.0))
         for shown in rules.RANKING:
-            d = p.decide_claim(shown)
-            if d.claim is None or d.claim == shown:
-                continue
-            opts = rules.higher_options(shown)
-            if d.claim not in opts:
-                continue
-            steps = len(opts) - opts.index(d.claim)
-            assert steps == 1, (
-                f"statistics={statistics} visar {rules.name(shown)} bjöd {rules.name(d.claim)} "
-                f"({steps} steg) — bluffen ska vara exakt ett steg"
-            )
+            for previous in rules.RANKING:
+                if rules.is_meier(previous):
+                    continue  # Meier är högst; inget lagligt påstående finns över det
+                if rules.compare(previous, shown) <= 0:
+                    continue
+                d = p.decide_claim(shown, previous_claim=previous)
+                assert d.claim == rules.next_higher(previous), (
+                    f"visar {rules.name(shown)} över {rules.name(previous)}: valde "
+                    f"{rules.name(d.claim)}, förväntade {rules.name(rules.next_higher(previous))}"
+                )

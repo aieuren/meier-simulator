@@ -138,10 +138,10 @@ Namnen på parametrarna är korta; här är vad de står för:
 | `unpredictability` | Oförutsägbarhet | Hur mycket spelaren varierar sitt spel för att vara svår att läsa |
 | `reading` | Läsförmåga | Hur mycket spelaren använder information om andras tidigare spel |
 
-Bluffandet är **inte** en parameter. I Meier måste den som slår alltid höja över
-det som står, och då blir en del påståenden lögner vad spelaren än vill. Bluffen
-är ett nödvändigt ont i spelet, inte en personlighetsegenskap att skruva på.
-Vikten av att motståndaren lägger sig är därför en fast konstant (`BLUFF_GAIN`).
+Bluffandet är **inte** en parameter, och grundtaktiken bluffar inte alls. Den
+säger vad tärningarna visar. Lögner förekommer bara när regeln tvingar fram dem:
+den som slår måste höja över det som står, och då blir en del påståenden osanna
+vad spelaren än vill.
 
 Skilj på tre saker:
 

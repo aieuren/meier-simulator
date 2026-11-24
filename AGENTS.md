@@ -498,13 +498,18 @@ Three rules that keep the companion doc honest:
   (`rules.is_true_claim`), not that it equals them. Saying 31 while holding 52 is
   true, just weaker — a call on it still loses for the caller. Only a claim
   *above* the dice is a bluff.
-- `decide_claim` values the safe claim as `p_called * l_lose` (the caller loses
-  their lives, I win them). Bluff losses use `l_win` — *my* lives. `l_lose` is
-  the caller's loss, i.e. my gain; swapping them makes bluffs look free.
-- `BLUFF_GAIN` is a fixed assumption about the table, not a rule. Meier's rules
-  say nothing about what an uncalled claim is worth. Do not "fix" it to make the
-  agents play better — the goal is to show what they do, not to find the best
-  strategy.
+- `decide_claim` has no voluntary bluff. It says `shown` when that is legal, and
+  the minimal legal raise (`legal[-1]`) otherwise. There is no valuation step.
+- `BLUFF_GAIN` was removed. It made an *uncalled lie* worth 0.5 lives while an
+  uncalled *truth* was worth nothing (`p_called * l_lose`, which vanishes as
+  `p_called -> 0`). That asymmetry alone produced "raise one step on weak dice":
+  making the truth worth the same removed every bluff, and it was a side effect
+  of a constant, not a property of Meier. Do not reintroduce it without adding a
+  symmetric term for the truth.
+- `opponent_factor` was removed from `decide_claim`, and `_call_factor` from
+  `StrategicAgent`: both only fed the bluff branch. Reading still works, but
+  through `opponent_q` in `decide_response` (bluff tendency, flips 61-63 to
+  `syna` against a known bluffer), not through the claim.
 - The claim prompt lists every legal claim with its direction against the dice
   (`StrategicAgent._legal_claims_listed`): "högre, alltså bluff", "exakt dina
   tärningar", or "lägre, alltså sant men svagare". Models rank Meier values
@@ -537,7 +542,9 @@ The old names `risk` and `press` are gone. Current fields on `AgentParams` are
 the pair is `call_tendency` (was `risk`) and `bluff_tendency` (was `press`),
 and the factor helpers are `call_factor` / `bluff_factor` with
 `NEUTRAL_CALL` / `NEUTRAL_BLUFF` (was `NEUTRAL_RISK` / `NEUTRAL_PRESS`).
-Bluffing is **not** a parameter at all: `BLUFF_GAIN` is a fixed constant.
+Bluffing is **not** a parameter at all, and `BasePolicy` never bluffs on
+purpose: it claims `shown`. Lying only happens when the rules force a raise the
+dice cannot cover.
 
 Watch the two traps when touching this:
 
@@ -877,13 +884,11 @@ gone — replaced by four neutral-named players in `meier/agents/roster.py`:
   preserves the `reading = 0 → exact CALL_PRIOR` invariant. Absolute bluff rates
   here are ~0.72 for everyone, so feeding them in raw inflates every opponent —
   the factor must stay relative.
-- `call_tendency` is wired into bidding, not just `bluff_tendency`.
-  `call_factor` maps the opponent's `call_tendency` to a factor around 1.0
-  centred on `NEUTRAL_CALL = 0.5`; it flows as `opponent_factor` into
-  `BasePolicy.decide_claim()` and on to `_p_called`, which scales the chance the
-  claim gets called. A calling opponent makes bluffing expensive, so the agent
-  moves closer to the truth. Measured: 5 % call rate → factor 0.25 → bluffs in
-  20/21 spots; 26 % → 1.00 → 16/21; 45 % → 1.70 → 8/21.
+- `call_tendency` no longer reaches the claim. `call_factor` still maps it to a
+  factor around 1.0 centred on `NEUTRAL_CALL = 0.5`, but the only consumer was
+  the removed bluff branch. `opponent_factor` is gone from `decide_claim`, and
+  `_call_factor` is gone from `StrategicAgent`. If you wire it back in, the claim
+  must stop being a pure "say the dice" rule — decide that on purpose.
   `bluff_tendency` adjusts belief about a claim (`_opponent_prior`),
   `call_tendency` adjusts the chance of being called (`_p_called`) — different
   terms, both live.

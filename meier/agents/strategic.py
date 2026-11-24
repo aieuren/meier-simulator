@@ -149,14 +149,6 @@ class StrategicAgent(Agent):
         factor = 1.0 + self.params.reading * (factor - 1.0)
         return min(0.95, base * factor)
 
-    def _call_factor(self, opponent: str | None) -> float:
-        """Hur mycket oftare motståndaren synar, relativt det normala."""
-        profile = self.opponent_profile(opponent)
-        if profile is None:
-            return 1.0
-        factor = self.tracker.call_factor(profile)
-        return 1.0 + self.params.reading * (factor - 1.0)
-
     # -- LLM-anropet -------------------------------------------------------
     def _ask(
         self, context: str, parse: Callable[[dict], tuple[Any | None, str]]
@@ -231,7 +223,6 @@ class StrategicAgent(Agent):
             # eget även här. ``corrected`` betyder att LLM:en inte kunde svara.
             decision = self.policy.decide_claim(
                 shown,
-                opponent_factor=self._call_factor(opponent),
                 previous_claim=previous_claim,
             )
             claim, reason = decision.claim, decision.reason

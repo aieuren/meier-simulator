@@ -240,13 +240,18 @@ modell inte svarar.
 ### Hur spelaren bluffar
 
 Tvånget att höja gäller alla lika. Bluffen är därför ingen ratt man skruvar på
-— den följer av spelet. Det som skiljer spelarna är hur de hanterar tvånget.
+— den följer av spelet.
 
-En försiktig spelare synar mer sällan, vilket gör att en bluff oftare får stå.
-En oförutsägbar spelare tar ibland ett större kliv än nödvändigt, så att
-motståndaren inte kan läsa mönstret. Ingen av dem har en inställning som heter
-"bluffa mer". Parametrarna säger hur spelaren brukar göra, inte vilket drag som
-är bäst i läget.
+Här går spelarna isär. **Axel**, den fasta räkneregeln, bluffar aldrig
+frivilligt: han säger vad tärningarna visar och ljuger bara när regeln tvingar
+honom. **Berit, Cecilia och David**, som styrs av en språkmodell, får välja själva
+och kan höja över sina tärningar om de tror att det lönar sig.
+
+Det som skiljer profilerna åt är hur de hanterar tvånget. En försiktig spelare
+synar mer sällan, vilket gör att en bluff oftare får stå. En oförutsägbar spelare
+tar ibland ett större kliv än nödvändigt, så att motståndaren inte kan läsa
+mönstret. Ingen av dem har en inställning som heter "bluffa mer". Parametrarna
+säger hur spelaren brukar göra, inte vilket drag som är bäst i läget.
 
 ### Spelaren läser sina motståndare
 
@@ -316,25 +321,18 @@ gäller tabellerna nedan utan undantag.
 
 #### Runda för runda: så sitter han vid bordet
 
-**När det är hans tur att öppna rundan** tittar han i bägaren och säger något.
-Har han 51 eller högre säger han exakt det tärningarna visar. Har han 43 eller
-lägre säger han ett steg över tärningarna. Ett steg är nästa rad i
-poängordningen, inte nästa tärningssiffra: har han 43 säger han 51, har han 42
-säger han 43.
+**När det är hans tur att öppna rundan** tittar han i bägaren och säger vad
+tärningarna visar. Inget mer. Visar de 43 säger han 43. Visar de 31 säger han
+31. Han ljuger inte frivilligt.
 
 | Tärningarna visar | Han säger |
 |---|---|
-| 51 och uppåt (alla värden där) | samma som tärningarna |
-| 43 | 51 |
-| 42 | 43 |
-| 41 | 42 |
-| 32 | 41 |
-| 31 | 32 |
+| vilket värde som helst | samma värde |
 
-Varför? På 51 och uppåt är påståendet starkt nog att stå emot en syn. Att
-ljuga där lägger bara till risk. På 43 och lägre är sanningen svag: säger han
-31 när han har 43 kan nästa spelare slå över billigt. Då höjer han ribban i
-stället, men aldrig mer än ett steg.
+Det enda undantaget är när ett högre påstående redan ligger. Då måste han höja
+enligt regeln, och om tärningarna inte täcker höjningen blir påståendet osant.
+Det är regelns verkning, inte ett val. Den situationen kallas **tvingad
+höjning** och finns längre ner.
 
 **När någon annan har påstått** har han inte sett tärningarna. Då väger han
 tre svar mot varandra och tar det som är värt mest i liv. Svaren kommer i
@@ -376,12 +374,11 @@ då slår han om bägaren och börjar en ny runda, och valet faller bort.
 Tre spelare: Axel, Berit och Cecilia. Alla har tre liv. Turen går Axel → Berit
 → Cecilia.
 
-**Axel öppnar rundan.** Han tittar i bägaren och ser 31. Det är lägst av allt,
-så enligt tabellen säger han ett steg över: **32**. Han ljuger redan här, men
-bara med ett enda steg.
+**Axel öppnar rundan.** Han tittar i bägaren och ser 31. Han säger **31**, för
+det är vad tärningarna visar. Ingen bluff.
 
-**Berit får 32.** Tabellen säger **slå** på 32, så hon skakar om bägaren. Hon
-lyfter på locket och ser 64. Det räcker gott över 32, så hon säger **64**.
+**Berit får 31.** Tabellen säger **slå** på 31, så hon skakar om bägaren. Hon
+lyfter på locket och ser 64. Det räcker gott över 31, så hon säger **64**.
 
 **Cecilia får 64.** Tabellen säger **syna** på 64, så hon lyfter på locket.
 Tärningarna visar 64 och påståendet var 64. Värdet är alltså inte lägre än
@@ -389,42 +386,56 @@ påståendet, och då förlorar den som synade: **Cecilia förlorar ett liv**.
 
 Nästa runda börjar hos spelaren före Cecilia, alltså Berit.
 
-Lägg märke till vad som hände. Axel bluffade ett steg och blev aldrig straffad
-för det, eftersom Berit valde att slå i stället för att syna. Berit hade tur
-när hon skakade om. Och Cecilia synade ett påstående som visade sig vara sant –
-det är så synen oftast går fel.
+**Runda 2.** Berit öppnar. Hon slår 43 och säger **43**. Cecilia får 43 och
+**skickar vidare**. Axel får 43 och **skickar vidare**. Nu har påståendet gått
+ett helt varv och är tillbaka hos Berit, som måste höja.
+
+Hon slår om bägaren och tittar. Nu visar tärningarna 31 – sämre än det hon
+måste höja över. Men regeln säger att den som slår måste säga högre, så hon
+säger **51**. Här är hon tvingad att ljuga.
+
+Cecilia får 51 och **skickar vidare**. Axel får 51 och **skickar vidare**. Berit
+är tillbaka igen och måste höja ännu en gång. Tärningarna visar 31 igen, så hon
+säger **52**. Cecilia **skickar vidare**. Axel **skickar vidare**. Berit höjer
+igen till **53**, och nu synar Cecilia. Tärningarna visar 31 mot påståendet 53,
+och **Berit förlorar ett liv**.
+
+Lägg märke till tre saker. Axel bluffade aldrig i det här partiet – han sa 31
+när han hade 31. Berit ljög, men bara när regeln tvingade henne att höja. Och
+hon höjde alltid bara ett steg, aldrig mer.
 
 #### Fem regler att ta med till bordet
 
-1. **Öppnar du rundan:** har du 51 eller högre, säg vad tärningarna visar.
-   Har du 43 eller lägre, säg ett steg över.
+1. **Öppnar du rundan: säg vad tärningarna visar.** Alltid. Ingen bluff.
 2. **Får du ett påstående på 21, 11, 22, 33, 44, 55, 66, 65 eller 64, syna.**
    Där ligger nästan varje slag under påståendet, så synen vinner.
 3. **Får du 63, 62, 61, 54, 53, 52, 51, 43 eller 42, skicka vidare.** Bär
    påståendet i stället för att betala för en syn.
 4. **Får du 41, 32 eller 31, slå.** Där finns inget att förlora på att skaka
    om bägaren.
-5. **Bluffa bara när du måste.** Den som slår måste höja. Det är enda gången
-   Axel ljuger.
+5. **Ljög du? Då var du tvingad.** Den som måste höja över ett påstående som
+   tärningarna inte täcker har inget val. Höj då bara ett steg, aldrig mer.
 
 Regel 2 och 3 är de som skiljer honom från en nybörjare. De flesta synar för
 sällan på låga påståenden och för ofta på höga. Axel gör tvärtom: han synar när
 synen är som säkrast, alltså på de låga.
 
-#### Det känsligaste talet i hans spel
+#### Varför han inte bluffar
 
-Brytpunkten mellan 43 och 51 är den siffra som först rör sig om man skruvar på
-hans inställningar. På 43 skiljer det bara 0,014 liv mellan att säga sanningen
-och att bluffa ett steg. Lite mer tro på att motståndaren lägger sig hade räckt
-för att han också skulle bluffa på 51 och 52. Bluffen på 43 är alltså ett
-gränsfall, inte en grundpelare.
+En bluff kan bara löna sig om motståndaren lägger sig. Då vinner man inget liv
+– man slipper bara en syn. Men den som slår måste alltid höja, och då blir en
+del påståenden osanna ändå. Lögnen kommer alltså av sig själv när den behövs.
+Att ljuga i onödan lägger bara till en risk utan att köpa något.
+
+Det här är en förenkling av simulatorn, inte en sanning om Meier. En människa
+kan bluffa för att bli svårläst. Den mekanismen finns inte här: Axel lär sig
+inget om dig under matchen, så det finns ingen att luras.
 
 #### Det han aldrig gör
 
 Han lär sig inget om dig under matchen – samma regler gäller i runda 1 som i
 sista rundan. Han satsar inte på att vinna rundan, utan på att överleva
-matchen. Och han ljuger aldrig för nöjes skull: varje bluff ska löna sig i
-förväntade liv, annars låter han bli.
+matchen. Och han ljuger aldrig för nöjes skull, bara när regeln tvingar honom.
 
 ## Vad du kan göra i webbappen
 

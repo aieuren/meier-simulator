@@ -261,14 +261,16 @@ tillåtet men oftast dåligt: påståendet är lätt att syna, och du blir håll
 
 Parametrarna styr:
 
-- `unpredictability` gör att agenten ibland tar den säkra vägen även när en bluff
-  räknas som marginellt bättre, så att mönstret inte går att läsa.
-- `caution` höjer tröskeln för att syna, vilket gör bluffen billigare att komma
-  undan med.
+- `caution` höjer tröskeln för att syna.
+- `statistics` styr hur mycket tron på motståndarens bluffar följer påståendets nivå.
+- `reading` styr hur mycket motståndarens tidigare spel får flytta den tron.
 
-Bluffen i sig är inte en parameter. Vikten av att motståndaren lägger sig är den
-fasta `BLUFF_GAIN`: ett påstående över `shown` jämförs med det säkra
-grundpåståendet, och agenten tar bluffen när den räknas som lönsam.
+Bluffen är inte en parameter, och grundtaktiken bluffar inte frivilligt. Den
+säger vad tärningarna visar. En lögn uppstår bara när ett högre påstående redan
+ligger och tärningarna inte täcker det: då tvingar regeln fram en osann höjning.
+Förr vägdes en frivillig bluff mot det sanna påståendet med konstanten
+`BLUFF_GAIN`. Den är borttagen, eftersom den byggde på antagandet att en lögn som
+står obesvarad är värd mer än en sanning som står obesvarad.
 
 ### Beslut 2 — Slå (får titta, väljer själv)
 
@@ -284,7 +286,7 @@ hem om tärningarna visar påståendet eller högre. I den här maskinen är det
 Beslutet delas därför i två, i den här ordningen:
 
 1. **Titta eller inte?** `decide_shake`. Grundtaktiken väljer alltid titten.
-2. **Vad sägs?** Har spelaren tittat går frågan till `decide_bid`, som får de
+2. **Vad sägs?** Har spelaren tittat går frågan till `decide_claim`, som får de
    sedda tärningarna. Har den avstått går frågan till `decide_raise`, som inte får
    dem.
 
@@ -298,8 +300,9 @@ steps = rng.randint(1, len(higher) − 1)   # bara om rng.random() < unpredictab
 new_bid = higher[−(steps + 1)]            # 0 steg = minsta höjningen
 ```
 
-Skilj detta från `decide_bid`, där spelaren *har* sett tärningarna. Där är bluffen
-alltid exakt ett steg över det visade utfallet: `min(higher_options(shown))`.
+Skilj detta från `decide_claim`, där spelaren *har* sett tärningarna. Där säger
+spelaren vad tärningarna visar. Är det inte lagligt, för att ett högre påstående
+redan ligger, säger den minsta lagliga höjningen: `legal[-1]`.
 
 ### Beslut 3 — Syna eller skicka (ser dem inte)
 
@@ -584,29 +587,22 @@ faktor = 1 + profil.confidence · (raw − 1)
 P(syn | påstående) = min(1, CALL_PRIOR_syn · faktor)
 ```
 
-Faktorn går in i `BasePolicy.decide_bid(shown, opponent_factor=...)` och vidare
-till `_p_called`, som räknar ut hur sannolikt det är att påståendet blir synat. Ett
-högre `opponent_factor` gör bluffen mindre lönsam, och agenten lägger sig närmare
-sanningen.
+`call_factor` räknas fortfarande ut, men den styr inte längre påståendet. Den
+vägen gick via den frivilliga bluffen: ett högre `opponent_factor` gjorde bluffen
+mindre lönsam, och agenten lade sig närmare sanningen. Sedan bluffen togs bort
+finns inget att skala, och grundtaktiken säger vad tärningarna visar oavsett hur
+ofta motståndaren synar.
 
-Mätt i ett kontrollerat läge (agent med full läsning mot en motståndare med känd
-synfrekvens, alla 21 tärningsutfall prövade):
-
-| Motståndaren synar | Faktor | Agenten bluffar i |
-|---|---|---|
-| 5 % | 0,25 | 20 av 21 lägen |
-| 26 % (normalt) | 1,00 | 16 av 21 lägen |
-| 45 % | 1,70 | 8 av 21 lägen |
+Läsningen lever kvar i en annan väg. `bluff_tendency` justerar tron på att ett
+visst påstående är sant (`_opponent_prior`), och den tron går in i
+`decide_response` som `opponent_q`. Möter agenten en känd bluffare stiger tron,
+och då blir 61–63 värda att syna i stället för att skickas vidare.
 
 Skalan måste vara relativ, inte absolut. Den råa synfrekvensen ligger kring
 26 % för alla roller. Sätter man in den rakt på 0–1-skalan (där 0,5 är neutral)
-ser *varje* motståndare extremt försiktig ut, och agenten bluffar vilt mot alla.
-Därför finns `POPULATION_CALL_RATE = 0,265` och `OpponentTracker.call_ratio()`:
-ratio 1,0 betyder "synar som folk mest". Samma fälla som för `bluff_tendency` — se 6.0.
-
-Båda faktorerna kan vara aktiva samtidigt. `bluff_tendency` justerar tron på att ett visst
-påstående är sant (`_opponent_prior`), `call_tendency` justerar chansen att påståendet blir synat
-(`_p_called`). De rör alltså olika led i samma uträkning.
+ser *varje* motståndare extremt försiktig ut. Därför finns
+`POPULATION_CALL_RATE = 0,265` och `OpponentTracker.call_ratio()`: ratio 1,0
+betyder "synar som folk mest".
 
 ### 6.1 Den läckagefria regeln (obligatorisk)
 

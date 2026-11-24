@@ -623,16 +623,12 @@ def test_axel_section_tables_match_the_policy():
         policy.AgentParams(caution=0.5, statistics=0.5, unpredictability=0.0, reading=0.0)
     )
 
-    # Öppningspåståendet: tabellen säger att 51+ är sant och 43- bluffar ett steg.
+    # Öppningspåståendet: tabellen säger att agenten säger vad tärningarna visar.
     for shown in rules.RANKING:
         claim = axel.decide_claim(shown).claim
-        if rules.compare(shown, 51) >= 0:
-            assert claim == shown, f"tabellen påstår sanning på {rules.name(shown)}, koden säger {rules.name(claim)}"
-        else:
-            assert rules.is_higher(claim, shown), f"tabellen påstår bluff på {rules.name(shown)}"
-            assert claim == rules.next_higher(shown), (
-                f"tabellen påstår ett steg över {rules.name(shown)}, koden säger {rules.name(claim)}"
-            )
+        assert claim == shown, (
+            f"tabellen påstår sanning på {rules.name(shown)}, koden säger {rules.name(claim)}"
+        )
 
     # Svaren: tabellen delar in påståendena i syna / skicka / slå.
     for claim in (21, 11, 22, 33, 44, 55, 66, 65, 64):
@@ -649,12 +645,11 @@ def test_axel_section_tables_match_the_policy():
         )
 
 
-def test_axel_section_margin_near_the_opening_breakpoint():
-    """Dokumentet säger att brytpunkten på 43 är ett gränsfall.
+def test_axel_section_says_there_is_no_voluntary_bluff():
+    """Avsnittet ska säga att Axel inte bluffar frivilligt.
 
-    Påståendet är en siffra, inte en känsla: marginalen mellan sanning och bluff
-    på 43 ska vara liten men positiv. Glider koden iväg ska testet falla, inte
-    dokumentet tyst bli fel.
+    Han säger vad tärningarna visar. Lögn förekommer bara när regeln tvingar
+    fram en höjning som tärningarna inte täcker. Texten måste stämma med koden.
     """
     from meier import policy, rules
 
@@ -664,20 +659,20 @@ def test_axel_section_margin_near_the_opening_breakpoint():
     axel = policy.BasePolicy(
         policy.AgentParams(caution=0.5, statistics=0.5, unpredictability=0.0, reading=0.0)
     )
-    truth = axel._p_called(43) * policy.CALL_ODDS[43].l_lose
-    nxt = rules.next_higher(43)
-    p_called = axel._p_called(nxt)
-    bluff = (1.0 - p_called) * policy.BLUFF_GAIN - p_called * policy.CALL_ODDS[nxt].l_win
-    margin = f"{bluff - truth:.3f}".replace(".", ",")
+    for shown in rules.RANKING:
+        assert axel.decide_claim(shown).claim == shown, (
+            f"koden påstår inte tärningarna på {rules.name(shown)}"
+        )
 
-    assert margin in flat, (
-        f"Dokumentet anger inte marginalen {margin} liv på 43. "
-        f"Koden ger sanning {truth:.3f} och bluff {bluff:.3f}."
+    assert "säger vad tärningarna visar" in flat.lower(), (
+        "Avsnittet förklarar inte att Axel säger tärningarnas värde."
     )
-    assert 0.0 < bluff - truth < 0.03, (
-        "Påståendet att 43 är ett gränsfall kräver en liten positiv marginal, "
-        f"men koden ger {bluff - truth:+.3f} liv."
-    )
+    # Det får inte stå kvar att han höjer ett steg på låga tärningar.
+    for stale in (
+        "Har du 43 eller lägre, säg ett steg över",
+        "säger han ett steg över tärningarna",
+    ):
+        assert stale not in flat, f"Avsnittet beskriver fortfarande en frivillig bluff: {stale!r}"
 
 
 def test_docs_say_the_shaker_may_always_look():

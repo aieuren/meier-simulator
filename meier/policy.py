@@ -226,20 +226,6 @@ CALL_PRIOR: dict[int, float] = {
 CALL_INERTIA_BASE = 0.13
 CALL_INERTIA_CAUTION = 0.10
 
-#: Värdet av att en bluff står obesvarat, i liv. **Fast**, inte en parameter.
-#:
-#: Bluffen är ett nödvändigt ont i Meier: den som slår måste alltid säga ett högre
-#: påstående, och då blir en del påståenden lögnar vad spelaren än vill. Därför finns
-#: det ingen bluffparameter att skruva på.
-#:
-#: Talet är **inte** hämtat ur reglerna. Reglerna säger bara vad som händer vid en
-#: syn; de säger ingenting om vad ett påstående som ingen synar är värt. Att sätta
-#: ett tal här är alltså ett antagande om bordet, inte en regel. Det är medvetet
-#: hållet fast: maskinens uppgift är att visa vad agenterna gör, inte att hitta den
-#: bästa strategin. Vill man undersöka bluffandet är det här ratten sitter, men
-#: ändra den inte för att "rätta" ett spel som ser fel ut.
-BLUFF_GAIN = 0.5
-
 #: Den platta tron på ``P(synaren vinner | påstående)`` som en agent med
 #: ``statistics = 0`` använder. Medelvärdet av ``CALL_PRIOR``: agenten bortser från
 #: påståendenivån och tror samma sak oavsett vad som står.
@@ -442,31 +428,21 @@ class BasePolicy:
         self,
         shown: int,
         *,
-        opponent_factor: float = 1.0,
         previous_claim: int | None = None,
     ) -> Decision:
         """Vilket påstående ska agenten säga när den sett tärningarna visa ``shown``?
 
-        Att påstå ``shown`` är **säkert**: blir det synat visar tärningarna minst
-        påståendet, så synaren förlorar. Det är grundpåståendet.
+        Spelaren säger vad tärningarna visar. Är det inte lagligt, för att ett
+        högre påstående redan ligger, säger den minsta lagliga höjningen.
 
-        Ett påstående **över** ``shown`` är en bluff. Den vinner bara om motståndaren
-        lägger sig (sannolikhet ``1 − p_called``) och förlorar liv om den synas.
-        En bluff lönar sig därför bara när den är *billig att bli synad på* — alltså
-        på påståendenivåer som sällan synas. Vikten av att motståndaren lägger sig
-        är den fasta ``BLUFF_GAIN``: bluffen är ett nödvändigt ont i Meier, inte en
-        personlighetsegenskap.
+        Det finns ingen frivillig bluff. Grundtaktiken ljuger bara när regeln
+        tvingar den: den som slår måste höja, och har tärningarna inte täckt
+        höjningen blir påståendet osant. Det är regelns verkning, inte ett val.
 
         ``previous_claim`` är påståendet som ligger när spelaren måste höja. Utan det
         valde agenten påståenden som om bordet var tomt, och motorn fick sedan tyst
         skriva om påståendet till minsta lagliga höjning. Här väljer agenten i stället
         bland de lagliga påståendena direkt, så att påståendet den säger är dess eget.
-
-        ``opponent_factor`` är motståndarens **synbenägenhet** relativt det
-        normala (1,0 = som folk mest). En motståndare som synar ofta gör varje
-        bluff dyrare, och då bluffar agenten mindre. Det är läsningens inverkan
-        på påståendet, skild från agentens egen ``caution``, som styr hur gärna
-        den synar.
         """
         legal = legality.legal_claims(shown=shown, previous_claim=previous_claim)
         if not legal:
@@ -475,66 +451,24 @@ class BasePolicy:
         if rules.is_meier(shown):
             return Decision("påstå", claim=shown, reason="Meier — högsta möjliga, påstår det.")
 
-        # Grundpåståendet är det högsta lagliga påstående som inte är en bluff, alltså
-        # ``shown`` om det är lagligt, annars minsta lagliga höjning.
+        # ``shown`` när det är lagligt, annars minsta lagliga höjning (``legal[-1]``
+        # är svagast, alltså den minsta höjningen över ``previous_claim``).
         safe = shown if shown in legal else legal[-1]
-
-        # Ett sant påstående kan synas utan att synaren vinner: då förlorar synaren
-        # livet och jag vinner det. Värdet är därför synsannolikheten gånger
-        # synarens förlust. Utan den termen jämfördes bluffen mot noll och vann
-        # över ett påstående som i själva verket är bättre.
-        safe_p_called = self._p_called(safe, opponent_factor)
-        safe_gain = safe_p_called * CALL_ODDS[safe].l_lose
-
-        best_bluff: int | None = None
-        best_gain = safe_gain
-        for cand in legal:
-            if rules.compare(cand, shown) <= 0:
-                continue
-            p_called = self._p_called(cand, opponent_factor)
-            # Synas bluffen förlorar jag mina egna liv, alltså ``l_win``. ``l_lose``
-            # är synarens förlust, det vill säga min vinst.
-            gain = (1.0 - p_called) * BLUFF_GAIN - p_called * CALL_ODDS[cand].l_win
-            if gain > best_gain:
-                best_gain, best_bluff = gain, cand
-
-        # En oförutsägbar spelare tar ibland den säkra vägen även när en bluff
-        # räknas som marginellt bättre, så att motståndaren inte kan läsa
-        # mönstret "bluffar bara på höga påståenden".
-        if best_bluff is not None:
-            if self.rng.random() < self.params.unpredictability * 0.25:
-                best_bluff = None
-
-        if best_bluff is not None:
-            return Decision(
-                "påstå",
-                claim=best_bluff,
-                reason=(
-                    f"Visar {rules.name(shown)}; bluffar {rules.name(best_bluff)} "
-                    f"(vinst {best_gain:+.2f} liv)."
-                ),
-            )
         return Decision(
             "påstå",
             claim=safe,
             reason=f"Visar {rules.name(shown)}; påstår {rules.name(safe)}.",
         )
 
-    def _p_called(self, claim: int, opponent_factor: float = 1.0) -> float:
+    def _p_called(self, claim: int) -> float:
         """Uppskattad sannolikhet att ett påstående blir synat.
 
         Fryst heuristik, kalibrerad mot empirin: högre påståenden synas oftare eftersom
         de är billigare att syna (synaren vinner oftare). Låga påståenden synas sällan
-        men aldrig *aldrig* — därför ett golv. Utan golvet ser en bluff till ett
-        lågt påstående ut att vara gratis, och agenten bluffar ihjäl sig.
-
-        ``opponent_factor`` skalar uppskattningen med motståndarens kända
-        synbenägenhet (se :meth:`OpponentTracker.call_factor`). Den som möter en
-        synbenägen motståndare räknar med att bli synad oftare — och bluffar
-        därför mindre.
+        men aldrig *aldrig* — därför ett golv. Utan golvet ser ett lågt påstående ut
+        att vara gratis att bära, och agenten underskattar risken.
         """
-        base = min(1.0, CALL_FLOOR + CALL_SLOPE * _strength(claim))
-        return min(1.0, base * opponent_factor)
+        return min(1.0, CALL_FLOOR + CALL_SLOPE * _strength(claim))
 
     # -- Beslut 4: tvingad höjning (titta eller inte titta) ------------------
     def decide_forced(self, claim: int) -> Decision:

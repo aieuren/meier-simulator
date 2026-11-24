@@ -253,26 +253,20 @@ def test_call_factor_is_damped_by_confidence():
     assert sure > unsure
 
 
-def test_opponent_factor_never_lowers_the_claim_below_the_truth():
-    """En synbenägen motståndare får aldrig locka fram en *högre* bluff.
+def test_call_tendency_does_not_reach_the_claim():
+    """Läsning av *synbenägenhet* styr inte längre påståendet.
 
-    Ju oftare motståndaren synar, desto dyrare blir bluffen. Faktorn får
-    alltså bara sänka påståendet, aldrig höja det.
+    Den vägen gick via bluffen: en motståndare som synar ofta gjorde bluffen
+    dyrare. Utan frivillig bluff finns inget att skala, så påståendet är detsamma
+    oavsett hur ofta motståndaren synar. Läsningen lever kvar i svaren
+    (``opponent_q``), inte i påståendet.
     """
     from meier.policy import AgentParams, BasePolicy
 
-    # Utan oförutsägbarhet blir jämförelsen mellan de två anropen meningsfull;
-    # annars kan slumpen släppa en bluff i det ena anropet och inte i det andra.
     policy = BasePolicy(AgentParams(unpredictability=0.0))
     for shown in rules.RANKING:
-        if rules.is_meier(shown):
-            continue
-        neutral = policy.decide_claim(shown)
-        for factor in (2.0, 3.0):
-            vs_caller = policy.decide_claim(shown, opponent_factor=factor)
-            assert rules.compare(vs_caller.claim, neutral.claim) <= 0, (
-                f"faktor {factor} höjde påståendet på {rules.name(shown)}"
-            )
+        claim = policy.decide_claim(shown).claim
+        assert claim == shown, f"påstod {rules.name(claim)} på {rules.name(shown)}"
 
 
 def test_call_ratio_is_relative_to_the_population():
@@ -295,42 +289,44 @@ def test_call_ratio_is_relative_to_the_population():
     assert synare > normal
 
 
-def test_call_tendency_reaches_the_claim_through_the_agent():
-    """Synbenägenheten ska faktiskt styra agentens påståenden, inte bara räknas ut."""
+def test_read_bluff_tendency_reaches_the_response():
+    """Läsning av *bluffbenägenhet* ska styra svaren, inte bara räknas ut.
+
+    Det är den väg som finns kvar sedan den frivilliga bluffen togs bort. Möter
+    agenten en notorisk bluffare höjs ``q``, och då blir 61-63 värda att syna.
+    Utan läsning skickas de vidare.
+    """
     from meier.agents.base import Role
     from meier.agents.strategic import StrategicAgent
     from meier.policy import AgentParams
 
-    def agent_for(call_rate: float) -> StrategicAgent:
+    def agent_for(bluff_was_true: bool, reading: float = 1.0) -> StrategicAgent:
         tracker = OpponentTracker()
-        n = 40
-        for _ in range(n):
+        for _ in range(40):
             tracker.observe_claim("X", unseen=False)
-            tracker.reveal("X", was_bluff=False)
-        for i in range(n):
-            tracker.observe_decision("X", "syna" if i < int(call_rate * n) else "skicka")
+            tracker.reveal("X", was_bluff=not bluff_was_true)
         role = Role(key="t", name="Test", description="", style="")
         return StrategicAgent(
             role,
-            AgentParams(caution=0.5, statistics=0.5, unpredictability=0.0, reading=1.0),
+            AgentParams(caution=0.5, statistics=0.5, unpredictability=0.0, reading=reading),
             tracker=tracker,
         )
 
-    timid = agent_for(0.03)
-    caller = agent_for(0.50)
-    assert timid._call_factor("X") < 1.0 < caller._call_factor("X")
+    def svar(agent: StrategicAgent, claim: int) -> str:
+        return agent.policy.decide_response(
+            claim, opponent_q=agent._opponent_prior(claim, "X")
+        ).action
 
-    def bluffs(agent: StrategicAgent) -> int:
-        count = 0
-        for shown in rules.RANKING:
-            if rules.is_meier(shown):
-                continue
-            d = agent.policy.decide_claim(shown, opponent_factor=agent._call_factor("X"))
-            if d.claim is not None and rules.compare(d.claim, shown) > 0:
-                count += 1
-        return count
+    bluffare = agent_for(bluff_was_true=False)
+    ärlig = agent_for(bluff_was_true=True)
 
-    assert bluffs(caller) < bluffs(timid)
+    # Mot en bluffare blir de höga men inte säkra påståendena värda att syna.
+    assert svar(bluffare, 63) == "syna", "läste inte bluffaren"
+    assert svar(ärlig, 63) == "skicka", "läste den ärlige som bluffare"
+
+    # Utan läsning ska de båda svara likadant: läsningen är det som skiljer.
+    utan = agent_for(bluff_was_true=False, reading=0.0)
+    assert svar(utan, 63) == svar(ärlig, 63), "läsning påverkade trots reading=0.0"
 
 
 def test_summary_gives_the_model_a_reference_point():
