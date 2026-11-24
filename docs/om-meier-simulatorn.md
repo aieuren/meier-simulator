@@ -244,8 +244,8 @@ Tvånget att höja gäller alla lika. Bluffen är därför ingen ratt man skruva
 
 Här går spelarna isär. **Axel**, den fasta räkneregeln, bluffar aldrig
 frivilligt: han säger vad tärningarna visar och ljuger bara när regeln tvingar
-honom. **Berit, Cecilia och David**, som styrs av en språkmodell, får välja själva
-och kan höja över sina tärningar om de tror att det lönar sig.
+honom. **Berit, Cecilia, David och Elsa**, som styrs av en språkmodell, får välja
+själva och kan höja över sina tärningar om de tror att det lönar sig.
 
 Det som skiljer profilerna åt är hur de hanterar tvånget. En försiktig spelare
 synar mer sällan, vilket gör att en bluff oftare får stå. En oförutsägbar spelare
