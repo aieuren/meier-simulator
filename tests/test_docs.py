@@ -615,7 +615,7 @@ def test_axel_section_tables_match_the_policy():
     from meier import policy, rules
 
     text = _om()
-    assert "### Så spelar Axel, drag för drag" in text, (
+    assert "### Så spelar Axel – du kan spela som han" in text, (
         "Om meier-simulatorn saknar avsnittet om Axels speltaktik"
     )
 
@@ -749,3 +749,49 @@ def test_koden_sager_pastaende_inte_bud():
         assert '"bud"' not in text, f"{rel} använder fortfarande handlingsetiketten 'bud'"
     app_js = (rot / "meier/web/static/app.js").read_text(encoding="utf-8")
     assert 'e.action === "påstå"' in app_js
+
+
+def test_axel_section_call_odds_are_real_numbers():
+    """Texten säger att synen vinner i 96 fall av 100 på 11 och 65 på 64.
+
+    Siffrorna ska komma ur ``CALL_ODDS``, inte ur lösa antaganden. Glider de
+    isär ska testet falla.
+    """
+    from meier import policy
+
+    text = _om()
+    flat = " ".join(text.split())
+
+    p11 = round(policy.CALL_ODDS[11].p_win * 100)
+    p22 = round(policy.CALL_ODDS[22].p_win * 100)
+    p64 = round(policy.CALL_ODDS[64].p_win * 100)
+
+    assert f"vinner synen i {p11} fall av 100" in flat, (
+        f"Texten anger inte att synen vinner i {p11} fall av 100 på 11."
+    )
+    assert f"vinner synen i {p22}" in flat, (
+        f"Texten anger inte att synen vinner i {p22} fall på 22."
+    )
+    assert f"Vid 64 vinner synen fortfarande i {p64} fall av 100" in flat, (
+        f"Texten anger inte att synen vinner i {p64} fall av 100 på 64."
+    )
+
+
+def test_axel_section_says_63_is_a_coin_flip():
+    """63 ska beskrivas som i praktiken jämnt mellan syna och skicka."""
+    from meier import policy, rules
+
+    text = _om()
+    flat = " ".join(text.split())
+
+    axel = policy.BasePolicy(
+        policy.AgentParams(caution=0.5, statistics=0.5, unpredictability=0.0, reading=0.0)
+    )
+    ev_call = policy.CALL_ODDS[63].ev_call(axel.belief(63)) + axel.inertia()
+    hold = axel._hold_value(63)
+    assert abs(ev_call - hold) < 0.002, (
+        f"63 är inte längre ett gränsfall: syna {ev_call:+.4f} mot håll {hold:+.4f}"
+    )
+    assert "63 är i praktiken ett myntkast" in flat
+    assert axel.decide_response(63).action == "skicka"
+    assert rules.name(63) == "63"
