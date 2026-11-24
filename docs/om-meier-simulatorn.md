@@ -209,9 +209,9 @@ hellre avstår från att syna än tar den chansen.
 Bluffen är alltså sällan ett fritt val. Står bordet redan högt kan dina tärningar
 ligga under, och då finns inget sant påstående kvar att säga. Att höja är det
 enda lagliga draget, och höjningen blir en bluff vare sig du vill eller inte.
-Valet finns bara vid rundans början och när bordet står lågt. Då kan du säga det
-tärningarna visar och bära en sanning, eller lägga dig över den och hoppas på att
-ingen synar. Det valet är det som skiljer spelarna åt.
+Valet finns bara vid rundans början och när bordet står lågt. Då kan du säga
+sanningen om dina tärningar, eller lägga dig över den och hoppas på att ingen
+synar. Det valet är det som skiljer spelarna åt.
 
 ### Två slags höjningar
 
@@ -354,33 +354,36 @@ tre svar mot varandra och tar det som är värt mest i liv:
 | 41, 32, 31 | **slå** |
 
 Han synar de låga påståendena eftersom nästan varje slag ligger **under** dem.
-Tärningarna är avlänga och viktade, så siffrorna följer tärningarnas vikter
-och inte jämna andelar. Säger någon 11 vinner synen i 96 fall av 100. Säger
-någon 22 vinner synen i 94. Ju högre påståendet blir, desto fler slag ligger
-över det, och då blir synen sämre än att bära påståendet vidare.
+Säger någon 11 vinner synen i 96 fall av 100. Säger någon 22 vinner synen i 94.
+Vid 64 vinner synen fortfarande i 65 fall av 100. Vid 63 vinner den i 58. Synen
+blir alltså sämre och sämre ju högre påståendet blir, för då ligger fler slag
+över det.
 
-Vid 64 vinner synen fortfarande i 65 fall av 100. Vid 63 har det jämnat ut sig
-helt: där skiljer det en halv tusendels liv mellan att syna och att skicka
-vidare, så 63 är i praktiken ett myntkast för honom.
+Men sannolikheten att vinna är inte hela kalkylen. Han räknar i liv, och en
+syn som slår fel kan kosta mer än ett liv: visar tärningarna Meier kostar den
+två. Att synen vinner oftast räcker alltså inte. Han synar bara när synen är
+värd mer i liv än att låta påståendet stå kvar.
+
+Gränsen hamnar vid 63. Där skiljer det bara en halv tusendels liv mellan de två
+vägarna, och den hårsmånen faller på att skicka vidare, så 63 är i praktiken
+ett myntkast för honom.
 
 Två rader i tabellen ser bakvända ut men är rätt. **31 synar han aldrig.** Han
-slår i stället, för ett slag ger ett nytt påstående som är lättare att bära än
-31. **61 och 62 synar han inte** trots att de ligger högt, för att bära dem är
-billigare än att betala för en syn.
+slår i stället. Ett slag ger honom ett nytt påstående, och redan minsta
+höjningen över 31 är värd mer att hålla kvar än 31 självt. **61 och 62 synar
+han inte** trots att de ligger högt: att skicka vidare kostar honom mindre i liv
+än att betala för en syn.
 
-**När han slår** skakar han bägaren på nytt och lyfter på locket. Tärningarna
-är nya och ingen har påstått något om dem, så titten avslöjar inget för bordet.
-Räcker det han ser över det förra påståendet säger han det. Räcker det inte
-säger han nästa steg i ordningen.
+**När han slår** skakar han bägaren på nytt och lyfter på locket. Räcker det han
+ser över det förra påståendet säger han det. Räcker det inte säger han nästa
+steg i ordningen.
 
-Att avstå från att titta är ett eget val. Med oförutsägbarheten noll tittar
-Axel alltid. Med 0,2 avstår han i ungefär ett fall av tio, och bara vid den
-tvingade höjningen.
-
-**När bägaren gått ett varv** måste han höja. Tärningarna slås om av bordet.
-Han väljer först om han vill titta, och tittar i så fall sedan. Står påståendet
-redan på Meier finns inget högre: då slår han om bägaren och börjar en ny runda,
-och valet faller bort.
+När bägaren gått ett helt varv tillbaka till honom måste han höja, och då slås
+tärningarna om. Då finns ett val: titta på de nya tärningarna, eller påstå utan
+att titta. Han väljer slumpmässigt, och sannolikheten för att han avstår från
+titten är hans oförutsägbarhet delat med två. Med Axels 0,2 blir det ett fall av
+tio. Med oförutsägbarheten noll tittar han alltid. Avstår han från titten säger
+han ett högre påstående utan att veta vad tärningarna visar.
 
 #### Ett exempelparti
 
