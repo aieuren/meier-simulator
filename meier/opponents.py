@@ -24,10 +24,10 @@ from .policy import DEFAULT_Q
 #: betett sig som den globala tron. Högre värde = trögare inlärning.
 PRIOR_STRENGTH = 4.0
 
-#: Hur mycket ett avslöjat **blint** påstående väger mot ett avslöjat frivilligt påstående.
+#: Hur mycket ett avslöjat påstående **utan titt** väger mot ett avslöjat frivilligt påstående.
 #: Ett slag är ett svagare löfte (spelaren såg inte tärningarna), men det är
 #: fortfarande en lögn motståndarna ser, så det väger mer än noll.
-BLIND_WEIGHT = 0.5
+UNSEEN_WEIGHT = 0.5
 
 #: Neutral bluffbenägenhet i motståndarprofilen. Profilens tal är **relativa**
 #: mot detta: ``bluff_tendency = 0,5`` betyder "bluffar som folk gör mest".
@@ -240,7 +240,7 @@ def _clamp01(value: float) -> float:
 class OpponentStats:
     """Vad vi vet om en motståndare, allt ur offentlig information.
 
-    ``visible_bids``       – antal icke-blinda *frivilliga* påståenden (första påståendet) vi sett.
+    ``visible_bids``       – antal där spelaren tittat *frivilliga* påståenden (första påståendet) vi sett.
     ``forced_bids``        – antal tvingade höjningar (mekaniska, säger inget om personen).
     ``revealed``           – hur många frivilliga påståenden som avslöjats genom en syn.
     ``revealed_bluffs``    – hur många av de avslöjade som var lögner.
@@ -255,8 +255,8 @@ class OpponentStats:
     forced_bids: int = 0
     revealed: int = 0
     revealed_bluffs: int = 0
-    revealed_blind: int = 0
-    revealed_blind_bluffs: int = 0
+    revealed_unseen: int = 0
+    revealed_unseen_bluffs: int = 0
     decisions: int = 0
     passes: int = 0
     raises: int = 0
@@ -269,8 +269,8 @@ class OpponentStats:
             "forced_bids": self.forced_bids,
             "revealed": self.revealed,
             "revealed_bluffs": self.revealed_bluffs,
-            "revealed_blind": self.revealed_blind,
-            "revealed_blind_bluffs": self.revealed_blind_bluffs,
+            "revealed_unseen": self.revealed_unseen,
+            "revealed_unseen_bluffs": self.revealed_unseen_bluffs,
             "decisions": self.decisions,
             "passes": self.passes,
             "raises": self.raises,
@@ -300,8 +300,8 @@ class OpponentTracker:
         return self.stats.setdefault(player, OpponentStats())
 
     # -- Offentliga observationer ---------------------------------------
-    def observe_bid(self, player: str, *, blind: bool, forced: bool = False) -> None:
-        """En spelare säger ett påstående. Blinda påstående är inga löften — räknas inte.
+    def observe_bid(self, player: str, *, unseen: bool, forced: bool = False) -> None:
+        """En spelare säger ett påstående. Påståenden utan titt är inga löften — räknas inte.
 
         ``forced`` markerar en **tvingad höjning** (bägaren har gått ett helt
         varv). En sådan är mekanisk: den som påstod måste höja vad tärningarna än
@@ -312,9 +312,9 @@ class OpponentTracker:
         """
         if forced:
             self._bucket(player).forced_bids += 1
-        elif not blind:
+        elif not unseen:
             self._bucket(player).visible_bids += 1
-        # Ett blint påstående skapar ingen profil: det är inget löfte, och en spelare
+        # Ett påstående utan titt skapar ingen profil: det är inget löfte, och en spelare
         # som bara har slagit ska fortfarande ligga på den globala förhandstron.
 
     def observe_decision(self, player: str, action: str) -> None:
@@ -329,7 +329,7 @@ class OpponentTracker:
             bucket.calls += 1
 
     def reveal(
-        self, player: str, *, was_bluff: bool, blind: bool = False, forced: bool = False
+        self, player: str, *, was_bluff: bool, unseen: bool = False, forced: bool = False
     ) -> None:
         """Facit efter en syn: var spelarens påstående en bluff?
 
@@ -343,16 +343,16 @@ class OpponentTracker:
         till — och en försiktig spelare såg ut som en värre bluffare än en riktig
         bluffare.
 
-        Ett **blint** påstående (ett slag) räknas, men väger hälften: spelaren lovade
+        Ett påstående **utan titt** (ett slag) räknas, men väger hälften: spelaren lovade
         inget den kunde se, men lögnen syns för motståndarna.
         """
         if forced:
             return
         bucket = self._bucket(player)
-        if blind:
-            bucket.revealed_blind += 1
+        if unseen:
+            bucket.revealed_unseen += 1
             if was_bluff:
-                bucket.revealed_blind_bluffs += 1
+                bucket.revealed_unseen_bluffs += 1
         else:
             bucket.revealed += 1
             if was_bluff:
@@ -369,19 +369,19 @@ class OpponentTracker:
         """Skattad bluff-frekvens för spelaren, eller den globala tron.
 
         Använder bara påstående som **avslöjats** genom en syn. Frivilliga påstående (där
-        spelaren såg tärningarna) väger tyngst; blinda slag väger hälften så
+        spelaren såg tärningarna) väger tyngst; slag utan titt väger hälften så
         mycket, eftersom spelaren då inte lovade något den kunde se. Finns inga
         avslöjade påståenden är svaret den globala frekvensen — agenten vet inget än.
         """
         bucket = self.stats.get(player)
         if bucket is None:
             return self.global_q
-        n = bucket.revealed + BLIND_WEIGHT * bucket.revealed_blind + self.prior_strength
+        n = bucket.revealed + UNSEEN_WEIGHT * bucket.revealed_unseen + self.prior_strength
         if n <= self.prior_strength:
             return self.global_q
         hits = (
             bucket.revealed_bluffs
-            + BLIND_WEIGHT * bucket.revealed_blind_bluffs
+            + UNSEEN_WEIGHT * bucket.revealed_unseen_bluffs
             + self.prior_strength * self.global_q
         )
         return hits / n
@@ -467,8 +467,8 @@ class OpponentTracker:
                 "pass_rate": None,
                 "call_rate": None,
             }
-        revealed = bucket.revealed + bucket.revealed_blind
-        bluffs = bucket.revealed_bluffs + bucket.revealed_blind_bluffs
+        revealed = bucket.revealed + bucket.revealed_unseen
+        bluffs = bucket.revealed_bluffs + bucket.revealed_unseen_bluffs
         return {
             "visible_bids": bucket.visible_bids,
             "revealed": revealed,
@@ -488,7 +488,7 @@ class OpponentTracker:
         bucket = self.stats.get(player)
         if bucket is None:
             return False
-        return (bucket.revealed + bucket.revealed_blind) > 0 or bucket.decisions > 0
+        return (bucket.revealed + bucket.revealed_unseen) > 0 or bucket.decisions > 0
 
     def statistical_profile(self, player: str) -> OpponentProfile:
         """Deterministisk fallback-profil ur sekreterarens siffror.
@@ -566,7 +566,7 @@ class OpponentTracker:
 
     def reveal_count(self) -> int:
         """Antal synar som avgjorts vid bordet hittills, alla spelare räknade."""
-        return sum(s.revealed + s.revealed_blind for s in self.stats.values())
+        return sum(s.revealed + s.revealed_unseen for s in self.stats.values())
 
     def evidence_strength(self) -> float:
         """Hur starkt underlaget är **över hela bordet**, 0–1.

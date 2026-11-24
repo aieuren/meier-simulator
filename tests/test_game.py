@@ -187,7 +187,7 @@ def test_engine_accepts_lower_first_bid():
     assert rules.compare(announcement.bid, 52) < 0
 
 
-def test_pass_is_blind_the_dice_never_reach_the_chooser():
+def test_pass_is_unseen_the_dice_never_reach_the_chooser():
     """Den som skickar vidare får inte se tärningarna.
 
     Att lyfta på locket är att syna. Kunde spelaren titta och sedan skicka
@@ -232,5 +232,5 @@ def test_decide_signature_cannot_take_dice():
     params = set(inspect.signature(MeierPlayerAgent.decide).parameters)
     assert params == {"self", "bid", "lives", "opponent"}, (
         f"decide har fått nya parametrar: {params}. Om tärningarna läggs till "
-        "bryts regeln att skicka vidare är blint."
+        "bryts regeln att skicka vidare sker utan att syna."
     )

@@ -68,7 +68,7 @@ def build_digest(records: list[dict[str, Any]]) -> dict[str, Any]:
     actions: Counter = Counter()
     bids: Counter = Counter()
     outcomes: Counter = Counter()
-    blind_bids = 0
+    unseen_bids = 0
     total_events = 0
     calls = {"caller_wins": 0, "caller_loses": 0}
     series: list[dict[str, Any]] = []
@@ -86,8 +86,8 @@ def build_digest(records: list[dict[str, Any]]) -> dict[str, Any]:
                 bids[str(e["bid_name"])] += 1
             if e.get("shown_name"):
                 outcomes[str(e["shown_name"])] += 1
-            if e.get("blind"):
-                blind_bids += 1
+            if e.get("unseen"):
+                unseen_bids += 1
             if action == "syna":
                 calls["caller_loses" if e.get("caller_loses") else "caller_wins"] += 1
 
@@ -110,7 +110,7 @@ def build_digest(records: list[dict[str, Any]]) -> dict[str, Any]:
         "actions": _top(actions),
         "bids": _top(bids),
         "outcomes": _top(outcomes),
-        "blind_bids": blind_bids,
+        "unseen_bids": unseen_bids,
         "events_total": total_events,
         "games_series": series[:_MAX_SERIES],
         "games_series_truncated": len(series) > _MAX_SERIES,
@@ -125,7 +125,7 @@ def render_digest_text(digest: dict[str, Any]) -> str:
     lines.append(
         f"Startspelaren vinner: {digest.get('starter_win_rate', 0)} av matcherna"
     )
-    lines.append(f"Blinda påståenden totalt: {digest.get('blind_bids', 0)}")
+    lines.append(f"Påståenden utan titt totalt: {digest.get('unseen_bids', 0)}")
 
     lines.append("")
     lines.append("PER ROLL")
@@ -134,7 +134,7 @@ def render_digest_text(digest: dict[str, Any]) -> str:
         lines.append(
             "- {name} ({role}): {games} matcher, {wins} vinster "
             "(vinst% {win_rate}), påståenden {bids}, bluff {bluffs} (bluff% {bluff_rate}), "
-            "blint påstående {blinds} (blint% {blind_rate}), höjningar {raises}, "
+            "utan titt {unseen} (utan titt% {unseen_rate}), höjningar {raises}, "
             "skicka {passes}, synar {calls} (syn% {call_rate}), "
             "syn lyckas {calls_won}/{calls} ({call_success_rate}), "
             "snitt liv förlorade {avg_lives_lost}, utslagen {eliminated} ({elimination_rate})".format(

@@ -21,7 +21,7 @@ from . import rules
 RESPONSES: tuple[str, ...] = ("syna", "skicka", "slå")
 
 #: De två valen vid en tvingad höjning (bägaren har gått ett helt varv).
-FORCED_CHOICES: tuple[str, ...] = ("titta", "blint")
+FORCED_CHOICES: tuple[str, ...] = ("titta", "unseen")
 
 
 def response_actions(*, bid: int) -> list[str]:
@@ -58,7 +58,7 @@ def legal_bids(*, shown: int, previous_bid: int | None = None) -> list[int]:
     return rules.higher_options(previous_bid)
 
 
-def blind_bids(*, previous_bid: int) -> list[int]:
+def unseen_bids(*, previous_bid: int) -> list[int]:
     """Påståenden som är lagliga när spelaren slår utan att titta.
 
     Samma krav som annars: strikt högre än påståendet som ligger. Att spelaren inte
@@ -74,7 +74,7 @@ def forced_choices(*, previous_bid: int) -> list[str]:
 
     Bägaren har gått ett helt varv tillbaka till den som påstod, som måste höja.
     Finns ett högre påstående kan spelaren välja att titta på de nya tärningarna eller
-    att påstå blint. Är påståendet redan Meier finns inget högre: då slår spelaren om
+    att påstå utan att titta. Är påståendet redan Meier finns inget högre: då slår spelaren om
     och börjar en ny runda, och valet faller bort.
     """
     if not rules.is_valid_value(previous_bid):

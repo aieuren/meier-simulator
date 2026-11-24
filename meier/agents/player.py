@@ -32,8 +32,8 @@ class Announcement:
     role: str
     proposed: int | None = None  # rå värdet modellen föreslog (kan vara ogiltigt)
     corrected: bool = False  # behövde påståendet korrigeras för att följa reglerna?
-    blind: bool = False  # påstod spelaren utan att titta på tärningarna?
-    choice_line: str = ""  # vid tvingad höjning: replik för titta/blint-valet
+    unseen: bool = False  # påstod spelaren utan att titta på tärningarna?
+    choice_line: str = ""  # vid tvingad höjning: replik för valet att titta eller inte
     choice_reasoning: str = ""  # vid tvingad höjning: motivering för valet
 
     def to_dict(self) -> dict:
@@ -50,7 +50,7 @@ class Announcement:
             "role": self.role,
             "proposed": self.proposed,
             "corrected": self.corrected,
-            "blind": self.blind,
+            "unseen": self.unseen,
             "choice_line": self.choice_line,
             "choice_reasoning": self.choice_reasoning,
         }
@@ -60,11 +60,11 @@ class Announcement:
 class ActionDecision:
     """Spelarens val när den möter ett påstående: Slå, Syna eller Skicka vidare.
 
-    Används också för titta/blint-valet vid en tvingad höjning, där ``action``
-    är ``"titta"`` eller ``"blint"``.
+    Används också för valet att titta eller inte vid en tvingad höjning, där ``action``
+    är ``"titta"`` eller ``"unseen"``.
     """
 
-    action: str  # "slå", "syna", "skicka" (eller "titta"/"blint" vid tvingad höjning)
+    action: str  # "slå", "syna", "skicka" (eller "titta"/"unseen" vid tvingad höjning)
     bid: int | None  # nytt påstående om spelaren slår
     line: str
     reasoning: str
@@ -104,7 +104,7 @@ class MeierPlayerAgent(Agent):
             "- Nästa spelare kan Slå (säga ett högre påstående), Syna (lyfta locket och granska "
             "påståendet) eller Skicka vidare (ta över ansvaret för samma påstående).\n"
             "- Om bägaren går ett helt varv tillbaka till den som påstod måste denne höja. "
-            "Tärningarna slås då om, och spelaren får själv välja att titta på dem eller påstå blint.\n"
+            "Tärningarna slås då om, och spelaren får själv välja att titta på dem eller påstå utan att titta.\n"
             "- Om någon synar och tärningarna visar lägre än påståendet förlorar den som påstod ett liv. "
             "Visar de samma eller högre förlorar den som synade ett liv.\n"
             "- Meier kostar dubbelt: om påståendet är Meier, eller om tärningarna visar Meier när "
@@ -126,7 +126,7 @@ class MeierPlayerAgent(Agent):
         ``previous_bid`` är det senaste påståendet i rundan om spelaren höjer efter
         ett helt varv och alltså redan har tittat på tärningarna. Då måste påståendet
         vara strikt högre. Att **slå** mot ett påstående går i stället via
-        :meth:`announce_blind`, för då får spelaren inte titta på tärningarna.
+        :meth:`announce_unseen`, för då får spelaren inte titta på tärningarna.
         """
         shown = rules.read_dice(*dice)
         higher = rules.higher_options(previous_bid) if previous_bid is not None else []
@@ -150,7 +150,7 @@ class MeierPlayerAgent(Agent):
             corrected=proposed != bid,
         )
 
-    def announce_blind(
+    def announce_unseen(
         self, dice: tuple[int, int], *, previous_bid: int, opponent: str | None = None
     ) -> Announcement:
         """Spelaren **slår** och måste säga ett strikt högre påstående.
@@ -165,11 +165,11 @@ class MeierPlayerAgent(Agent):
         shown = rules.read_dice(*dice)
         higher = rules.higher_options(previous_bid)
 
-        context = self._blind_announce_context(previous_bid, higher)
+        context = self._unseen_announce_context(previous_bid, higher)
         data = self.respond(context)
 
         proposed = self._raw_bid(data.get("bid"))
-        bid = self._coerce_blind_bid(data.get("bid"), previous_bid, higher)
+        bid = self._coerce_unseen_bid(data.get("bid"), previous_bid, higher)
         reasoning = str(data.get("reasoning") or "").strip()
 
         return Announcement(
@@ -182,7 +182,7 @@ class MeierPlayerAgent(Agent):
             role=self.role.key,
             proposed=proposed,
             corrected=proposed != bid,
-            blind=True,
+            unseen=True,
         )
 
     def announce_forced(
@@ -191,7 +191,7 @@ class MeierPlayerAgent(Agent):
         """Hållaren måste höja när bägaren gått ett helt varv.
 
         Tärningarna har redan slagits om av motorn. Spelaren får själv välja om
-        den vill titta på dem (som vid ett vanligt påstående) eller påstå blint (som
+        den vill titta på dem (som vid ett vanligt påstående) eller påstå utan att titta (som
         vid ett slag). Båda sätten är tillåtna – valet är spelarens.
         """
         if not rules.is_valid_value(previous_bid):
@@ -201,10 +201,10 @@ class MeierPlayerAgent(Agent):
             raise ValueError(
                 f"Kan inte höja: {rules.name(previous_bid)} är högst, det finns inget högre påstående"
             )
-        choice = self._wants_blind_forced(previous_bid, higher)
-        if choice.action == "blint":
-            # Spelaren väljer att påstå blint utan att titta på de nya tärningarna.
-            ann = self.announce_blind(
+        choice = self._wants_unseen_forced(previous_bid, higher)
+        if choice.action == "unseen":
+            # Spelaren väljer att påstå utan att titta utan att titta på de nya tärningarna.
+            ann = self.announce_unseen(
                 dice, previous_bid=previous_bid, opponent=opponent
             )
         else:
@@ -212,19 +212,19 @@ class MeierPlayerAgent(Agent):
             ann = self.announce(dice, previous_bid=previous_bid, opponent=opponent)
         return replace(ann, choice_line=choice.line, choice_reasoning=choice.reasoning)
 
-    def _wants_blind_forced(self, previous_bid: int, higher: list[int]) -> ActionDecision:
-        """Fråga spelaren: titta på de nya tärningarna eller påstå blint?
+    def _wants_unseen_forced(self, previous_bid: int, higher: list[int]) -> ActionDecision:
+        """Fråga spelaren: titta på de nya tärningarna eller påstå utan att titta?
 
         Returnerar valet som en :class:`ActionDecision` så att både själva valet
-        (``action == "blint"`` eller ``"titta"``) och dess motivering bevaras.
+        (``action == "unseen"`` eller ``"titta"``) och dess motivering bevaras.
         """
         context = self._forced_choice_context(previous_bid, higher)
         data = self.respond(context)
-        blind = self._coerce_blind_choice(data.get("blind"))
+        unseen = self._coerce_unseen_choice(data.get("unseen"))
         return ActionDecision(
-            action="blint" if blind else "titta",
+            action="unseen" if unseen else "titta",
             bid=None,
-            line="Jag påstår blint." if blind else "Jag tittar på tärningarna.",
+            line="Jag påstår utan att titta." if unseen else "Jag tittar på tärningarna.",
             reasoning=str(data.get("reasoning") or "").strip(),
             role=self.role.key,
         )
@@ -232,36 +232,36 @@ class MeierPlayerAgent(Agent):
     def _forced_choice_context(self, previous_bid: int, higher: list[int]) -> str:
         return "\n".join(
             [
-                "TITTA ELLER BLINT",
+                "TITTA ELLER INTE TITTA",
                 "SITUATIONEN",
                 f"Bägaren har gått ett helt varv och är tillbaka hos dig. Du måste höja "
                 f"över {rules.name(previous_bid)}.",
                 "Tärningarna har slagits om. Du får själv välja hur du gör:",
                 "- Titta på de nya tärningarna och säga ett påstående (som vid ett vanligt påstående).",
-                "- Påstå blint utan att titta (som när man slår).",
+                "- Påstå utan att titta (som när man slår).",
                 "Båda sätten är tillåtna. Valet är ditt.",
                 f"Giltiga påståenden: {', '.join(rules.name(v) for v in higher)}.",
                 "",
                 "Svara med JSON:",
-                '{"blind": <true om du påstår utan att titta, false om du tittar>, '
+                '{"unseen": <true om du påstår utan att titta, false om du tittar>, '
                 '"reasoning": "<kort motivering>"}',
             ]
         )
 
     @staticmethod
-    def _coerce_blind_choice(value: object) -> bool:
-        """Tolka modellens val av titta (False) eller påstå blint (True)."""
+    def _coerce_unseen_choice(value: object) -> bool:
+        """Tolka modellens val av titta (False) eller påstå utan att titta (True)."""
         if isinstance(value, bool):
             return value
         if isinstance(value, str):
             v = value.strip().lower()
-            if v in ("true", "ja", "j", "blint", "blind", "utan att titta"):
+            if v in ("true", "ja", "j", "utan att titta", "tittar inte"):
                 return True
             if v in ("false", "nej", "n", "titta", "tittar"):
                 return False
         return False
 
-    def _blind_announce_context(self, previous_bid: int, higher: list[int]) -> str:
+    def _unseen_announce_context(self, previous_bid: int, higher: list[int]) -> str:
         return "\n".join(
             [
                 "SITUATIONEN",
@@ -279,7 +279,7 @@ class MeierPlayerAgent(Agent):
             ]
         )
 
-    def _coerce_blind_bid(self, value: object, previous_bid: int, higher: list[int]) -> int:
+    def _coerce_unseen_bid(self, value: object, previous_bid: int, higher: list[int]) -> int:
         """Se till att ett slag-påstående är giltigt och strikt högre."""
         if not higher:
             raise ValueError(

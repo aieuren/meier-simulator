@@ -305,19 +305,19 @@ class StrategicAgent(Agent):
         return "; ".join(marked)
 
     # -- Beslut 2: slå (spelaren ser inte tärningarna) ---------------------
-    def announce_blind(
+    def announce_unseen(
         self, dice: tuple[int, int], *, previous_bid: int, opponent: str | None = None
     ) -> Announcement:
         """Spelaren slår: bägaren är stängd och påståendet måste vara strikt högre."""
         if not rules.is_valid_value(previous_bid):
             raise ValueError(f"{previous_bid} är inte ett giltigt påstående")
-        legal = legality.blind_bids(previous_bid=previous_bid)
+        legal = legality.unseen_bids(previous_bid=previous_bid)
         if not legal:
             raise ValueError(
                 f"Kan inte slå: {rules.name(previous_bid)} är högst, det finns inget högre påstående"
             )
         shown = rules.read_dice(*dice)
-        context = self._blind_context(previous_bid, legal, opponent)
+        context = self._unseen_context(previous_bid, legal, opponent)
         bid, reason = self._ask(context, lambda d: self._parse_bid(d, legal))
 
         corrected = False
@@ -337,10 +337,10 @@ class StrategicAgent(Agent):
             role=self.role.key,
             proposed=bid,
             corrected=corrected,
-            blind=True,
+            unseen=True,
         )
 
-    def _blind_context(
+    def _unseen_context(
         self, previous_bid: int, legal: list[int], opponent: str | None
     ) -> str:
         return "\n".join(
@@ -361,11 +361,11 @@ class StrategicAgent(Agent):
             ]
         )
 
-    # -- Beslut 3: titta eller påstå blint vid tvingad höjning -------------
+    # -- Beslut 3: titta eller påstå utan att titta vid tvingad höjning -------------
     def announce_forced(
         self, dice: tuple[int, int], *, previous_bid: int, opponent: str | None = None
     ) -> Announcement:
-        """Bägaren har gått ett helt varv: titta på de nya tärningarna eller påstå blint?"""
+        """Bägaren har gått ett helt varv: titta på de nya tärningarna eller påstå utan att titta?"""
         if not rules.is_valid_value(previous_bid):
             raise ValueError(f"{previous_bid} är inte ett giltigt påstående")
         choices = legality.forced_choices(previous_bid=previous_bid)
@@ -375,42 +375,42 @@ class StrategicAgent(Agent):
                 f"Kan inte höja: {rules.name(previous_bid)} är högst, det finns inget högre påstående"
             )
         context = self._forced_context(previous_bid, choices, opponent)
-        blind, reason = self._ask(context, self._parse_forced)
+        unseen, reason = self._ask(context, self._parse_forced)
 
-        if blind is None:
+        if unseen is None:
             choice = self.policy.decide_forced(previous_bid)
-            blind, reason = choice.action == "blint", choice.reason
+            unseen, reason = choice.action == "unseen", choice.reason
 
-        if blind:
-            ann = self.announce_blind(dice, previous_bid=previous_bid, opponent=opponent)
+        if unseen:
+            ann = self.announce_unseen(dice, previous_bid=previous_bid, opponent=opponent)
         else:
             ann = self.announce(dice, previous_bid=previous_bid, opponent=opponent)
         return replace(
             ann,
-            choice_line="Jag påstår blint." if blind else "Jag tittar på tärningarna.",
+            choice_line="Jag påstår utan att titta." if unseen else "Jag tittar på tärningarna.",
             choice_reasoning=reason,
         )
 
     @staticmethod
     def _parse_forced(data: dict) -> tuple[bool | None, str]:
         reason = str(data.get("reasoning") or "").strip()
-        value = data.get("blind")
+        value = data.get("unseen")
         if isinstance(value, bool):
             return value, reason
         if isinstance(value, str):
             v = value.strip().lower()
-            if v in ("true", "ja", "j", "blint", "blind"):
+            if v in ("true", "ja", "j", "utan att titta", "tittar inte"):
                 return True, reason
             if v in ("false", "nej", "n", "titta", "tittar"):
                 return False, reason
-        return None, 'Du måste svara med "blind": true eller false.'
+        return None, 'Du måste svara med "unseen": true eller false.'
 
     def _forced_context(
         self, previous_bid: int, choices: list[str], opponent: str | None
     ) -> str:
         return "\n".join(
             [
-                "TITTA ELLER BLINT",
+                "TITTA ELLER INTE TITTA",
                 f"Bägaren har gått ett helt varv och är tillbaka hos dig. Du måste höja "
                 f"över {rules.name(previous_bid)}.",
                 "Tärningarna har slagits om och ligger under locket.",
@@ -418,10 +418,10 @@ class StrategicAgent(Agent):
                 "",
                 f"LAGLIGA VAL: {', '.join(choices)}",
                 "- titta: lyft locket och säg ett påstående som du ser tärningarna.",
-                "- blint: påstå utan att titta, som när man slår.",
+                "- utan titt: påstå utan att titta, som när man slår.",
                 "",
                 "Svara med JSON:",
-                '{"blind": true | false, "reasoning": "<kort motivering>"}',
+                '{"unseen": true | false, "reasoning": "<kort motivering>"}',
             ]
         )
 

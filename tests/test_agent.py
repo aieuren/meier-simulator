@@ -58,7 +58,7 @@ def test_prompts_do_not_ask_for_line():
     agent = make_agent({})
     for context in (
         agent._announce_context((2, 5), 52, None, []),
-        agent._blind_announce_context(52, [54, 53]),
+        agent._unseen_announce_context(52, [54, 53]),
         agent._forced_choice_context(52, [54, 53]),
         agent._decide_context(52, [54, 53], 3),
     ):

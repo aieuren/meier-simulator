@@ -163,7 +163,7 @@ def decide(req: DecideRequest) -> dict:
         )
     elif decision.action == "slå":
         result["note"] = (
-            "Vid slag: bägaren skakas om blint och nästa påstående måste vara högre, "
+            "Vid slag: bägaren skakas om utan att spelaren tittar, och nästa påstående måste vara högre, "
             "oavsett vad tärningarna visar."
         )
     else:

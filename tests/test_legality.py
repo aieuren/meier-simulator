@@ -57,7 +57,7 @@ def test_bids_above_a_previous_bid_are_strictly_higher():
 
 def test_meier_has_no_higher_bid():
     assert legality.legal_bids(shown=31, previous_bid=rules.MEIER) == []
-    assert legality.blind_bids(previous_bid=rules.MEIER) == []
+    assert legality.unseen_bids(previous_bid=rules.MEIER) == []
     assert legality.forced_choices(previous_bid=rules.MEIER) == []
 
 
@@ -65,7 +65,7 @@ def test_forced_choice_exists_for_every_non_meier_bid():
     for bid in rules.RANKING:
         if rules.is_meier(bid):
             continue
-        assert legality.forced_choices(previous_bid=bid) == ["titta", "blint"]
+        assert legality.forced_choices(previous_bid=bid) == ["titta", "unseen"]
 
 
 def test_illegal_bids_are_rejected():
@@ -133,16 +133,16 @@ def test_unknown_action_is_rejected():
     assert decision.action in legality.RESPONSES
 
 
-def test_llm_can_choose_blind_at_forced_raise():
-    agent = agent_with(['{"blind": true, "reasoning": "döljer"}'])
+def test_llm_can_choose_unseen_at_forced_raise():
+    agent = agent_with(['{"unseen": true, "reasoning": "döljer"}'])
     ann = agent.announce_forced((3, 3), previous_bid=54)
-    assert ann.blind is True
+    assert ann.unseen is True
     assert rules.is_higher(ann.bid, 54)
 
 
 def test_forced_raise_over_meier_is_not_a_choice():
     # Meier är högst: motorn slår om i stället, så det finns inget val att göra.
-    agent = agent_with(['{"blind": true}'])
+    agent = agent_with(['{"unseen": true}'])
     with pytest.raises(ValueError):
         agent.announce_forced((3, 3), previous_bid=rules.MEIER)
 
@@ -160,8 +160,8 @@ def test_each_decision_costs_exactly_one_llm_call():
         ("bud", '{"bid": 62, "reasoning": "x"}',
          lambda a: a.announce((1, 1), previous_bid=61)),
         ("svar", '{"action": "syna", "reasoning": "x"}', lambda a: a.decide(61)),
-        ("blint", '{"bid": 62, "reasoning": "x"}',
-         lambda a: a.announce_blind((1, 1), previous_bid=61)),
+        ("unseen", '{"bid": 62, "reasoning": "x"}',
+         lambda a: a.announce_unseen((1, 1), previous_bid=61)),
     ):
         llm = ScriptedLLM([reply])
         agent = StrategicAgent(

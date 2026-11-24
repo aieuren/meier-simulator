@@ -199,7 +199,11 @@ def test_om_meier_describes_the_machine_not_its_results():
 
 
 def test_om_meier_cumulative_dice_table_matches_the_rules():
-    """Den kumulativa kolumnen ska räknas ur FACE_WEIGHTS, inte ur en kub."""
+    """Den kumulativa kolumnen ska räknas ur FACE_WEIGHTS, inte ur en kub.
+
+    Kolumnen visar chansen att slå påståendet eller högre, eftersom det är
+    synarens villkor: tärningarna ska nå upp till påståendet.
+    """
     from meier import rules
 
     weights = dict(zip(range(1, 7), rules.FACE_WEIGHTS))
@@ -210,7 +214,7 @@ def test_om_meier_cumulative_dice_table_matches_the_rules():
         return w[hi] * w[lo] / total * (1 if hi == lo else 2)
 
     def cum(value: int, w: dict[int, float]) -> float:
-        return sum(exact(v, w) for v in rules.RANKING if rules.compare(v, value) <= 0)
+        return sum(exact(v, w) for v in rules.RANKING if rules.compare(v, value) >= 0)
 
     kub = {i: 1.0 for i in range(1, 7)}
     text = _om()
@@ -504,7 +508,7 @@ def test_tolkningarna_ar_fa_och_utan_kodnamn():
         assert namn not in avsnitt, f"bryggan läcker implementationsdetaljen {namn}"
 
 
-def test_skicka_vidare_ar_blint_i_regeltext_och_prompt():
+def test_skicka_vidare_ar_utan_titt_i_regeltext_och_prompt():
     """Att titta är att syna. Regeln ska stå i både regeltext och LLM-prompt."""
     regler = _flat(REGLER.read_text(encoding="utf-8"))
     assert "tittar inte på tärningarna" in regler
@@ -522,7 +526,7 @@ def test_om_meier_does_not_claim_raises_are_always_one_step():
     """Dokumentet får inte påstå att *alla* höjningar är ett steg.
 
     ``decide_bid`` (sedda tärningar) höjer exakt ett steg, men ``decide_raise``
-    (blint) skalar med ``unpredictability`` och kan hoppa ända till Meier. Ett
+    (utan titt) skalar med ``unpredictability`` och kan hoppa ända till Meier. Ett
     påstående om att höjningen "alltid" är ett steg beskriver bara det första
     beslutet.
     """
@@ -535,7 +539,7 @@ def test_om_meier_does_not_claim_raises_are_always_one_step():
     ):
         assert claim not in flat, (
             f"Om meier-simulatorn påstår {claim!r}. Minsta höjning gäller bluffen över sedda "
-            "tärningar; blind höjning styrs av unpredictability."
+            "tärningar; höjning utan titt styrs av unpredictability."
         )
 
 
@@ -630,7 +634,7 @@ def test_axel_section_tables_match_the_policy():
     for bid in (41, 32, 31):
         assert axel.decide_response(bid).action == "slå", f"koden slår inte på {rules.name(bid)}"
 
-    # Blint slag: alltid minsta lagliga höjning.
+    # Slag utan titt: alltid minsta lagliga höjning.
     for bid in (31, 32, 41, 42, 43, 51, 52, 53, 54, 61, 62, 63, 64, 65, 66):
         assert axel.decide_raise(bid).bid == rules.next_higher(bid), (
             f"koden höjer inte minimalt över {rules.name(bid)}"

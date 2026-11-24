@@ -53,44 +53,43 @@ längden 1,3 mot bredden 1,0 blir en långsida 1,56 gånger så sannolik som en
 fördelning maskinen slår med.
 
 Tabellen visar sannolikheten för varje utfall, och hur stor chansen är att slå
-utfallet eller lägre. Den sista kolumnen är samma sak för en vanlig kub, så att
+utfallet eller högre. Den sista kolumnen är samma sak för en vanlig kub, så att
 det går att se vad formen gör.
 
-| Utfall | Exakt utfall | Utfallet eller lägre | Vanlig kub, eller lägre |
+| Utfall | Exakt utfall | Utfallet eller högre | Vanlig kub, eller högre |
 |---|---:|---:|---:|
-| 21 (Meier) | 2,9 % | 100,0 % | 100,0 % |
-| 11 | 1,5 % | 97,1 % | 94,4 % |
-| 22 | 1,5 % | 95,6 % | 91,7 % |
-| 33 | 3,6 % | 94,1 % | 88,9 % |
-| 44 | 3,6 % | 90,5 % | 86,1 % |
-| 55 | 3,6 % | 86,9 % | 83,3 % |
-| 66 | 3,6 % | 83,4 % | 80,6 % |
-| 65 | 7,2 % | 79,8 % | 77,8 % |
-| 64 | 7,2 % | 72,6 % | 72,2 % |
-| 63 | 7,2 % | 65,4 % | 66,7 % |
-| 62 | 4,6 % | 58,3 % | 61,1 % |
-| 61 | 4,6 % | 53,7 % | 55,6 % |
-| 54 | 7,2 % | 49,1 % | 50,0 % |
-| 53 | 7,2 % | 41,9 % | 44,4 % |
-| 52 | 4,6 % | 34,7 % | 38,9 % |
-| 51 | 4,6 % | 30,1 % | 33,3 % |
-| 43 | 7,2 % | 25,5 % | 27,8 % |
-| 42 | 4,6 % | 18,4 % | 22,2 % |
-| 41 | 4,6 % | 13,8 % | 16,7 % |
-| 32 | 4,6 % | 9,2 % | 11,1 % |
-| 31 | 4,6 % | 4,6 % | 5,6 % |
+| 21 (Meier) | 2,9 % | 2,9 % | 5,6 % |
+| 11 | 1,5 % | 4,4 % | 8,3 % |
+| 22 | 1,5 % | 5,9 % | 11,1 % |
+| 33 | 3,6 % | 9,5 % | 13,9 % |
+| 44 | 3,6 % | 13,1 % | 16,7 % |
+| 55 | 3,6 % | 16,6 % | 19,4 % |
+| 66 | 3,6 % | 20,2 % | 22,2 % |
+| 65 | 7,2 % | 27,4 % | 27,8 % |
+| 64 | 7,2 % | 34,6 % | 33,3 % |
+| 63 | 7,2 % | 41,7 % | 38,9 % |
+| 62 | 4,6 % | 46,3 % | 44,4 % |
+| 61 | 4,6 % | 50,9 % | 50,0 % |
+| 54 | 7,2 % | 58,1 % | 55,6 % |
+| 53 | 7,2 % | 65,3 % | 61,1 % |
+| 52 | 4,6 % | 69,9 % | 66,7 % |
+| 51 | 4,6 % | 74,5 % | 72,2 % |
+| 43 | 7,2 % | 81,6 % | 77,8 % |
+| 42 | 4,6 % | 86,2 % | 83,3 % |
+| 41 | 4,6 % | 90,8 % | 88,9 % |
+| 32 | 4,6 % | 95,4 % | 94,4 % |
+| 31 | 4,6 % | 100,0 % | 100,0 % |
 
 Mellan kolumnerna syns vad formen gör. Meier och 11 blir ovanligare än vid en
-kub, medan utfall där båda tärningarna är 3–6 blir vanligare. Udda och jämnt
-förblir ändå lika sannolikt, eftersom 1 och 2 ligger på ändytorna (en udda, en
-jämn) och 3–6 på långytorna.
+kub, medan utfall där båda tärningarna är 3–6 blir vanligare.
 
-Kolumnen Utfallet eller lägre är den som liknar spelet mest. Den säger hur ofta
-tärningarna visar påståendet eller mindre, och det är just det en syn avgör.
+Kolumnen Utfallet eller högre är den som liknar spelet mest. Den säger hur ofta
+tärningarna når upp till påståendet, och det är just det en syn avgör: synaren
+vinner när tärningarna visar påståendet eller högre.
 
 ---
 
-## De fem spelarna
+## Spelarna
 
 Spelarens egen profil sitter i fyra parametrar, inte i namnet. Varje parameter
 går från 0 till 1.
@@ -214,9 +213,10 @@ påstående alltid dyrare att bli synad på. En syn på 66 är billigare för
 motståndaren än en syn på 51, eftersom tärningarna då oftare är lägre än
 påståendet. Att höja långt ökar alltså risken att åka dit.
 
-När spelaren i stället slår blint finns ingen sann nivå att lägga sig strax
-över, och kalkylen är en annan: ett lågt påstående är svårt för nästa spelare att
-slå över, ett högt sätter press men synas oftare.
+När spelaren i stället slår finns ingen sann nivå att lägga sig strax över,
+och kalkylen är en annan: ett lågt påstående är svårt för nästa spelare att slå
+över, ett högt sätter press men synas oftare. Spelaren slår utan att titta på
+tärningarna.
 
 Vem väger det ena mot det andra? Modellen. Koden räknar bara upp vilka
 påståenden som är lagliga i läget, och modellen väljer bland dem. Den får
@@ -310,7 +310,7 @@ Han hamnar i fyra olika situationer, och de skiljer sig åt i vad han vet:
 |---|---|---|
 | 1. Rundans första påstående | ja | säger sanningen, eller bluffar ett steg om tärningarna är svaga |
 | 2. Någon annan har påstått | nej | väljer mellan att syna, skicka vidare eller slå |
-| 3. Han slår, alltså skakar blint | nej | säger den minsta lagliga höjningen |
+| 3. Han slår, alltså skakar utan att titta | nej | säger den minsta lagliga höjningen |
 | 4. Bägaren har gått ett varv | nej, han väljer först | tittar på de nya tärningarna |
 
 **När han börjar rundan.** Han har tittat i smyg och ställer det sanna
@@ -349,20 +349,20 @@ aldrig, eftersom bara Meier är högre — där slår han i stället. Inte helle
 62 synar han, trots att de ligger högt: att bära dem är billigare än att syna
 dem.
 
-**När han slår.** Han skakar blint och ser inte tärningarna. Då är den minsta
+**När han slår.** Han skakar utan att titta på tärningarna. Då är den minsta
 lagliga höjningen säkrast, eftersom den har minst chans att tärningarna visar
 lägre. Han säger alltid nästa steg i rangordningen: 31 blir 32, 32 blir 41, och
 så vidare uppåt. Över 66 säger han 55, för alla dubbletter ligger över de
 blandade paren. Det ser bakvänt ut men är rätt.
 
 **När bägaren gått ett varv.** Tärningarna slås om och han måste höja. Han
-väljer först och tittar sedan. Nio gånger av tio tittar han. Annars påstår han
-blint, för att inte gå att läsa.
+väljer först och tittar sedan. Nio gånger av tio tittar han på tärningarna.
+Annars påstår han utan att titta, för att inte gå att läsa.
 
 **Oförutsägbarheten.** Axel har en liten dos oförutsägbarhet, och den gör tre
 saker: han tar ibland den säkra vägen även när en bluff räknas som marginellt
 bättre, han hoppar ibland längre än minsta höjning när han slår, och han påstår
-ibland blint vid tvingad höjning. Bruset är medvetet litet. Det ska göra honom
+ibland utan att titta vid tvingad höjning. Bruset är medvetet litet. Det ska göra honom
 svår att läsa, inte sämre. Skruvar man ner det till noll blir han helt mekanisk
 och tabellerna ovan gäller exakt.
 

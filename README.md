@@ -55,7 +55,7 @@ roller kan spela hela spel mot varandra.
 - När man mist tre liv är man ute. Sist kvar vinner.
 - Kommer bägaren ett helt varv tillbaka till den som påstår måste denne höja.
   Tärningarna slås då om, och den som påstår får själv välja att titta på dem eller
-  påstå blint. Är påståendet Meier får spelaren i stället slå om och börja en ny runda.
+  påstå utan att titta. Är påståendet Meier får spelaren i stället slå om och börja en ny runda.
 
 Poängordning (högst först):
 21, 11, 22, 33, 44, 55, 66, 65, 64, 63, 62, 61, 54, 53, 52, 51, 43, 42, 41, 32, 31.
@@ -218,11 +218,11 @@ I webbappen finns sektionen "Spelarna möter varandra":
 3. Flödet följer reglerna:
    - Den som börjar slår och tittar i smyg, sedan säger ett påstående.
    - Nästa spelare slår (skakar sina egna tärningar på nytt, tittar inte på
-     dem och säger ett högre påstående — ett *blint påstående*), synar eller skickar
+     dem och säger ett högre påstående — ett *påstående utan titt*), synar eller skickar
      vidare.
    - Kommer bägaren ett helt varv tillbaka till den som påstår måste denne höja.
      Tärningarna slås då om, och den som påstår får själv välja att titta på dem eller
-     påstå blint. Är påståendet Meier slår den som påstår i stället om och börjar en ny runda.
+     påstå utan att titta. Är påståendet Meier slår den som påstår i stället om och börjar en ny runda.
    - Vid en syn lyfts locket. Visar tärningarna lägre än påståendet förlorar
      den som ansvarar för påståendet ett liv (den som sa det senast, eller skickade
      vidare och tog över ansvaret), annars den som synade. Meier kostar dubbelt.
@@ -261,7 +261,7 @@ Protokollet är byggt för efteranalys. Varje match innehåller:
 - `events`: varje åtgärd med spelare, roll, tärningsutfall, påstående, om spelaren hade
   tittat på tärningarna (och om påståendet då var sant eller en bluff), tidigare påstående,
   livsställning och rundnummer,
-- `player_stats`: per spelare antal påståenden, blinda slag, bluffar, sanningar, synar,
+- `player_stats`: per spelare antal påståenden, slag utan titt, bluffar, sanningar, synar,
   höjningar, förlorade liv och om spelaren slogs ut.
 
 Med ett fast basfrö blir en serie reproducerbar. JSONL-formatet (en match per rad)

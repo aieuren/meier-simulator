@@ -45,7 +45,7 @@ tillåter det, och LLM-agenten kan göra det.
 | 16 | Meier-varv → slå om, ingen livsförlust | ✅ | `higher_options(21) == []`, mätt 0 av 1158 rundor |
 | 17 | En runda slutar vid syn | ✅ | 0 rundor utan syn på 1158 |
 | 18 | **Första påståendet får vara lägre än tärningarna** | ⚠️ | Motorn: ja. Policyn: nej. Se nedan. |
-| 19 | **Skicka vidare är blint – tärningarna läcker inte** | ✅ | `decide()` tar `bid` och `lives`, aldrig tärningsvärdet. 4 anropsställen, 0 läckor. |
+| 19 | **Skicka vidare sker utan att syna – tärningarna läcker inte** | ✅ | `decide()` tar `bid` och `lives`, aldrig tärningsvärdet. 4 anropsställen, 0 läckor. |
 
 ## Avvikelsen: lägre påståenden
 

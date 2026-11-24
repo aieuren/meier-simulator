@@ -41,7 +41,7 @@ class LogEntry:
 
     - ``kind == "roll"``: ett tärningsutfall (indata). Ingen spelare har svarat
       än. Detta är steget där OK-knappen hör hemma.
-    - ``kind == "action"``: en spelares svar – ett påstående, en blind höjning, en
+    - ``kind == "action"``: en spelares svar – ett påstående, en höjning utan titt, en
       syn eller ett skickande.
     - ``kind == "life"``: någon har förlorat ett (eller två) liv efter en syn.
       Raden ligger direkt efter synen och visar hur många liv som är kvar.
@@ -64,8 +64,8 @@ class LogEntry:
     accepted_bid: int | None = None  # påståendet spelaren svarar på (slå/skicka/syna)
     proposed: int | None = None  # rått påstående från modellen
     corrected: bool = False  # korrigerades påståendet?
-    blind: bool = False  # slog spelaren bägaren på nytt (fick inte lyfta locket)?
-    choice_line: str = ""  # vid tvingad höjning: replik för titta/blint-valet
+    unseen: bool = False  # slog spelaren bägaren på nytt (fick inte lyfta locket)?
+    choice_line: str = ""  # vid tvingad höjning: replik för valet att titta eller inte
     choice_reasoning: str = ""  # vid tvingad höjning: motivering för valet
     lives_lost: int = 0  # antal förlorade liv (endast life)
     lives_left: int | None = None  # kvarvarande liv (endast life)
@@ -103,7 +103,7 @@ class LogEntry:
             else None,
             "proposed": self.proposed,
             "corrected": self.corrected,
-            "blind": self.blind,
+            "unseen": self.unseen,
             "choice_line": self.choice_line,
             "choice_reasoning": self.choice_reasoning,
             "lives_lost": self.lives_lost,
@@ -175,10 +175,10 @@ class Session:
     holder: int = 0  # spelarindex för den som ansvarar för påståendet (kan ha skickat vidare)
     actor: int = 0  # spelarindex som ska agera
     #: Spelarindex för den som senast *annonserade* ett påstående (påstående/höja/slå). Det är
-    #: den spelaren ett avslöjande attribueras till. Ett blint påstående är ett svagare
-    #: löfte, så ``bid_was_blind`` styr hur tungt avslöjandet väger.
+    #: den spelaren ett avslöjande attribueras till. Ett påstående utan titt är ett svagare
+    #: löfte, så ``bid_was_unseen`` styr hur tungt avslöjandet väger.
     last_announcer: int = 0
-    bid_was_blind: bool = False
+    bid_was_unseen: bool = False
     #: Sant om det stående påståendet kom från en **tvingad** höjning (bägaren har gått
     #: ett helt varv). En sådan är mekanisk — den som påstod måste höja vad tärningarna
     #: än visar — och får aldrig räknas in i motståndarprofilen.
@@ -275,16 +275,16 @@ class Session:
         return [i for i in self.order if self.lives[i] > 0]
 
     # -- Motståndarmodell: mata spåraren när något blir offentligt ----------
-    def _notify_bid(self, player_name: str, *, blind: bool, forced: bool = False) -> None:
+    def _notify_bid(self, player_name: str, *, unseen: bool, forced: bool = False) -> None:
         if self.tracker is not None:
-            self.tracker.observe_bid(player_name, blind=blind, forced=forced)
+            self.tracker.observe_bid(player_name, unseen=unseen, forced=forced)
 
     def _notify_decision(self, player_name: str, action: str) -> None:
         if self.tracker is not None:
             self.tracker.observe_decision(player_name, action)
 
     def _notify_reveal(
-        self, announcer_idx: int, *, blind: bool, forced: bool, was_bluff: bool
+        self, announcer_idx: int, *, unseen: bool, forced: bool, was_bluff: bool
     ) -> None:
         """Facit efter en syn. Tvingade höjningar är mekaniska och hoppas över —
         de säger inget om spelarens benägenhet (se :class:`OpponentTracker`)."""
@@ -292,7 +292,7 @@ class Session:
             self.tracker.reveal(
                 self.name_of(announcer_idx),
                 was_bluff=was_bluff,
-                blind=blind,
+                unseen=unseen,
                 forced=forced,
             )
 
@@ -424,15 +424,15 @@ class Session:
         player = self.players[self.actor]
         # Den som sitter näst efter är den som först får svara på påståendet.
         ann = player.announce(dice, opponent=self.name_of(self._next_actor(self.actor)))
-        self._notify_bid(player.name, blind=False)
+        self._notify_bid(player.name, unseen=False)
         entry = self._log_entry(
-            player, dice, ann, action="bud", previous_bid=None, blind=False, actor_idx=self.actor
+            player, dice, ann, action="bud", previous_bid=None, unseen=False, actor_idx=self.actor
         )
         self.pending_bid = ann.bid
         self.bidder = self.actor
         self.holder = self.actor
         self.last_announcer = self.actor
-        self.bid_was_blind = False
+        self.bid_was_unseen = False
         self.bid_was_forced = False
         self._prepare_action(actor=self._next_actor(self.actor))
         return entry
@@ -453,18 +453,18 @@ class Session:
             # Spelaren skakar bägaren på nytt: ett färskt slag, och locket lyfts inte.
             dice = rules.roll(self.rng)
             self._log_roll(player=player.name, dice=dice, shown=rules.read_dice(*dice))
-            ann = player.announce_blind(
+            ann = player.announce_unseen(
                 dice, previous_bid=bid, opponent=self.name_of(self._next_actor(self.actor))
             )
             ann = self._enforce_bid(ann, previous_bid=bid)
-            self._notify_bid(player.name, blind=True)
+            self._notify_bid(player.name, unseen=True)
             entry = self._log_entry(
                 player,
                 dice,
                 ann,
                 action="slå",
                 previous_bid=bid,
-                blind=True,
+                unseen=True,
                 accepted_bid=bid,
                 actor_idx=self.actor,
             )
@@ -473,7 +473,7 @@ class Session:
             self.bidder = self.actor
             self.holder = self.actor
             self.last_announcer = self.actor
-            self.bid_was_blind = True
+            self.bid_was_unseen = True
             self.bid_was_forced = False
             self._after_bid(actor=self.actor)
             return entry
@@ -508,7 +508,7 @@ class Session:
         assert bid is not None
         player = self.players[self.bidder]
         # Tärningarna slås om när bägaren gått ett helt varv. Hållaren väljer
-        # själv om den tittar på dem eller påstår blint (som vid ett slag).
+        # själv om den tittar på dem eller påstår utan att titta (som vid ett slag).
         dice = rules.roll(self.rng)
         self._log_roll(player=player.name, dice=dice, shown=rules.read_dice(*dice))
         ann = player.announce_forced(
@@ -516,14 +516,14 @@ class Session:
         )
         ann = self._enforce_bid(ann, previous_bid=bid)
         # Tvingad höjning: mekanisk, räknas separat i motståndarprofilen.
-        self._notify_bid(player.name, blind=ann.blind, forced=True)
+        self._notify_bid(player.name, unseen=ann.unseen, forced=True)
         entry = self._log_entry(
             player,
             dice,
             ann,
             action="höja",
             previous_bid=bid,
-            blind=ann.blind,
+            unseen=ann.unseen,
             actor_idx=self.bidder,
             choice_line=ann.choice_line,
             choice_reasoning=ann.choice_reasoning,
@@ -532,7 +532,7 @@ class Session:
         self.pending_bid = ann.bid
         self.holder = self.bidder
         self.last_announcer = self.bidder
-        self.bid_was_blind = ann.blind
+        self.bid_was_unseen = ann.unseen
         self.bid_was_forced = True
         self._after_bid(actor=self.bidder)
         return entry
@@ -621,11 +621,11 @@ class Session:
         )
 
         # Facit är nu offentligt — tärningarna ligger på bordet. Först nu får
-        # motståndarmodellen veta om det senaste påståendet var en bluff. Ett blint påstående
+        # motståndarmodellen veta om det senaste påståendet var en bluff. Ett påstående utan titt
         # är inget löfte och avslöjas aldrig (se ``_notify_reveal``).
         self._notify_reveal(
             self.last_announcer,
-            blind=self.bid_was_blind,
+            unseen=self.bid_was_unseen,
             forced=self.bid_was_forced,
             was_bluff=(bid != shown),
         )
@@ -671,7 +671,7 @@ class Session:
         *,
         action: str,
         previous_bid: int | None,
-        blind: bool,
+        unseen: bool,
         accepted_bid: int | None = None,
         actor_idx: int | None = None,
         choice_line: str = "",
@@ -693,7 +693,7 @@ class Session:
             accepted_bid=accepted_bid,
             proposed=ann.proposed,
             corrected=ann.corrected,
-            blind=blind,
+            unseen=unseen,
             choice_line=choice_line,
             choice_reasoning=choice_reasoning,
             actor_lives=self.lives[actor_idx] if actor_idx is not None else None,

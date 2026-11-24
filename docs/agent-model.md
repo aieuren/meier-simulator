@@ -28,7 +28,7 @@ De fyra situationerna:
    stor, annars skickar hon vidare. Ett Meier-påstående synar hon alltid, annars tar
    rundan aldrig slut.
 4. Hon tvingas höja. Hon väljer mellan att titta (och kunna påstå nära
-   sanningen) eller påstå blint (och dölja information).
+   sanningen) eller påstå utan att titta (och dölja information).
 
 Det viktigaste: hon gör alltid exakt samma sak i samma läge. Slumpen finns bara
 i tärningarna, aldrig i hennes beslut.
@@ -240,9 +240,9 @@ besluten.
 | # | Beslut | Ser agenten sina tärningar? | Metod i koden |
 |---|---|---|---|
 | 1 | **Första påståendet** | **Ja** (tittat i smyg) | `announce()` |
-| 2 | **Slå** (mot ett påstående) | **Nej** — nytt, stängt slag | `announce_blind()` |
+| 2 | **Slå** (mot ett påstående) | **Nej** — nytt, stängt slag | `announce_unseen()` |
 | 3 | **Syna / skicka** | **Nej** — har inte tittat | `decide()` |
-| 4 | **Tvingad höjning** | **Väljer själv**: titta eller blint | `announce_forced()` |
+| 4 | **Tvingad höjning** | **Väljer själv**: titta eller inte titta | `announce_forced()` |
 
 ### Beslut 1 — Första påståendet (ser tärningarna)
 
@@ -320,13 +320,13 @@ motståndarspecifika uppskattningen (avsnitt 6).
 ### Beslut 4 — Tvingad höjning (väljer själv)
 
 Bägaren har gått ett helt varv. Tärningarna slås om. Agenten får titta eller
-påstå blint.
+påstå utan att titta.
 
 Policy: jämför de två vägarna och välj den med högst `V`.
 
 - Titta är bättre när de nya tärningarna är starka (du kan påstå nära
   sanningen och slippa risken).
-- Blint är bättre när du ändå måste höja högt och tärningarna sannolikt är
+- Att inte titta är bättre när du ändå måste höja högt och tärningarna sannolikt är
   svaga — då slipper du ljuga med vetskap, och motståndaren får ingen
   läsvinst från din tvekan.
 
@@ -395,7 +395,7 @@ tärningsmodell som koden inte längre använder.
 Två tal hör dit:
 
 - `DEFAULT_Q = 0,715` — populationens bluff-frekvens bland **avslöjade**
-  påståenden (frivilliga väger fullt, blinda halvt). Tvingade höjningar räknas
+  påståenden (frivilliga väger fullt, sådana utan titt halvt). Tvingade höjningar räknas
   aldrig, eftersom de är mekaniska för alla. Används som förhandstro innan en
   spelare avslöjats, och som nämnare när en motståndares benägenhet mäts relativt
   populationen. Observera att `bluff_ratio` delar med samma tal, så det absoluta
@@ -610,7 +610,7 @@ beslutstillfället. I synnerhet:
 - Bluffar kan bara räknas ur avslutade rundor, där en syn avslöjade
   tärningarna. Den pågående rundan får aldrig bidra.
 - Motståndarens dolda tärningar och framtida drag får aldrig ingå.
-- Ett blint påstående är inget löfte och räknas aldrig som en bluff.
+- Ett påstående utan titt är inget löfte och räknas aldrig som en bluff.
 
 Anledningen är subtil men avgörande: `session.py` loggar `shown` (de faktiska
 tärningarna) för varje påstående. Bygger man profilen ur hela loggen läcker framtiden

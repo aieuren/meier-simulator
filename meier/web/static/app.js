@@ -633,18 +633,18 @@ function renderLog(entries, result) {
       main = `<span class="log-action">Säger</span> <strong>${textOr(e.bid_name, "?")}</strong>`;
     }
     // Etiketten "sant/bluff" gäller bara påståenden där spelaren tittat på sina tärningar.
-    // Ett blint påstående ("slå") kan inte vara en bluff – spelaren såg dem inte.
+    // Ett påstående utan titt ("slå") kan inte vara en bluff – spelaren såg dem inte.
     const showsTruth =
-      (e.action === "bud" || e.action === "höja") && !e.blind;
+      (e.action === "bud" || e.action === "höja") && !e.unseen;
     const truthTag = showsTruth
       ? `<span class="log-bid ${e.lie ? "lie" : "truth"}">${e.lie ? "bluff" : "sant"}</span>`
       : "";
-    const blindTag = e.blind
-      ? `<span class="log-blind">blint påstående – tittar inte på egna tärningarna</span>`
+    const unseenTag = e.unseen
+      ? `<span class="log-unseen">påstående utan titt – spelaren såg inte sina tärningar</span>`
       : "";
-    // Vid tvingad höjning valde spelaren att titta eller påstå blint; visa varför.
+    // Vid tvingad höjning valde spelaren att titta eller påstå utan att titta; visa varför.
     const choiceTag = e.choice_reasoning
-      ? `<span class="log-choice">Val: ${e.blind ? "blint" : "tittade"} – ${escapeHtml(e.choice_reasoning)}</span>`
+      ? `<span class="log-choice">Val: ${e.unseen ? "tittade inte" : "tittade"} – ${escapeHtml(e.choice_reasoning)}</span>`
       : "";
 
     row.innerHTML = `
@@ -653,7 +653,7 @@ function renderLog(entries, result) {
         ${main}
         ${truthTag}
       </div>
-      ${blindTag}
+      ${unseenTag}
       ${choiceTag}
       ${corrected}
     `;
@@ -680,7 +680,7 @@ function matchRow(rec) {
         `<span class="ms-name">${p.name}</span>` +
         `<span class="ms-cell">påståenden ${s.bids || 0}</span>` +
         `<span class="ms-cell">bluff ${s.bluffs || 0}</span>` +
-        `<span class="ms-cell">blind ${s.blinds || 0}</span>` +
+        `<span class="ms-cell">unseen ${s.unseen || 0}</span>` +
         `<span class="ms-cell">syn ${s.calls || 0}</span>` +
         `<span class="ms-cell">liv −${s.lives_lost || 0}</span>` +
         `<span class="ms-cell">${s.eliminated ? "ute" : (p.name === rec.winner ? "vinnare" : "kvar")}</span>` +
@@ -714,7 +714,7 @@ function renderMatchSummary(summary) {
         `<td>${b.wins}/${b.games}</td>` +
         `<td>${pct(b.win_rate)}</td>` +
         `<td>${pct(b.bluff_rate)}</td>` +
-        `<td>${pct(b.blind_rate)}</td>` +
+        `<td>${pct(b.unseen_rate)}</td>` +
         `<td>${pct(b.raise_rate)}</td>` +
         `<td>${pct(b.call_rate)}</td>` +
         `<td>${pct(b.call_success_rate)}</td>` +
@@ -743,7 +743,7 @@ function renderMatchSummary(summary) {
       <thead>
         <tr>
           <th>Spelare</th><th>Vinster</th><th>Vinst%</th>
-          <th>Bluff%</th><th>Blint påstående%</th><th>Höj%</th><th>Syn%</th><th>Syn lyckas</th><th>Snitt liv −</th>
+          <th>Bluff%</th><th>Utan titt%</th><th>Höj%</th><th>Syn%</th><th>Syn lyckas</th><th>Snitt liv −</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>

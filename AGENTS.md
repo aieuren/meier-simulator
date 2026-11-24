@@ -58,12 +58,12 @@ lower bid). Multiple agents with distinct roles can also play full games.
 - Call responsibility: the player who loses a life on a call is the one who
   *holds* the bid — the last player to say or pass the bid — not necessarily the
   one who first set it. `Session.holder` tracks this and is updated on every bid,
-  blind shake, forced raise, and pass. The next round starts with the active
+  shake without a look, forced raise, and pass. The next round starts with the active
   player *before* the loser in turn order (`_previous_active`). `meier/game.py`
   keeps the same `holder` logic in its text log.
 - `meier/agents/base.py` – `Agent`/`Role` base classes.
 - `meier/agents/player.py` – `MeierPlayerAgent` and the role registry. The agent
-  is the source of truth for legality: `_coerce_bid` and `_coerce_blind_bid`
+  is the source of truth for legality: `_coerce_bid` and `_coerce_unseen_bid`
   keep every bid valid and strictly higher, and `Session._enforce_bid` is the
   engine's backstop. The tests guard the rules.
 - `meier/web/app.py` + `meier/web/static/` – web UI and JSON API. The UI has
@@ -92,7 +92,7 @@ lower bid). Multiple agents with distinct roles can also play full games.
   match per line; `summarize` aggregates a series per role (win rate, bluff
   rate, raise/call rates, call success, lives lost). `GameRecord.events` is the
   full session log (`LogEntry.to_dict()`), which carries the analysis fields
-  (`accepted_bid`, `proposed`, `corrected`, `blind`, `lives_lost`, `lives_left`,
+  (`accepted_bid`, `proposed`, `corrected`, `unseen`, `lives_lost`, `lives_left`,
   `actor_lives`, `active_players`, `caller_loses`). Tests swap the module-level
   `_new_agents` factory for scripted agents.
 - `meier/cli.py` – command line entry points (`announce`, `decide`, `play`,
@@ -134,7 +134,7 @@ without looking), syna (lift the lid) and skicka (pass the same bid).
 So slå is *not* a peek at the old dice — the player shakes a brand new roll, and
 the bid must be strictly higher than the previous one whatever the dice show.
 This is why the engine logs a fresh `kind="roll"` entry before every slå, and
-why `announce_blind` (not `announce`) is used for it. A slå that is not strictly
+why `announce_unseen` (not `announce`) is used for it. A slå that is not strictly
 higher is corrected to the smallest legal raise: `Session._enforce_bid`.
 
 ## Two different raises — do not conflate them (gotcha)
@@ -146,7 +146,7 @@ of exactly one of the two decisions. Keep them apart:
   always exactly one step above it (`min(higher_options(shown))`), at every
   `unpredictability`. Higher bids get called more often, so a longer jump is
   pure downside.
-- `decide_raise(bid)` — blind shake, dice unseen. The minimum legal raise is
+- `decide_raise(bid)` — shake without a look, dice unseen. The minimum legal raise is
   safest. With probability `unpredictability` the agent instead picks a random
   higher option (up to Meier), so it cannot be read as "always the minimum".
   There is no "true level" to sit just above when the dice are unknown.
@@ -154,7 +154,7 @@ of exactly one of the two decisions. Keep them apart:
 Measured on 80 no-LLM matches: 63.3 % of raises were one step, 36.7 % were
 more, up to 18. So "always one step" was wrong for the table as played.
 
-Guarded by `tests/test_policy.py::test_unpredictability_makes_blind_raises_vary` and
+Guarded by `tests/test_policy.py::test_unpredictability_makes_unseen_raises_vary` and
 `::test_seen_bid_bluff_is_always_exactly_one_step`, plus
 `tests/test_docs.py::test_om_meier_does_not_claim_raises_are_always_one_step`.
 
@@ -162,17 +162,17 @@ Guarded by `tests/test_policy.py::test_unpredictability_makes_blind_raises_vary`
 
 When the cup comes back to the bidder after a full lap, the rule we play is
 that the dice are re-rolled — not just a higher number said over the old
-dice. The bidder may then look at the new dice or bid blind; both are allowed,
+dice. The bidder may then look at the new dice or bid without looking; both are allowed,
 just like any other bid. So `Session._resolve_raise` and `Game._play_round`
 roll new dice, log a fresh `kind="roll"` entry, and call
-`MeierPlayerAgent.announce_forced` (which asks the model "look or blind?" via
-`_forced_choice_context`, then delegates to `announce` or `announce_blind`).
+`MeierPlayerAgent.announce_forced` (which asks the model "look or not?" via
+`_forced_choice_context`, then delegates to `announce` or `announce_unseen`).
 `pending_dice` must be updated to the new roll, otherwise a later syna would be
 judged against the stale dice. The holder must also become the bidder in
 `Game._play_round` (Session already does `self.holder = self.bidder`) — miss it
-and a later syna blames the wrong player. A forced raise is `blind=True` only
-when the bidder chose to bid blind. (`höja` is still a bid, so it counts in
-`BID_ACTIONS`; blind raises count as `blinds`, not bluffs.)
+and a later syna blames the wrong player. A forced raise is `unseen=True` only
+when the bidder chose not to look. (`höja` is still a bid, so it counts in
+`BID_ACTIONS`; raises without a look count as `unseen`, not bluffs.)
 
 ## Prose style for docs: no bold
 
@@ -193,7 +193,7 @@ belong in `docs/agent-model.md` or `docs/regler/granskning.md`.
 Two things bridge the gap to the repo without turning the file into a spec.
 One is the wording note: the PDF says "bud", this text says "påstående". The
 other is the short closing section "Några tolkningar för denna simulator",
-which lists the open choices (blind passing, blind raises, bluff frequency,
+which lists the open choices (passing without a look, raising without a look, bluff frequency,
 die shape) as choices, not rules. Keep that section to a handful of bullets and
 link out for detail.
 
@@ -211,9 +211,9 @@ guards the specific claim.
 
 ## The `line` is built locally, never written by the model
 
-The model only produces the move (`bid`, `action`, `blind`). The spoken `line`
+The model only produces the move (`bid`, `action`, `unseen`). The spoken `line`
 is assembled in code from the move: `StrategicAgent._say` for a bid,
-`_say_action` for syna/skicka/slå, and a fixed string for the look-or-blind
+`_say_action` for syna/skicka/slå, and a fixed string for the look-or-not
 choice. No prompt asks for `"line"` any more, and any `"line"` in a model reply
 is ignored.
 
@@ -234,9 +234,9 @@ are now closed:
 - syna was logged with empty `line`/`reasoning`. `Session._resolve_call`
   now takes the caller's `ActionDecision` and stores its `line`/`reasoning` on
   the log entry and on the `CallResult` (shown in the web UI).
-- Forced raise (look or blind?) discarded the choice's motivation.
-  `_wants_blind_forced` now returns an `ActionDecision` (`action` is `"titta"`
-  or `"blint"`), and `announce_forced` carries `choice_line`/`choice_reasoning`
+- Forced raise (look or not?) discarded the choice's motivation.
+  `_wants_unseen_forced` now returns an `ActionDecision` (`action` is `"titta"`
+  or `"unseen"`), and `announce_forced` carries `choice_line`/`choice_reasoning`
   onto the announcement, the log entry and `Game`'s text log.
 
 So `Announcement.choice_line`/`choice_reasoning` and
@@ -244,12 +244,12 @@ So `Announcement.choice_line`/`choice_reasoning` and
 Note: `build_digest` does not include reasoning — to analyse it you must
 feed selected raw events to the model, not the digest.
 
-Investigated a reported "raise after a blind slå" bug: it is not reproducible.
+Investigated a reported "raise after an unseen slå" bug: it is not reproducible.
 `accepted_bid` is the bid the player *answers*, so a raise showing
 `accepted=52, bid=61` is just the forced raise at the end of a full lap, not a
 double raise. A property check over 500 random matches (200 for `bid >=
 accepted`, 300 for the `slå → höja` pattern) found 0 violations, and every `slå`
-is `blind=True`.
+is `unseen=True`.
 
 ## The OpenHands agent-server proxy is gone (removed 2026-11-17)
 
@@ -386,7 +386,7 @@ Manual fallback: `pip install -r requirements.txt`, then
 ## The engine is the source of truth
 
 Legality lives in the engine and the player agent, not in a separate judge:
-`MeierPlayerAgent._coerce_bid` / `_coerce_blind_bid` keep every bid valid and
+`MeierPlayerAgent._coerce_bid` / `_coerce_unseen_bid` keep every bid valid and
 strictly higher, and `Session._enforce_bid` is the engine's backstop for the bid
 that actually stands. The tests in `tests/` guard the rules. There is no referee
 agent — do not reintroduce a deterministic check as a "judge".
@@ -486,13 +486,14 @@ Three rules that keep the companion doc honest:
   contradicting the move.
 - The engine coerces illegal model output back to legal moves (e.g. forces a
   higher bid when the rules require it). Keep that safety net.
-- A "slå" bid is blind: the player shakes their *own* cup and does not look
+- A "slå" bid is unseen: the player shakes their *own* cup and does not look
   at their own dice, so the bid is not a truth-or-bluff claim. Only "påstående" and
   "höja" bids where the player actually looked carry the sant/bluff label; any
-  blind bid (a slå, or a forced raise where the bidder chose not to look) is
-  labelled "blint påstående" and counted as `blinds`, never as `bluffs`, in the stats.
-  This is deliberate: it adds a psychological dimension, so `blind_rate`
-  is tracked per role to see whether bidding blind pays off over many matches.
+  bid without a look (a slå, or a forced raise where the bidder chose not to
+  look) is labelled "påstående utan titt" and counted as `unseen`, never as
+  `bluffs`, in the stats.
+  This is deliberate: it adds a psychological dimension, so `unseen_rate`
+  is tracked per role to see whether bidding without a look pays off over many matches.
 - Note that pairs (11–66) outrank high singles, so e.g. 44 beats 65. When a call
   looks "wrong", check the ranking before assuming a bug.
 - "Deterministic" means `unpredictability == 0`, not "no LLM". `axel` is the

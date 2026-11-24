@@ -92,7 +92,7 @@ def test_summarize_aggregates_roles(monkeypatch):
         assert b["games"] == 4
         assert 0.0 <= b["win_rate"] <= 1.0
         assert 0.0 <= b["bluff_rate"] <= 1.0
-        assert 0.0 <= b["blind_rate"] <= 1.0
+        assert 0.0 <= b["unseen_rate"] <= 1.0
         assert b["wins"] <= b["games"]
     # Vinnarna fördelas på rollerna och antalet stämmer.
     assert sum(stats["winner_counts"].values()) == 4

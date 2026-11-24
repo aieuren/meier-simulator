@@ -175,7 +175,7 @@ def test_response_offers_all_three_actions():
 
 
 def test_response_can_shake_when_shaking_is_best():
-    # Blindslaget blir det minsta lagliga höjningen, och då är hållarvärdet
+    # Slaget utan titt blir det minsta lagliga höjningen, och då är hållarvärdet
     # bättre än att skicka vidare 31.
     calm = BasePolicy(AgentParams(unpredictability=0.0))
     assert calm.decide_response(31).action == "slå"
@@ -216,13 +216,13 @@ def test_response_picks_the_best_available_option():
 
 # -- Tvingad höjning (beslut 4) -------------------------------------------
 
-def test_forced_choice_is_titta_or_blint(base):
+def test_forced_choice_is_titta_or_unseen(base):
     # Vid Meier finns inget högre påstående; då återstår bara att syna (motorn slår
-    # annars om och startar en ny runda). För alla andra påståenden är valet titta/blint.
+    # annars om och startar en ny runda). För alla andra påståenden är valet titta eller inte titta.
     for bid in rules.RANKING:
         if rules.is_meier(bid):
             continue
-        assert base.decide_forced(bid).action in {"titta", "blint"}
+        assert base.decide_forced(bid).action in {"titta", "unseen"}
 
 
 def test_forced_choice_follows_unpredictability():
@@ -233,7 +233,7 @@ def test_forced_choice_follows_unpredictability():
 
     bold = BasePolicy(AgentParams(unpredictability=1.0))
     seen = {bold.decide_forced(54).action for _ in range(40)}
-    assert "blint" in seen, "en oförutsägbar profil ska ibland påstå blint"
+    assert "unseen" in seen, "en oförutsägbar profil ska ibland påstå utan att titta"
 
 
 # -- Den påståendespecifika tron -------------------------------------------
@@ -300,8 +300,8 @@ def test_axel_reads_no_opponent():
 
 # -- Höjningens längd: två olika beslut, två olika regler ------------------
 
-def test_blind_raise_is_minimum_without_unpredictability():
-    """Utan oförutsägbarhet är blindslaget alltid minsta lagliga höjning.
+def test_unseen_raise_is_minimum_without_unpredictability():
+    """Utan oförutsägbarhet är slaget utan titt alltid minsta lagliga höjning.
 
     Spelaren ser inte tärningarna, så det minsta steget är det säkraste. Det är
     bara ``unpredictability`` som får agenten att hoppa högre.
@@ -311,7 +311,7 @@ def test_blind_raise_is_minimum_without_unpredictability():
     assert p.decide_raise(31).bid == opts[-1]
 
 
-def test_unpredictability_makes_blind_raises_vary():
+def test_unpredictability_makes_unseen_raises_vary():
     """En oförutsägbar agent ska inte alltid välja samma höjning."""
     opts = rules.higher_options(31)
     bids = set()

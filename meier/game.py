@@ -148,7 +148,7 @@ class Game:
                         "– slår om och börjar ny runda."
                     )
                     return bidder
-                # Tärningarna slås om; den som påstod väljer att titta eller påstå blint.
+                # Tärningarna slås om; den som påstod väljer att titta eller påstå utan att titta.
                 dice = self.roll()
                 shown = rules.read_dice(*dice)
                 responder = order[(order.index(bidder) + 1) % len(order)]
@@ -159,11 +159,11 @@ class Game:
                 )
                 bid = forced.bid
                 holder = bidder  # den som påstod ansvarar nu för det nya påståendet
-                blind_note = " (blint)" if forced.blind else ""
+                unseen_note = " (utan titt)" if forced.unseen else ""
                 why = f" [{forced.choice_reasoning}]" if forced.choice_reasoning else ""
                 self._record(
                     f"  Bägaren tillbaka hos {self.players[bidder].name}, som slår om "
-                    f"({rules.name(shown)}) och måste höja till {rules.name(bid)}{blind_note} "
+                    f"({rules.name(shown)}) och måste höja till {rules.name(bid)}{unseen_note} "
                     f"({forced.line}).{why}"
                 )
                 pos += 1

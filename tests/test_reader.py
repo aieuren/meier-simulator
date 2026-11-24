@@ -54,7 +54,7 @@ class BrokenLLM:
 def _tracker_with_bluffer() -> OpponentTracker:
     tracker = OpponentTracker()
     for _ in range(6):
-        tracker.observe_bid("bluffare", blind=False)
+        tracker.observe_bid("bluffare", unseen=False)
         tracker.reveal("bluffare", was_bluff=True)
     for _ in range(6):
         tracker.observe_decision("bluffare", "syna")
@@ -120,7 +120,7 @@ def test_reader_uses_the_llm_when_available():
 def test_confidence_is_capped_by_the_evidence_at_the_table():
     """En bild byggd på en enda syn får inte räknas som säker."""
     tracker = OpponentTracker()
-    tracker.observe_bid("bluffare", blind=False)
+    tracker.observe_bid("bluffare", unseen=False)
     tracker.reveal("bluffare", was_bluff=True)
     reader = OpponentReader(llm=FakeLLM(confidence=1.0))
     profile = reader.profile(tracker, "bluffare")
@@ -133,7 +133,7 @@ def test_confidence_grows_as_more_calls_are_revealed():
     for reveals in (1, 3, 9):
         tracker = OpponentTracker()
         for _ in range(reveals):
-            tracker.observe_bid("bluffare", blind=False)
+            tracker.observe_bid("bluffare", unseen=False)
             tracker.reveal("bluffare", was_bluff=True)
         reader = OpponentReader(llm=FakeLLM(confidence=1.0))
         seen.append(reader.profile(tracker, "bluffare").confidence)
@@ -160,7 +160,7 @@ def test_reader_caches_until_new_evidence_arrives():
     assert llm.calls == 1, "profilen ska cachas mellan beslut"
 
     # Ny syn → nytt bevis → profilen räknas om.
-    tracker.observe_bid("bluffare", blind=False)
+    tracker.observe_bid("bluffare", unseen=False)
     tracker.reveal("bluffare", was_bluff=False)
     reader.profile(tracker, "bluffare")
     assert llm.calls == 2
@@ -282,11 +282,11 @@ def test_call_ratio_is_relative_to_the_population():
     n = 100
     normal_calls = round(n * POPULATION_CALL_RATE)
     for _ in range(n):
-        tracker.observe_bid("normal", blind=False)
+        tracker.observe_bid("normal", unseen=False)
     for i in range(n):
         tracker.observe_decision("normal", "syna" if i < normal_calls else "skicka")
     for _ in range(n):
-        tracker.observe_bid("synare", blind=False)
+        tracker.observe_bid("synare", unseen=False)
     for i in range(n):
         tracker.observe_decision("synare", "syna" if i < 60 else "skicka")
     normal = tracker.call_ratio("normal")
@@ -305,7 +305,7 @@ def test_call_tendency_reaches_the_bid_through_the_agent():
         tracker = OpponentTracker()
         n = 40
         for _ in range(n):
-            tracker.observe_bid("X", blind=False)
+            tracker.observe_bid("X", unseen=False)
             tracker.reveal("X", was_bluff=False)
         for i in range(n):
             tracker.observe_decision("X", "syna" if i < int(call_rate * n) else "skicka")

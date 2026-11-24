@@ -42,7 +42,7 @@ class Agent:
         """Standardbeteende för tvingad höjning: höj som vid ett vanligt påstående.
 
         Agenten får de omslagna tärningarna ``dice`` och måste säga ett högre
-        påstående. Spelaragenter kan överskugga detta för att i stället påstå blint.
+        påstående. Spelaragenter kan överskugga detta för att i stället påstå utan att titta.
         """
         return self.announce(dice, previous_bid=previous_bid, opponent=opponent)
 

@@ -78,11 +78,11 @@ def _player_stats(log: list[LogEntry], names: list[str]) -> dict[str, dict[str, 
     stats: dict[str, dict[str, Any]] = {
         name: {
             "bids": 0,          # egna påståenden (påstående/slå/höja)
-            "blinds": 0,        # egna påståenden efter ett blind slag (såg inte tärningarna)
+            "unseen": 0,        # egna påståenden efter ett slag utan titt (såg inte tärningarna)
             "bluffs": 0,        # egna påståenden där spelaren tittat och inte sa sanningen
             "truths": 0,        # egna påståenden där spelaren tittat och sa sanningen
             "decisions": 0,     # svar på andras påståenden
-            "raises": 0,        # "slå" (blind höjning)
+            "raises": 0,        # "slå" (höjning utan titt)
             "passes": 0,        # "skicka"
             "calls": 0,         # "syna"
             "calls_won": 0,     # syn där motståndaren förlorade
@@ -106,9 +106,9 @@ def _player_stats(log: list[LogEntry], names: list[str]) -> dict[str, dict[str, 
             continue
         if entry.action in BID_ACTIONS:
             s["bids"] += 1
-            # Ett blind slag är inget medvetet löfte – räkna det inte som bluff.
-            if entry.blind:
-                s["blinds"] += 1
+            # Ett slag utan titt är inget medvetet löfte – räkna det inte som bluff.
+            if entry.unseen:
+                s["unseen"] += 1
             elif entry.truth:
                 s["truths"] += 1
             else:
@@ -350,7 +350,7 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
                     "eliminated": 0,
                     "lives_lost": 0,
                     "bids": 0,
-                    "blinds": 0,
+                    "unseen": 0,
                     "bluffs": 0,
                     "truths": 0,
                     "decisions": 0,
@@ -371,7 +371,7 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
             bucket["lives_lost"] += s["lives_lost"]
             for key in (
                 "bids",
-                "blinds",
+                "unseen",
                 "bluffs",
                 "truths",
                 "decisions",
@@ -396,7 +396,7 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
         b["elimination_rate"] = _rate(b["eliminated"], b["games"])
         b["avg_lives_lost"] = round(b["lives_lost"] / games, 3)
         b["bluff_rate"] = _rate(b["bluffs"], b["bids"])
-        b["blind_rate"] = _rate(b["blinds"], b["bids"])
+        b["unseen_rate"] = _rate(b["unseen"], b["bids"])
         b["raise_rate"] = _rate(b["raises"], b["decisions"])
         b["pass_rate"] = _rate(b["passes"], b["decisions"])
         b["call_rate"] = _rate(b["calls"], b["decisions"])

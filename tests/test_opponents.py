@@ -10,18 +10,18 @@ de faktiska tärningarna för varje påstående, och bygger man profilen ur hela
 from meier.opponents import OpponentTracker
 
 
-def test_blind_bids_are_not_promises():
+def test_unseen_bids_are_not_promises():
     tracker = OpponentTracker()
-    tracker.observe_bid("a", blind=True)
-    # Ett blint påstående är inget löfte: ingen profil skapas alls för det.
+    tracker.observe_bid("a", unseen=True)
+    # Ett påstående utan titt är inget löfte: ingen profil skapas alls för det.
     assert "a" not in tracker.stats
-    tracker.observe_bid("a", blind=False)
+    tracker.observe_bid("a", unseen=False)
     assert tracker.stats["a"].visible_bids == 1
 
 
 def test_bluff_estimate_defaults_to_global_before_any_reveal():
     tracker = OpponentTracker()
-    tracker.observe_bid("a", blind=False)
+    tracker.observe_bid("a", unseen=False)
     assert tracker.bluff_estimate("a") == tracker.global_q
 
 
@@ -29,7 +29,7 @@ def test_bluff_estimate_uses_only_revealed_bids():
     tracker = OpponentTracker()
     # Fyra synliga påståenden, men bara ett avslöjat — och det var en bluff.
     for _ in range(4):
-        tracker.observe_bid("a", blind=False)
+        tracker.observe_bid("a", unseen=False)
     tracker.reveal("a", was_bluff=True)
     # Ett avslöjat påstående som var en bluff höjer tron över förhandstron:
     # (1 + 4*DEFAULT_Q) / (1 + 4) > DEFAULT_Q för alla DEFAULT_Q > 0.

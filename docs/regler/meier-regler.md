@@ -101,14 +101,14 @@ Kommer bägaren ett helt varv tillbaka till den som satte påståendet, måste d
 spelaren höja.
 
 - Är påståendet inte Meier: tärningarna slås om, och spelaren väljer att titta på
-  dem eller påstå blint.
+  dem eller påstå utan att titta.
 - Är påståendet Meier: det går inte att höja. Spelaren slår i stället om och
   börjar en ny runda. Ingen förlorar liv.
 
 ## Ett förtydligande som PDF:en bara antyder
 
 PDF:en säger att "skicka vidare" sker "utan att slå". Den säger inte ordagrant att
-spelaren är blind för tärningarna. Men alternativet vore orimligt: att lyfta på
+spelaren inte ser tärningarna. Men alternativet vore orimligt: att lyfta på
 locket är att syna. Kunde man titta och sedan skicka vidare skulle "skicka
 vidare" vara en gratis syn, och syna-alternativet vore meningslöst. Därför ser
 den som skickar vidare inte tärningarna, utan vet bara vad påståendet säger.
@@ -120,9 +120,9 @@ att det går att skilja på vad spelet kräver och vad den här maskinen har
 bestämt. Inget av detta är regler, och allt kan ändras utan att reglerna
 ändras.
 
-- Att datorn spelar spelaren ändrar inte blindheten i "skicka vidare". Den som
-  svarar får påståendet och sitt livsantal, aldrig tärningarna.
-- Att en blind höjning måste lägga sig över det förra påståendet är en regel.
+- Att datorn spelar spelaren ändrar inte att "skicka vidare" sker utan att syna.
+  Den som svarar får påståendet och sitt livsantal, aldrig tärningarna.
+- Att ett slag utan titt måste lägga sig över det förra påståendet är en regel.
   Vilket högre påstående som väljs är däremot ett strategival.
 - Hur ofta en spelare bluffar, synar eller skickar vidare är också ett
   strategival. Reglerna säger inget om det.

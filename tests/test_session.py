@@ -33,10 +33,10 @@ class ScriptedLLM:
     ``actions`` används i tur och ordning för beslut mot ett påstående.
     """
 
-    def __init__(self, bids=None, actions=None, blind=False):
+    def __init__(self, bids=None, actions=None, unseen=False):
         self.bids = list(bids or [])
         self.actions = list(actions or [])
-        self.blind = blind
+        self.unseen = unseen
         self._bid_i = 0
         self._act_i = 0
 
@@ -48,11 +48,11 @@ class ScriptedLLM:
         return default
 
     def complete(self, system, user, *, json_mode=False):
-        # Tvingad höjning: spelaren väljer att titta eller bjuda blint.
-        if "TITTA ELLER BLINT" in user:
+        # Tvingad höjning: spelaren väljer att titta eller bjuda utan att titta.
+        if "TITTA ELLER INTE TITTA" in user:
             return (
-                '{"blind": %s, "line": "Jag höjer.", "reasoning": "test"}'
-                % ("true" if self.blind else "false")
+                '{"unseen": %s, "line": "Jag höjer.", "reasoning": "test"}'
+                % ("true" if self.unseen else "false")
             )
 
         # Slag (bägaren skakas på nytt) eller vanligt påstående.
@@ -267,43 +267,43 @@ def test_forced_raise_rerolls_the_dice():
     assert session.to_dict()["pending"]["dice"] == list(entry.dice)
 
 
-def test_forced_raise_can_be_blind():
-    # Hållaren får själv välja att bjuda blint på de omslagna tärningarna.
+def test_forced_raise_can_be_unseen():
+    # Hållaren får själv välja att bjuda utan att titta på de omslagna tärningarna.
     players = [
-        make_player(k, ScriptedLLM(bids=[44, 33], actions=["skicka"], blind=True))
+        make_player(k, ScriptedLLM(bids=[44, 33], actions=["skicka"], unseen=True))
         for k in ("a", "b")
     ]
     session = Session.new(players)
     session.advance()  # påstående 44
     session.advance()  # skicka -> tvingad höjning
-    entry = session.advance()  # höjning, blint
+    entry = session.advance()  # höjning, utan titt
 
     assert entry.action == "höja"
-    assert entry.blind is True
+    assert entry.unseen is True
     stats = match._player_stats(session.log, [p.name for p in players])
-    # Det blinda höjningsbudet räknas som "blint", inte som bluff eller sanning.
-    assert stats[entry.player_name]["blinds"] == 1
+    # Höjningsbudet utan titt räknas som "unseen", inte som bluff eller sanning.
+    assert stats[entry.player_name]["unseen"] == 1
     assert stats[entry.player_name]["bids"] == 2
     assert stats[entry.player_name]["bluffs"] + stats[entry.player_name]["truths"] == 1
 
 
-def test_forced_raise_keeps_the_look_or_blind_reasoning():
-    # Vid tvingad höjning väljer spelaren att titta eller bjuda blint.
+def test_forced_raise_keeps_the_look_or_unseen_reasoning():
+    # Vid tvingad höjning väljer spelaren att titta eller bjuda utan att titta.
     # Motiveringen för *det valet* ska bevaras på höjningsraden.
     players = [
-        make_player(k, ScriptedLLM(bids=[44, 33], actions=["skicka"], blind=True))
+        make_player(k, ScriptedLLM(bids=[44, 33], actions=["skicka"], unseen=True))
         for k in ("a", "b")
     ]
     session = Session.new(players)
     session.advance()  # påstående 44
     session.advance()  # skicka -> tvingad höjning
-    entry = session.advance()  # höjning, blint
+    entry = session.advance()  # höjning, utan titt
 
     assert entry.action == "höja"
-    assert entry.blind is True
+    assert entry.unseen is True
     assert entry.choice_reasoning == "test"
     # Repliken beskriver valet och byggs lokalt; motiveringen kommer från modellen.
-    assert entry.choice_line == "Jag påstår blint."
+    assert entry.choice_line == "Jag påstår utan att titta."
     assert entry.to_dict()["choice_reasoning"] == "test"
 
 
@@ -318,30 +318,30 @@ def test_slag_logs_fresh_roll_before_action():
     kinds = [row["kind"] for row in session.to_dict()["log"]]
     assert kinds == ["roll", "action", "roll", "action"]
     assert entry.action == "slå"
-    assert entry.blind is True
+    assert entry.unseen is True
 
 
-def test_blind_slag_is_not_counted_as_bluff():
-    # Ett blind slag ("slå") är inget medvetet löfte: spelaren såg inte
-    # tärningarna. Det ska räknas som "blind", inte som bluff eller sanning.
+def test_unseen_slag_is_not_counted_as_bluff():
+    # Ett slag utan titt ("slå") är inget medvetet löfte: spelaren såg inte
+    # tärningarna. Det ska räknas som "unseen", inte som bluff eller sanning.
     players = [
         make_player(k, ScriptedLLM(bids=[44], actions=["slå"])) for k in ("a", "b")
     ]
     session = Session.new(players)
     session.advance()  # påstående 44 (spelaren tittade)
-    entry = session.advance()  # nästa spelare slår blint
+    entry = session.advance()  # nästa spelare slår utan att titta
 
     assert entry.action == "slå"
-    assert entry.blind is True
+    assert entry.unseen is True
 
     stats = match._player_stats(session.log, [p.name for p in players])
     slagger = stats[entry.player_name]
-    assert slagger["blinds"] == 1
+    assert slagger["unseen"] == 1
     assert slagger["bluffs"] == 0
     assert slagger["truths"] == 0
 
 
-def test_blind_flag_is_serialized():
+def test_unseen_flag_is_serialized():
     players = [
         make_player(k, ScriptedLLM(bids=[44], actions=["slå"])) for k in ("a", "b")
     ]
@@ -350,7 +350,7 @@ def test_blind_flag_is_serialized():
     entry = session.advance()
 
     row = next(r for r in session.to_dict()["log"] if r["action"] == "slå")
-    assert row["blind"] is True
+    assert row["unseen"] is True
 
 
 def test_illegal_slag_is_corrected_to_smallest_legal_raise():

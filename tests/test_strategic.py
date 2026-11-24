@@ -133,17 +133,17 @@ def test_reading_changes_the_prior():
     # annorlunda än en känd ärlig spelare, givet samma historik.
     tracker = OpponentTracker()
     for _ in range(20):
-        tracker.observe_bid("bluffare", blind=False)
+        tracker.observe_bid("bluffare", unseen=False)
         tracker.reveal("bluffare", was_bluff=True)
-        tracker.observe_bid("ärlig", blind=False)
+        tracker.observe_bid("ärlig", unseen=False)
         tracker.reveal("ärlig", was_bluff=False)
 
     reader = make("reader", AgentParams(reading=1.0), tracker)
-    blind = make("blind", AgentParams(reading=0.0), tracker)
+    unseen = make("unseen", AgentParams(reading=0.0), tracker)
 
     assert tracker.bluff_ratio("bluffare") > tracker.bluff_ratio("ärlig")
     # En agent utan läsning faller tillbaka på populationen (inget omdöme).
-    assert blind._opponent_prior(61, "bluffare") is None
+    assert unseen._opponent_prior(61, "bluffare") is None
     # Den läsande agenten tror mer på ett högt påstående från en känd bluffare än
     # från en känd ärlig spelare.
     assert reader._opponent_prior(61, "bluffare") > reader._opponent_prior(61, "ärlig")
@@ -167,7 +167,7 @@ def test_reader_profile_is_used_when_answering_a_bid():
     # låta den styra synbeslutet — utan LLM via sekreterarens aritmetik.
     tracker = OpponentTracker()
     for _ in range(8):
-        tracker.observe_bid("bluffare", blind=False)
+        tracker.observe_bid("bluffare", unseen=False)
         tracker.reveal("bluffare", was_bluff=True)
     reader = make("cecilia", ROSTER["cecilia"].params, tracker)
     decision = reader.decide(61, opponent="bluffare")
@@ -216,7 +216,7 @@ def test_line_is_built_locally_never_from_the_model():
 
 
 def test_no_prompt_asks_the_model_for_a_reply():
-    llm = _TalkingLLM({"bid": 54, "action": "skicka", "blind": False, "reasoning": "motiv"})
+    llm = _TalkingLLM({"bid": 54, "action": "skicka", "unseen": False, "reasoning": "motiv"})
     agent = make("cecilia", ROSTER["cecilia"].params, OpponentTracker())
     agent.llm = llm
     agent.announce((5, 2))
@@ -228,11 +228,11 @@ def test_no_prompt_asks_the_model_for_a_reply():
 
 
 def test_forced_choice_line_is_local_but_reasoning_is_kept():
-    llm = _TalkingLLM({"bid": 54, "blind": True, "reasoning": "kör på känsla"})
+    llm = _TalkingLLM({"bid": 54, "unseen": True, "reasoning": "kör på känsla"})
     agent = make("cecilia", ROSTER["cecilia"].params, OpponentTracker())
     agent.llm = llm
     ann = agent.announce_forced((5, 2), previous_bid=52)
-    assert ann.choice_line == "Jag påstår blint."
+    assert ann.choice_line == "Jag påstår utan att titta."
     assert ann.choice_reasoning == "kör på känsla"
 
 

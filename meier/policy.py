@@ -160,7 +160,7 @@ class Decision:
     """Ett färdigt beslut från policyn.
 
     ``action`` är en av ``"bud"``, ``"slå"``, ``"syna"``, ``"skicka"`` eller
-    ``"titta"``/``"blint"`` (vid tvingad höjning). ``bid`` är satt för påstående och slå.
+    ``"titta"``/``"unseen"`` (vid tvingad höjning). ``bid`` är satt för påstående och slå.
     ``reason`` är en kort maskinell motivering (LLM:en får formulera en rikare).
     """
 
@@ -173,7 +173,7 @@ class Decision:
 
 
 #: Den typiska bluff-frekvensen i populationen, mätt på **avslöjade** påstående
-#: (frivilliga väger fullt, blinda halvt). Används som nämnare när en motståndares
+#: (frivilliga väger fullt, de utan titt halvt). Används som nämnare när en motståndares
 #: benägenhet mäts relativt populationen, och som förhandstro innan en spelare
 #: avslöjats.
 #:
@@ -353,7 +353,7 @@ class BasePolicy:
           Jag förlorar liv om tärningarna visar lägre än påståendet; annars förlorar
           nästa spelare som synar. Värdet är därför nollsummespelet ovanför
           påståendet, viktat med hur ofta påståendet synas.
-        - **Slå** — jag skakar blint och måste påstå högre. Vilket påstående det blir
+        - **Slå** — jag skakar utan att titta och måste påstå högre. Vilket påstående det blir
           avgör :meth:`decide_raise`; det är samma påstående som motorn sedan spelar.
           Värdet är hållarvärdet för just det påståendet.
 
@@ -401,7 +401,7 @@ class BasePolicy:
 
     # -- Beslut 2: slå (ser inte tärningarna) ---------------------------
     def decide_raise(self, bid: int) -> Decision:
-        """Vilket påstående ska agenten säga när den slår (blint) över ``bid``?
+        """Vilket påstående ska agenten säga när den slår utan att titta, över ``bid``?
 
         Eftersom agenten inte ser sina tärningar är den minsta lagliga höjningen
         säkrast (minst chans att tärningarna visar lägre). En oförutsägbar agent
@@ -518,17 +518,17 @@ class BasePolicy:
         base = min(1.0, CALL_FLOOR + CALL_SLOPE * _strength(bid))
         return min(1.0, base * opponent_factor)
 
-    # -- Beslut 4: tvingad höjning (titta eller blint) ------------------
+    # -- Beslut 4: tvingad höjning (titta eller inte titta) ------------------
     def decide_forced(self, bid: int) -> Decision:
-        """Titta på de nya tärningarna eller påstå blint? Fattas utan att titta.
+        """Titta på de nya tärningarna eller påstå utan att titta? Fattas utan att titta.
 
         Att titta är tryggare: då kan spelaren påstå något tärningarna faktiskt
-        bär. Att påstå blint döljer informationen för bordet. En försiktig spelare
+        bär. Att påstå utan att titta döljer informationen för bordet. En försiktig spelare
         väljer det trygga, en oförutsägbar väljer ibland det som inte går att läsa.
         """
         if not rules.higher_options(bid):
             return Decision("syna", reason="Meier är högst; kan inte höja.")
         if self.params.unpredictability > 0.0:
             if self.rng.random() < self.params.unpredictability * 0.5:
-                return Decision("blint", reason="Oförutsägbar profil: påstår blint.")
+                return Decision("unseen", reason="Oförutsägbar profil: påstår utan att titta.")
         return Decision("titta", reason="Försiktig profil: tittar på tärningarna.")
