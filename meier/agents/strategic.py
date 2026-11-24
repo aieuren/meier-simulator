@@ -14,11 +14,16 @@ En tidigare version gjorde tvärtom: :class:`~meier.policy.BasePolicy` räknade
 fram draget och LLM:en formulerade bara repliken. Då blev varje spelare samma
 algoritm med olika konstanter, och modellen fick aldrig påverka påståendevalet.
 
-Utan LLM-klient faller agenten tillbaka på :class:`~meier.policy.BasePolicy`.
-Det läget används av ``axel`` (referensen utan språkmodell) samt av tester som
-ska gå på millisekunder utan nätverk. Kravet på Axel är att taktiken inte
-innehåller någon LLM — inte att varje drag är reproducerbart in i minsta
-slumpval.
+**Ingen reservväg.** En agent med LLM-klient får tre försök per beslut. Ger
+modellen inget användbart svar höjs :class:`~meier.llm.LLMError` och matchen
+avbryts. Att tyst falla tillbaka på en räkneregel skulle se ut som ett
+modellsvar men vara något annat, och då mäter simulatorn fel sak.
+
+Utan LLM-klient är agenten i stället en **regelspelare**:
+:class:`~meier.policy.BasePolicy` väljer draget. Det är ``axel`` (referensen
+utan språkmodell) och utvärderingsläget ``--no-llm``. Det är ett uttalat val,
+aldrig en nödlösning. Kravet på Axel är att taktiken inte innehåller någon LLM
+— inte att varje drag är reproducerbart in i minsta slumpval.
 """
 
 from __future__ import annotations
@@ -27,7 +32,7 @@ from dataclasses import replace
 from typing import Any, Callable
 
 from .. import rules
-from ..llm import LLMClient, parse_json_object
+from ..llm import LLMClient, LLMError, parse_json_object
 from ..opponents import OpponentProfile, OpponentTracker
 from ..policy import AgentParams, BasePolicy
 from .. import legality
@@ -35,6 +40,13 @@ from . import personality
 from .base import Agent, Role
 from .player import ActionDecision, Announcement
 from .reader import OpponentReader
+
+#: Antal försök en LLM-spelare får per beslut innan matchen avbryts.
+#:
+#: Tre är nog för att ett tillfälligt slarvigt svar ska räddas, men få nog att
+#: ett systematiskt fel upptäcks snabbt. Vi vill inte spela vidare på en modell
+#: som inte kan svara: då mäter simulatorn en räkneregel i stället för modellen.
+DECISION_ATTEMPTS = 3
 
 _RULES = """\
 Två tärningar läses som ett tal med den högsta tärningen först: 2 och 5 blir 52.
@@ -69,9 +81,10 @@ class StrategicAgent(Agent):
     ``tracker`` är valfri och ger agenten en bild av motståndarna. Bilden
     beskrivs i ord för modellen; den matas aldrig in i en formel.
 
-    ``llm`` är valfri. Utan den spelar agenten enligt
-    :class:`~meier.policy.BasePolicy`, vilket är nätverksfritt. Det är
-    ``axel``s läge: taktiken innehåller ingen språkmodell.
+    ``llm`` avgör vilken sorts spelare agenten är. Med en klient är den en
+    LLM-spelare: modellen äger draget, och ett uteblivet svar avbryter matchen.
+    Utan klient är den en regelspelare som väljer enligt
+    :class:`~meier.policy.BasePolicy`, nätverksfritt. Det är ``axel``s läge.
     """
 
     def __init__(
@@ -137,7 +150,8 @@ class StrategicAgent(Agent):
     def _opponent_prior(self, claim: int, opponent: str | None) -> float | None:
         """Påståendespecifik tro, justerad för motståndaren — eller None (populationen).
 
-        Används bara av reservpolicyn. LLM:en får motståndaren i ord i stället.
+        Används bara av regelspelaren (``llm is None``). LLM:en får motståndaren
+        i ord i stället.
         """
         from ..policy import CALL_PRIOR
 
@@ -151,25 +165,49 @@ class StrategicAgent(Agent):
 
     # -- LLM-anropet -------------------------------------------------------
     def _ask(
-        self, context: str, parse: Callable[[dict], tuple[Any | None, str]]
-    ) -> tuple[Any | None, str]:
-        """Fråga modellen och tolka svaret.
+        self,
+        context: str,
+        parse: Callable[[dict], tuple[Any | None, str]],
+        *,
+        decision: str,
+    ) -> tuple[Any, str]:
+        """Fråga modellen och tolka svaret. Ger upp genom att **avbryta matchen**.
+
+        Det finns ingen reservpolicy. En LLM-spelare som inte kan svara får inte
+        tyst spela vidare som Axel, för då mäter simulatorn fel sak: vi tror att
+        vi mäter modellens spel men mäter en räkneregel. Därför höjs
+        :class:`~meier.llm.LLMError` i stället, och matchen avbryts.
 
         ``parse`` returnerar ``(värde, motivering)``, där ``värde`` är ``None`` om
-        svaret inte gick att använda. Ett ogiltigt svar får **en** omfrågning med
-        besked om vad som var fel. Sedan ger agenten upp och reservpolicyn tar
-        över, så en trasig modell aldrig kan fälla en match.
+        svaret inte gick att använda. Ett oanvändbart svar får **tre** försök med
+        besked om vad som var fel. Ett transportfel avbryter direkt: klienten har
+        redan gjort sina egna omförsök, och att vänta igen kan ta minuter.
+
+        ``decision`` är beslutet som frågan gäller ("påstående", "syn" …), så att
+        avbrottet går att läsa i efterhand.
         """
         if self.llm is None:
-            return None, ""
+            raise LLMError(
+                f"{self.role.name} är en LLM-spelare men har ingen LLM-klient. "
+                f"Beslutet '{decision}' kan inte fattas, och matchen avbryts."
+            )
+
         prompt = context
         reason = ""
-        for _ in range(2):
+        for _ in range(DECISION_ATTEMPTS):
             try:
                 raw = self.llm.complete(self.system_prompt(), prompt, json_mode=True)
+            except LLMError as exc:
+                # Transportfel: klienten har redan gjort sina omförsök.
+                raise LLMError(
+                    f"{self.role.name} fick inget svar från LLM vid '{decision}': {exc}"
+                ) from exc
+
+            try:
                 data = parse_json_object(raw)
-            except Exception:  # noqa: BLE001 - ett modellfel får aldrig fälla matchen
-                return None, ""
+            except LLMError:
+                # Otydbar JSON är ett oanvändbart svar, inte ett transportfel.
+                data = {}
             value, reason = parse(data)
             if value is not None:
                 return value, reason
@@ -177,7 +215,11 @@ class StrategicAgent(Agent):
                 f"{context}\n\nDITT FÖRRA SVAR DUGER INTE. {reason}\n"
                 "Välj ett av de lagliga alternativen ovan."
             )
-        return None, reason
+
+        raise LLMError(
+            f"{self.role.name} gav inget användbart svar vid '{decision}' efter "
+            f"{DECISION_ATTEMPTS} försök ({reason}). Matchen avbryts."
+        )
 
     @staticmethod
     def _as_claim(value: object) -> int | None:
@@ -215,20 +257,14 @@ class StrategicAgent(Agent):
         shown = rules.read_dice(*dice)
         legal = legality.legal_claims(shown=shown, previous_claim=previous_claim)
         context = self._claim_context(dice, shown, previous_claim, legal, opponent)
-        claim, reason = self._ask(context, lambda d: self._parse_claim(d, legal))
-
-        corrected = False
-        if claim is None:
-            # Reservpolicyn väljer bland samma lagliga påståenden, så valet är spelarens
-            # eget även här. ``corrected`` betyder att LLM:en inte kunde svara.
-            decision = self.policy.decide_claim(
-                shown,
-                previous_claim=previous_claim,
-            )
+        if self.llm is None:
+            # Regelspelaren (axel): taktiken är BasePolicy, ingen språkmodell.
+            decision = self.policy.decide_claim(shown, previous_claim=previous_claim)
             claim, reason = decision.claim, decision.reason
-            # Bara en korrigering om LLM:en faktiskt svarade fel. Utan klient
-            # ar policyn spelearens eget beslut, inte en rattselse av nagon annans.
-            corrected = self.llm is not None
+        else:
+            claim, reason = self._ask(
+                context, lambda d: self._parse_claim(d, legal), decision="påstående"
+            )
 
         return Announcement(
             dice=(dice[0], dice[1]),
@@ -239,7 +275,6 @@ class StrategicAgent(Agent):
             reasoning=reason,
             role=self.role.key,
             proposed=claim,
-            corrected=corrected,
         )
 
     def _claim_context(
@@ -308,13 +343,15 @@ class StrategicAgent(Agent):
         Avstår den från att titta går påståendet genom :meth:`announce_unseen`, som
         inte känner till tärningarna.
         """
-        choice = self.policy.decide_shake(previous_claim)
-        seen, reason = self._ask(
-            self._shake_context(previous_claim, opponent), self._parse_seen
-        )
-        if seen is None:
-            seen = choice.action != "unseen"
-            reason = reason or choice.reason
+        if self.llm is None:
+            choice = self.policy.decide_shake(previous_claim)
+            seen, reason = choice.action != "unseen", choice.reason
+        else:
+            seen, reason = self._ask(
+                self._shake_context(previous_claim, opponent),
+                self._parse_seen,
+                decision="titta eller inte",
+            )
 
         ann = (
             self.announce(dice, previous_claim=previous_claim, opponent=opponent)
@@ -374,14 +411,16 @@ class StrategicAgent(Agent):
             )
         shown = rules.read_dice(*dice)
         context = self._unseen_context(previous_claim, legal, opponent)
-        claim, reason = self._ask(context, lambda d: self._parse_claim(d, legal))
-
-        corrected = False
-        if claim is None:
+        if self.llm is None:
             decision = self.policy.decide_raise(previous_claim)
             claim = decision.claim if decision.claim in legal else legal[-1]
             reason = decision.reason
-            corrected = self.llm is not None
+        else:
+            claim, reason = self._ask(
+                context,
+                lambda d: self._parse_claim(d, legal),
+                decision="påstående utan att titta",
+            )
 
         return Announcement(
             dice=(dice[0], dice[1]),
@@ -392,7 +431,6 @@ class StrategicAgent(Agent):
             reasoning=reason,
             role=self.role.key,
             proposed=claim,
-            corrected=corrected,
             unseen=True,
         )
 
@@ -431,11 +469,15 @@ class StrategicAgent(Agent):
                 f"Kan inte höja: {rules.name(previous_claim)} är högst, det finns inget högre påstående"
             )
         context = self._forced_context(previous_claim, choices, opponent)
-        unseen, reason = self._ask(context, self._parse_forced)
-
-        if unseen is None:
+        if self.llm is None:
             choice = self.policy.decide_forced(previous_claim)
             unseen, reason = choice.action == "unseen", choice.reason
+        else:
+            unseen, reason = self._ask(
+                context,
+                self._parse_forced,
+                decision="titta eller inte vid tvingad höjning",
+            )
 
         if unseen:
             ann = self.announce_unseen(dice, previous_claim=previous_claim, opponent=opponent)
@@ -490,19 +532,15 @@ class StrategicAgent(Agent):
             raise ValueError(f"{claim} är inte ett giltigt påstående")
         choices = legality.response_actions(claim=claim)
         context = self._response_context(claim, lives, choices, opponent)
-        action, reason = self._ask(context, lambda d: self._parse_response(d, choices))
-
-        if action is None:
+        if self.llm is None:
             decision = self.policy.decide_response(
                 claim, lives=lives, opponent_q=self._opponent_prior(claim, opponent)
             )
             action, reason = decision.action, decision.reason
             if action not in choices:
-                # Reservpolicyn kan vilja slå mot Meier. Det går inte, så ta det
-                # bästa av de val som återstår i stället för att kasta.
+                # Policyn kan vilja slå mot Meier. Det går inte, så ta det bästa
+                # av de val som återstår i stället för att kasta.
                 action = "skicka"
-            # Reservpolicyn väger in motståndarbilden i tal. Skriv ut den i
-            # klartext också, så loggen visar vad den byggde på.
             profile = self.opponent_profile(opponent)
             if profile is not None:
                 reason = (
@@ -510,6 +548,12 @@ class StrategicAgent(Agent):
                     f"(bluff {profile.bluff_tendency:.2f}, "
                     f"konf {profile.confidence:.2f})"
                 )
+        else:
+            action, reason = self._ask(
+                context,
+                lambda d: self._parse_response(d, choices),
+                decision="svar på påstående",
+            )
 
         return ActionDecision(
             action=action,

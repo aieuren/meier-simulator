@@ -535,6 +535,27 @@ Three rules that keep the companion doc honest:
   This bit `tests/test_legality.py::test_agent_without_llm_is_deterministic`,
   which was flaky until it built its own params instead of `AgentParams()`.
 
+## An LLM player never falls back to the rule engine
+
+This is a simulator, not a hardened game server. The numbers only mean
+"what the model does" if the model actually answered. So the old silent
+fallback to `BasePolicy` is gone.
+
+- `StrategicAgent._ask` makes `DECISION_ATTEMPTS` (3) attempts per decision.
+  Unparseable JSON and illegal values count as attempts, with the error fed
+  back into the next prompt. Bad JSON is not a transport failure: try again.
+- A transport error (`LLMError` from the client) aborts at once. The client
+  already retried with backoff, so waiting again can block a decision for
+  minutes.
+- When attempts run out, `LLMError` is raised and the match aborts. The web
+  API turns it into HTTP 502 with the player and decision in the message.
+- `make_player(key)` refuses to build a non-Axel role without a client.
+  `make_rule_player(key)` (and `--no-llm`) is the explicit rule-engine path.
+  Keeping those two separate is what stops the silent path from reopening.
+- `corrected` no longer means "the model failed". It only carries the
+  session-level correction in `Session._enforce_claim` (see `player.py`), so do
+  not use it as a health signal for the LLM path. Read the 502 instead.
+
 ## Personality parameters were renamed
 
 The old names `risk` and `press` are gone. Current fields on `AgentParams` are
@@ -574,16 +595,20 @@ Watch the two traps when touching this:
   (mode 600), which `run.sh` reads. `/workspace` is a persistent volume;
   `/home` and `/tmp` are wiped on restart.
 - A Gemini flash model answers `503 UNAVAILABLE` ("currently experiencing high
-  demand") in bursts that last minutes. Without a fallback the client retries
-  the same model three times, then raises `LLMError`, and the agent silently
-  falls back to `BasePolicy` — the UI still answers, but with `corrected: true`
-  and a one-line reasoning that no model wrote. That is easy to mistake for
-  "the LLM works". `MEIER_FALLBACK_MODELS` (comma-separated, set in `run.sh`)
-  makes `LLMClient` try the next model instead. A 503 raises `_Overloaded`,
-  which is deliberately *not* `_Transient`, so no retry is wasted on a model
-  that is down. The model that last answered goes first in the chain, so the
-  switch is paid once, not on every decision. Check `corrected` on any sample
-  response before concluding the LLM path is healthy.
+  demand") in bursts that last minutes. The client retries the same model
+  three times, then raises `LLMError`. `MEIER_FALLBACK_MODELS`
+  (comma-separated, set in `run.sh`) makes `LLMClient` try the next model
+  instead. A 503 raises `_Overloaded`, which is deliberately *not* `_Transient`,
+  so no retry is wasted on a model that is down. The model that last answered
+  goes first in the chain, so the switch is paid once, not on every decision.
+- **There is no `BasePolicy` fallback for an LLM player.** When the client
+  gives up, `StrategicAgent._ask` raises `LLMError` and the match aborts. Three
+  attempts are made per decision (`DECISION_ATTEMPTS`); a transport error
+  aborts at once, because the client already retried with backoff. The match
+  must not continue on a rule engine while claiming to measure the model.
+  `make_player` refuses to build an LLM role without a client, so the silent
+  path is closed at construction too. `make_rule_player` (and `--no-llm`) is
+  the explicit way to play a rule engine.
 - Never print the session API key. Read it from the process env if needed.
 - The web app is served on port 12000 in this environment.
 - Long runs / sandbox lifetime: the runtime pauses an idle environment
@@ -831,9 +856,11 @@ gone — replaced by four neutral-named players in `meier/agents/roster.py`:
     `unpredictability`/`reading` into prose
     for the prompt. The params describe a human to play as; they are no longer
     fed into a formula that computes the move.
-  - An illegal or unparseable answer gets one retry that names the error.
-    After that the agent falls back to `BasePolicy` and sets `corrected=True`,
-    so a broken model can never crash a match.
+  - An illegal or unparseable answer is retried up to `DECISION_ATTEMPTS`
+    (three) times, each naming the error. After that the agent raises
+    `LLMError` and the match aborts. There is no `BasePolicy` fallback: a
+    silent fallback would look like a model move. The web API turns the error
+    into HTTP 502 with the reason.
 - Why it changed. The old design computed the move in `BasePolicy` and left
   only the line to the LLM. Every player then played the same algorithm with
   different constants: `berit` always claim 43 and `david` always 64 when

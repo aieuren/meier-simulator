@@ -41,10 +41,11 @@ def _new_agents(role_keys: Iterable[str]):
 
 
 def _new_agents_no_llm(role_keys: Iterable[str]):
-    """Samma spelare men utan LLM-klienter: bara mekaniska repliker.
+    """Samma roller som **regelspelare**: ``BasePolicy``, ingen språkmodell.
 
-    Draget ägs ändå av policyn, så resultatet blir detsamma — men matchen går
-    på millisekunder i stället för minuter. Det är läget för utvärdering.
+    Det är utvärderingsläget. Det är inte samma sak som en LLM-spelare som
+    misslyckats: en sådan avbryter matchen. Här är regelspelandet ett val, och
+    matchen går på millisekunder i stället för minuter.
     """
     players, _tracker = make_players(role_keys)
     return players

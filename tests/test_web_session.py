@@ -118,3 +118,30 @@ def test_announce_rejects_raising_over_meier(monkeypatch):
     )
     assert res.status_code == 400
     assert "Meier" in res.json()["detail"]
+
+
+def test_llm_failure_aborts_the_match_with_502(monkeypatch):
+    """En LLM-spelare som inte svarar ska synas som avbrott, inte som ett tyst drag.
+
+    ``session_advance`` fångar ``LLMError`` och svarar 502. Testet bevisar att
+    felet når klienten i stället för att spelet spelar vidare på en räkneregel.
+    """
+    from meier.llm import LLMError
+
+    class DeadLLM:
+        def complete(self, system, prompt, json_mode=True):
+            raise LLMError("modellen svarade inte")
+
+    def dead_agent(key: str) -> MeierPlayerAgent:
+        role = Role(key=key, name=f"Spelare-{key}", description="test", style="spela")
+        return MeierPlayerAgent(role=role, llm=DeadLLM())
+
+    client = _client(monkeypatch)
+    monkeypatch.setattr(web_app, "_get_agent", dead_agent)
+
+    client.post("/api/session/new", json={})
+    res = client.post("/api/session/advance")
+
+    assert res.status_code == 502
+    assert "LLM-fel" in res.json()["detail"]
+    assert "modellen svarade inte" in res.json()["detail"]

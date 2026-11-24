@@ -14,14 +14,37 @@ import json
 import sys
 
 from . import rules
-from .agents.roster import ROSTER, get_profile, make_player, make_players, role_keys
+from .agents.roster import (
+    ROSTER,
+    get_profile,
+    make_player,
+    make_players,
+    make_rule_player,
+    role_keys,
+)
+from .llm import LLMClient
 from .game import Game
 from .match import read_jsonl, run_matches, summarize, write_jsonl
 from .session import Session
 
 
+def _build_single(args: argparse.Namespace):
+    """Bygg spelaren för ett enskilt beslut.
+
+    En LLM-roll får en riktig klient, så simuleringen mäter modellen. Axel
+    byggs som regelspelare. ``--no-llm`` tvingar regelspelaren även för
+    LLM-rollerna; det är ett uttalat val, inte en reservväg.
+    """
+    if getattr(args, "no_llm", False):
+        return make_rule_player(args.role)
+    profile = get_profile(args.role)
+    if not profile.uses_llm:
+        return make_player(args.role)
+    return make_player(args.role, llm=LLMClient())
+
+
 def _cmd_announce(args: argparse.Namespace) -> int:
-    agent = make_player(args.role)
+    agent = _build_single(args)
     ann = agent.announce((args.die1, args.die2), previous_claim=args.previous_claim)
     print(f"Spelare:     {agent.name}")
     print(f"Tärningarna: {rules.read_dice(args.die1, args.die2)} ({args.die1} och {args.die2})")
@@ -37,7 +60,7 @@ def _cmd_announce(args: argparse.Namespace) -> int:
 
 
 def _cmd_decide(args: argparse.Namespace) -> int:
-    agent = make_player(args.role)
+    agent = _build_single(args)
     decision = agent.decide(args.claim, lives=args.lives)
     print(f"Spelare:   {agent.name}")
     print(f"Motståndarens påstående: {rules.name(args.claim)}")
@@ -205,12 +228,22 @@ def build_parser() -> argparse.ArgumentParser:
     p_ann.add_argument("die2", type=int, choices=range(1, 7))
     p_ann.add_argument("--role", default="cecilia", choices=role_keys())
     p_ann.add_argument("--previous-claim", type=int, default=None)
+    p_ann.add_argument(
+        "--no-llm",
+        action="store_true",
+        help="Spela rollen som regelspelare i stället för att anropa modellen.",
+    )
     p_ann.set_defaults(func=_cmd_announce)
 
     p_dec = sub.add_parser("decide", help="Spelaren möter ett påstående")
     p_dec.add_argument("claim", type=int)
     p_dec.add_argument("--role", default="cecilia", choices=role_keys())
     p_dec.add_argument("--lives", type=int, default=3)
+    p_dec.add_argument(
+        "--no-llm",
+        action="store_true",
+        help="Spela rollen som regelspelare i stället för att anropa modellen.",
+    )
     p_dec.set_defaults(func=_cmd_decide)
 
     p_play = sub.add_parser("play", help="Spela ett helt spel med flera agenter")

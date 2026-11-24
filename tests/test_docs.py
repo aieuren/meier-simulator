@@ -352,10 +352,12 @@ def test_om_meier_bluffs_are_always_the_smallest_raise():
     fel, inte bara siffran.
     """
     from meier import rules
-    from meier.agents.roster import make_player
+    from meier.agents.roster import make_rule_player
 
+    # Påståendet gäller regelspelaren. En LLM-spelare väljer fritt bland de
+    # lagliga påståendena och är inte bunden till minsta höjning.
     for key in ROSTER:
-        agent = make_player(key)
+        agent = make_rule_player(key)
         for value in rules.RANKING:
             hi, lo = divmod(value, 10)
             claim = agent.announce((hi, lo)).claim

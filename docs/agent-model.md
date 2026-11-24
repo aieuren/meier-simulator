@@ -92,8 +92,8 @@ simulera en verklig spelare med — och inte en dom över vad som är rätt drag
 Tre saker hålls isär:
 
 1. Reglerna — vilka påståenden och svar som är lagliga. Koden äger dem, och ett
-   olagligt svar från modellen når aldrig bordet. Modellen får en omfrågning
-   med besked om felet; sedan tar reservpolicyn över.
+   olagligt svar från modellen når aldrig bordet. Modellen får tre försök med
+   besked om felet. Sedan avbryts matchen; det finns ingen reservpolicy.
 2. Personligheten — vem spelaren är, i ord. Parametrarna blir en människa
    att spela som, inte en tabell att räkna ur.
 3. Beslutet — vad spelaren gör. Det är modellens.
@@ -104,12 +104,15 @@ behöver ta fram påståendet eller svaret. Modellen får alltså aldrig hitta p
 spelaren säger, och ett JSON-svar med `"line"` ignoreras. Det håller repliken
 kort, förutsägbar och fri från påhittade termer.
 
-Konsekvensen är praktisk: en match kan köras utan LLM (`--no-llm`). Då faller
-varje spelare tillbaka på `BasePolicy`, som väljer bland samma lagliga drag.
-Det läget används av `axel` (referensen utan språkmodell) samt av tester som ska
-gå på millisekunder utan nätverk. Det är en referens, inte en beskrivning av hur
-de andra spelarna fungerar. Kravet på Axel är att taktiken inte innehåller någon
-LLM — inte att varje drag är reproducerbart in i minsta slumpval.
+Konsekvensen är praktisk: en match kan köras utan LLM (`--no-llm`). Då spelar
+varje roll som **regelspelare** med `BasePolicy`, som väljer bland samma lagliga
+drag. Det är ett uttalat val, inte en reservväg. `axel` är alltid regelspelare;
+de andra rollerna blir det bara när man ber om det.
+
+Skillnaden är viktig för mätningen. En LLM-spelare som inte svarar avbryter
+matchen, för då vet vi att siffrorna kommer från modellen. Regelspelaren är
+däremot en referens: kravet på Axel är att taktiken inte innehåller någon LLM —
+inte att varje drag är reproducerbart in i minsta slumpval.
 
 ---
 
@@ -509,7 +512,8 @@ konfidens = min(LLM:ens egen konfidens, styrka)
 ```
 
 Tre synar ger alltså styrka 0,50 — modellen får inte påstå sig vara mer än
-halvsäker. Nio synar ger 0,75. Taket gäller även reservprofilen utan LLM.
+halvsäker. Nio synar ger 0,75. Taket gäller även den aritmetiska profilen, som används
+när ingen LLM finns (regelspelaren).
 
 Poängen är att konfidensen ska spegla hur tidig gissningen är, inte hur
 tvärsäker modellen råkar låta. Modellen får alltid be om 1,0; taket håller emot.
@@ -684,9 +688,11 @@ konkret exempel på varför frysning + färsk kalibrering är ett krav.
 - Saknad motståndardata: med för få observationer faller den läsande agenten
   tillbaka på `CALL_PRIOR`. `reading` skalar hur snabbt profilen får genomslag.
 - Tom historik (första rundan): alla agenter spelar som BASE tills data finns.
-- LLM otillgänglig: reservpolicyn tar över och väljer bland samma lagliga
-  drag. Repliken blir mekanisk ("Jag säger 62."), och `corrected` sätts så att
-  loggen visar att modellen inte svarade.
+- LLM otillgänglig: matchen **avbryts**. En LLM-spelare får tre försök per
+  beslut. Ger modellen inget användbart svar, eller faller anropet, höjs
+  `LLMError` och spelet stannar. Reservpolicyn anropas aldrig, för då skulle
+  simuleringen mäta en räkneregel och kalla det modellens spel. Webb-API:t
+  svarar 502 med orsaken.
 
 ### 8.1 Fall: livelock när ingen synade
 

@@ -234,8 +234,12 @@ Repliken däremot skrivs inte av modellen. Den byggs i koden ur draget, så att 
 spelare aldrig säger något annat än det hen faktiskt gjorde.
 
 Axel är undantaget. Han har ingen modell utan spelar en fast räkneregel, och
-hans speltaktik beskrivs i detalj längre fram. Samma räkneregel tar över om en
-modell inte svarar.
+hans speltaktik beskrivs i detalj längre fram.
+
+Räkneregeln tar aldrig över åt en modell. Svarar en LLM-spelare inte efter tre
+försök avbryts matchen. Skälet är att simulatorn ska mäta modellens spel: en
+tyst återgång till räkneregeln skulle se ut som ett modellsvar men vara något
+annat.
 
 ### Hur spelaren bluffar
 

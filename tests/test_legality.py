@@ -12,7 +12,8 @@ import pytest
 from meier import legality, rules
 from meier.agents.base import Role
 from meier.agents.roster import ROSTER
-from meier.agents.strategic import StrategicAgent
+from meier.agents.strategic import DECISION_ATTEMPTS, StrategicAgent
+from meier.llm import LLMError
 from meier.policy import AgentParams
 
 
@@ -37,10 +38,17 @@ def test_shaking_is_not_offered_against_meier():
     assert "skicka" in legality.response_actions(claim=rules.MEIER)
 
 
-def test_llm_choosing_shake_against_meier_never_crashes():
+def test_llm_that_insists_on_shaking_against_meier_aborts_the_match():
+    """Mot Meier finns inget att slå över, så valet är olagligt.
+
+    Modellen får tre försök och ombeds välja ett lagligt svar. Håller den fast
+    vid ett olagligt drag avbryts matchen — den spelas inte vidare på en
+    gissning från reservpolicyn.
+    """
     agent = agent_with(['{"action": "slå", "reasoning": "trotsar"}'])
-    decision = agent.decide(rules.MEIER)
-    assert decision.action in legality.response_actions(claim=rules.MEIER)
+    with pytest.raises(LLMError):
+        agent.decide(rules.MEIER)
+    assert agent.llm.calls == DECISION_ATTEMPTS
 
 
 def test_first_claim_may_be_anything_in_the_ranking():
@@ -113,12 +121,18 @@ def test_llm_illegal_claim_is_rejected_and_asked_again():
     assert agent.llm.calls >= 2
 
 
-def test_llm_that_never_complies_falls_back_to_a_legal_claim():
-    # 31 ligger under 61 i rangordningen, så det är olagligt att säga där.
+def test_llm_that_never_complies_aborts_the_match():
+    """Upprepade oanvändbara svar ska stoppa matchen, inte tystna till en regel.
+
+    Annars vet vi inte om vi mäter modellens spel eller grundtaktiken. Tre
+    försök görs, sedan höjs ett fel. 31 ligger under 61, så det är olagligt.
+    """
     agent = agent_with(['{"claim": 31}'])
-    ann = agent.announce((1, 1), previous_claim=61)
-    assert rules.is_higher(ann.claim, 61)
-    assert ann.corrected is True
+    with pytest.raises(LLMError) as info:
+        agent.announce((1, 1), previous_claim=61)
+    assert agent.llm.calls == DECISION_ATTEMPTS
+    assert "Test" in str(info.value)
+    assert "3 försök" in str(info.value)
 
 
 def test_llm_chooses_among_all_three_responses():
@@ -127,14 +141,15 @@ def test_llm_chooses_among_all_three_responses():
         assert agent.decide(61).action == action
 
 
-def test_unknown_action_is_rejected():
+def test_unknown_action_aborts_the_match():
     agent = agent_with(['{"action": "fuska"}'])
-    decision = agent.decide(61)
-    assert decision.action in legality.RESPONSES
+    with pytest.raises(LLMError):
+        agent.decide(61)
 
 
 def test_llm_can_choose_unseen_at_forced_raise():
-    agent = agent_with(['{"unseen": true, "reasoning": "döljer"}'])
+    # Två beslut: först titta/inte titta, sedan själva påståendet.
+    agent = agent_with(['{"unseen": true, "reasoning": "döljer"}', '{"claim": 61}'])
     ann = agent.announce_forced((3, 3), previous_claim=54)
     assert ann.unseen is True
     assert rules.is_higher(ann.claim, 54)
@@ -232,3 +247,76 @@ def test_every_role_claims_legally_against_every_previous_claim():
                 assert rules.is_higher(ann.claim, previous), (
                     f"{key} bjöd {rules.name(ann.claim)} över {rules.name(previous)}"
                 )
+
+
+# -- Ingen reservväg för LLM-spelare -------------------------------------
+
+
+def test_transport_error_aborts_without_extra_attempts():
+    """Ett transportfel avbryter direkt.
+
+    Klienten har redan gjort sina egna omförsök med backoff. Att försöka tre
+    gånger till kan blockera ett beslut i minuter, och felet blir inte bättre.
+    """
+
+    class DeadLLM:
+        calls = 0
+
+        def complete(self, system, prompt, json_mode=True):
+            self.calls += 1
+            raise LLMError("nätet är nere")
+
+    llm = DeadLLM()
+    agent = StrategicAgent(
+        Role(key="test", name="Test", description="", style=""),
+        AgentParams(),
+        llm=llm,
+    )
+    with pytest.raises(LLMError) as info:
+        agent.announce((1, 1))
+    assert llm.calls == 1
+    assert "nätet är nere" in str(info.value)
+
+
+def test_unusable_answer_is_retried_exactly_three_times():
+    """Tre försök per beslut: nog för slarv, för få för att dölja ett systemfel."""
+    agent = agent_with(['{"claim": 31}'])
+    with pytest.raises(LLMError):
+        agent.announce((1, 1), previous_claim=61)
+    assert agent.llm.calls == DECISION_ATTEMPTS
+
+
+def test_a_good_answer_after_a_bad_one_is_used():
+    """Ett oanvändbart svar ska inte kosta beslutet om nästa duger."""
+    agent = agent_with(['{"claim": 31}', '{"claim": 62}'])
+    ann = agent.announce((1, 1), previous_claim=61)
+    assert ann.claim == 62
+    assert agent.llm.calls == 2
+
+
+def test_llm_player_without_client_raises_instead_of_playing_the_rule():
+    """Kärnan i ändringen: en LLM-spelare får aldrig spela grundtaktiken tyst.
+
+    Vakten sitter i ``make_player``. En ``StrategicAgent`` utan klient *är*
+    regelspelaren (axel), så skillnaden måste avgöras när spelaren byggs.
+    """
+    from meier.agents.roster import make_player, make_rule_player
+
+    with pytest.raises(ValueError) as info:
+        make_player("berit")
+    assert "kräver en LLM-klient" in str(info.value)
+
+    # Regelspelaren går att bygga för alla roller, men bara som ett uttalat val.
+    assert make_rule_player("berit").llm is None
+
+
+def test_unparseable_json_is_retried_not_treated_as_transport_failure():
+    """Otydbar JSON är ett dåligt svar, inte ett nätfel.
+
+    Det ska ge tre försök med besked, inte avbryta direkt: modellen kan svara
+    med prosa en gång och rätt JSON nästa gång.
+    """
+    agent = agent_with(["det här är inte json", '{"claim": 62}'])
+    ann = agent.announce((1, 1), previous_claim=61)
+    assert ann.claim == 62
+    assert agent.llm.calls == 2

@@ -119,11 +119,15 @@ def get_profile(key: str) -> Profile:
 
 
 def make_player(key: str, *, llm=None):
-    """Bygg spelaren för ``key`` som en strategisk agent.
+    """Bygg en **LLM-spelare** för ``key``.
 
-    ``llm`` är valfri. Med den äger LLM:en draget; utan den spelar agenten enligt
-    ``BasePolicy``. Repliken byggs alltid lokalt ur draget. Axel får aldrig en LLM
-    — han är referensen utan språkmodell.
+    ``llm`` är obligatorisk för alla roller utom Axel. En LLM-spelare får aldrig
+    skapas utan modell: då skulle den tyst spela grundtaktiken, och simulatorn
+    skulle mäta en räkneregel i stället för modellen. Saknas klienten höjs ett
+    fel, så felet syns direkt i stället för i resultatet.
+
+    Repliken byggs alltid lokalt ur draget. Axel får aldrig en LLM — han är
+    referensen utan språkmodell.
 
     Slumpen bakom ``unpredictability`` skapas inuti agenten. Den behöver ingen
     yttre styrning: varje spelare ska bete sig olika från gång till gång.
@@ -131,8 +135,32 @@ def make_player(key: str, *, llm=None):
     from .strategic import StrategicAgent
 
     profile = get_profile(key)
-    client = llm if profile.uses_llm else None
-    return StrategicAgent(profile.role, profile.params, llm=client)
+    if not profile.uses_llm:
+        if llm is not None:
+            raise ValueError(
+                f"{profile.name} spelar utan språkmodell och kan inte få en LLM-klient."
+            )
+        return StrategicAgent(profile.role, profile.params)
+
+    if llm is None:
+        raise ValueError(
+            f"{profile.name} är en LLM-spelare och kräver en LLM-klient. "
+            f"Vill du spela rollen som regelspelare använder du make_rule_player()."
+        )
+    return StrategicAgent(profile.role, profile.params, llm=llm)
+
+
+def make_rule_player(key: str):
+    """Bygg en **regelspelare** för ``key``: ``BasePolicy``, ingen språkmodell.
+
+    Alla roller kan spelas så. Det är ett uttalat val (utvärderingsläget
+    ``--no-llm``), inte en reservväg: en LLM-spelare som inte svarar avbryter
+    matchen i stället för att hamna här.
+    """
+    from .strategic import StrategicAgent
+
+    profile = get_profile(key)
+    return StrategicAgent(profile.role, profile.params)
 
 
 def make_players(keys, *, llm_factory=None):
@@ -144,7 +172,9 @@ def make_players(keys, *, llm_factory=None):
     händelser blir offentliga.
 
     ``llm_factory`` kallas en gång per LLM-spelare för att ge var och en sin
-    egen klient (så tokenräkningen per spelare hålls åtskild). Axel får ingen.
+    egen klient (så tokenräkningen per spelare hålls åtskild). Utan
+    ``llm_factory`` byggs **regelspelare** för alla roller: det är uttalat
+    utvärderingsläge, inte en reservväg.
 
     Antalet spelare är fritt: ``keys`` får innehålla två eller fler roller.
     """
@@ -154,8 +184,10 @@ def make_players(keys, *, llm_factory=None):
     players = []
     for key in keys:
         profile = get_profile(key)
-        llm = llm_factory() if (llm_factory is not None and profile.uses_llm) else None
-        player = make_player(key, llm=llm)
+        if llm_factory is not None and profile.uses_llm:
+            player = make_player(key, llm=llm_factory())
+        else:
+            player = make_rule_player(key)
         if player.params.reading > 0.0:
             player.tracker = tracker
         players.append(player)

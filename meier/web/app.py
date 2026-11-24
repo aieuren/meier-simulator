@@ -48,8 +48,22 @@ def _match_file() -> Path:
 
 def _get_agent(role_key: str):
     if role_key not in _agents:
-        _agents[role_key] = make_player(role_key, llm=LLMClient())
+        _agents[role_key] = _build_agent(role_key)
     return _agents[role_key]
+
+
+def _build_agent(role_key: str):
+    """Bygg spelaren för webbappen.
+
+    Axel är regelspelare och får ingen klient. Övriga roller är LLM-spelare och
+    kräver en: utan den avbryts matchen i stället för att tyst spela vidare på
+    räkneregeln.
+    """
+    from ..agents.roster import get_profile
+
+    if not get_profile(role_key).uses_llm:
+        return make_player(role_key)
+    return make_player(role_key, llm=LLMClient())
 
 
 class AnnounceRequest(BaseModel):
