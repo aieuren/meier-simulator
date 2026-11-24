@@ -368,7 +368,7 @@ steg i ordningen.
 När bägaren gått ett helt varv tillbaka till honom måste han höja, och då slås
 tärningarna om. Då finns ett val: titta på de nya tärningarna, eller påstå utan
 att titta. Han väljer slumpmässigt, och sannolikheten för att han avstår från
-titten är hans oförutsägbarhet delat med två. Med Axels 0,2 blir det ett fall av
+titten är hans oförutsägbarhet. I Axels fall med faktor 0,2 blir det ett fall av
 tio. Avstår han från titten måste han alltså säga ett högre påstående utan att veta vad tärningarna visar.
 
 #### Ett exempelparti
