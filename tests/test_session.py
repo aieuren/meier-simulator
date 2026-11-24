@@ -276,12 +276,12 @@ def test_forced_raise_can_be_unseen():
     session = Session.new(players)
     session.advance()  # påstående 44
     session.advance()  # skicka -> tvingad höjning
-    entry = session.advance()  # höjning, utan titt
+    entry = session.advance()  # höjning, utan att titta
 
     assert entry.action == "höja"
     assert entry.unseen is True
     stats = match._player_stats(session.log, [p.name for p in players])
-    # Höjningsbudet utan titt räknas som "unseen", inte som bluff eller sanning.
+    # Höjningsbudet utan att titta räknas som "unseen", inte som bluff eller sanning.
     assert stats[entry.player_name]["unseen"] == 1
     assert stats[entry.player_name]["bids"] == 2
     assert stats[entry.player_name]["bluffs"] + stats[entry.player_name]["truths"] == 1
@@ -297,7 +297,7 @@ def test_forced_raise_keeps_the_look_or_unseen_reasoning():
     session = Session.new(players)
     session.advance()  # påstående 44
     session.advance()  # skicka -> tvingad höjning
-    entry = session.advance()  # höjning, utan titt
+    entry = session.advance()  # höjning, utan att titta
 
     assert entry.action == "höja"
     assert entry.unseen is True
@@ -322,7 +322,7 @@ def test_slag_logs_fresh_roll_before_action():
 
 
 def test_unseen_slag_is_not_counted_as_bluff():
-    # Ett slag utan titt ("slå") är inget medvetet löfte: spelaren såg inte
+    # Ett slag utan att titta ("slå") är inget medvetet löfte: spelaren såg inte
     # tärningarna. Det ska räknas som "unseen", inte som bluff eller sanning.
     players = [
         make_player(k, ScriptedLLM(bids=[44], actions=["slå"])) for k in ("a", "b")

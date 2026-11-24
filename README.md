@@ -218,7 +218,7 @@ I webbappen finns sektionen "Spelarna möter varandra":
 3. Flödet följer reglerna:
    - Den som börjar slår och tittar i smyg, sedan säger ett påstående.
    - Nästa spelare slår (skakar sina egna tärningar på nytt, tittar inte på
-     dem och säger ett högre påstående — ett *påstående utan titt*), synar eller skickar
+     dem och säger ett högre påstående — ett *påstående utan att titta*), synar eller skickar
      vidare.
    - Kommer bägaren ett helt varv tillbaka till den som påstår måste denne höja.
      Tärningarna slås då om, och den som påstår får själv välja att titta på dem eller
@@ -261,7 +261,7 @@ Protokollet är byggt för efteranalys. Varje match innehåller:
 - `events`: varje åtgärd med spelare, roll, tärningsutfall, påstående, om spelaren hade
   tittat på tärningarna (och om påståendet då var sant eller en bluff), tidigare påstående,
   livsställning och rundnummer,
-- `player_stats`: per spelare antal påståenden, slag utan titt, bluffar, sanningar, synar,
+- `player_stats`: per spelare antal påståenden, slag utan att titta, bluffar, sanningar, synar,
   höjningar, förlorade liv och om spelaren slogs ut.
 
 Med ett fast basfrö blir en serie reproducerbar. JSONL-formatet (en match per rad)

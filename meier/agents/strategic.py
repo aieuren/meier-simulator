@@ -418,7 +418,7 @@ class StrategicAgent(Agent):
                 "",
                 f"LAGLIGA VAL: {', '.join(choices)}",
                 "- titta: lyft locket och säg ett påstående som du ser tärningarna.",
-                "- utan titt: påstå utan att titta, som när man slår.",
+                "- utan att titta: påstå utan att lyfta på locket, som när man slår.",
                 "",
                 "Svara med JSON:",
                 '{"unseen": true | false, "reasoning": "<kort motivering>"}',

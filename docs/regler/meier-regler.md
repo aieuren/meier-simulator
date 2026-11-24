@@ -122,7 +122,7 @@ bestämt. Inget av detta är regler, och allt kan ändras utan att reglerna
 
 - Att datorn spelar spelaren ändrar inte att "skicka vidare" sker utan att syna.
   Den som svarar får påståendet och sitt livsantal, aldrig tärningarna.
-- Att ett slag utan titt måste lägga sig över det förra påståendet är en regel.
+- Att ett slag utan att titta måste lägga sig över det förra påståendet är en regel.
   Vilket högre påstående som väljs är däremot ett strategival.
 - Hur ofta en spelare bluffar, synar eller skickar vidare är också ett
   strategival. Reglerna säger inget om det.

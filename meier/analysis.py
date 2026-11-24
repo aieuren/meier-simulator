@@ -125,7 +125,7 @@ def render_digest_text(digest: dict[str, Any]) -> str:
     lines.append(
         f"Startspelaren vinner: {digest.get('starter_win_rate', 0)} av matcherna"
     )
-    lines.append(f"Påståenden utan titt totalt: {digest.get('unseen_bids', 0)}")
+    lines.append(f"Påståenden utan att titta totalt: {digest.get('unseen_bids', 0)}")
 
     lines.append("")
     lines.append("PER ROLL")
@@ -134,7 +134,7 @@ def render_digest_text(digest: dict[str, Any]) -> str:
         lines.append(
             "- {name} ({role}): {games} matcher, {wins} vinster "
             "(vinst% {win_rate}), påståenden {bids}, bluff {bluffs} (bluff% {bluff_rate}), "
-            "utan titt {unseen} (utan titt% {unseen_rate}), höjningar {raises}, "
+            "utan att titta {unseen} (andel {unseen_rate}), höjningar {raises}, "
             "skicka {passes}, synar {calls} (syn% {call_rate}), "
             "syn lyckas {calls_won}/{calls} ({call_success_rate}), "
             "snitt liv förlorade {avg_lives_lost}, utslagen {eliminated} ({elimination_rate})".format(

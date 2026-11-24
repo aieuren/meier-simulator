@@ -490,7 +490,7 @@ Three rules that keep the companion doc honest:
   at their own dice, so the bid is not a truth-or-bluff claim. Only "påstående" and
   "höja" bids where the player actually looked carry the sant/bluff label; any
   bid without a look (a slå, or a forced raise where the bidder chose not to
-  look) is labelled "påstående utan titt" and counted as `unseen`, never as
+  look) is labelled "påstående utan att titta" and counted as `unseen`, never as
   `bluffs`, in the stats.
   This is deliberate: it adds a psychological dimension, so `unseen_rate`
   is tracked per role to see whether bidding without a look pays off over many matches.

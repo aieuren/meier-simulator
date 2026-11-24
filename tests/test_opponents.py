@@ -13,7 +13,7 @@ from meier.opponents import OpponentTracker
 def test_unseen_bids_are_not_promises():
     tracker = OpponentTracker()
     tracker.observe_bid("a", unseen=True)
-    # Ett påstående utan titt är inget löfte: ingen profil skapas alls för det.
+    # Ett påstående utan att titta är inget löfte: ingen profil skapas alls för det.
     assert "a" not in tracker.stats
     tracker.observe_bid("a", unseen=False)
     assert tracker.stats["a"].visible_bids == 1

@@ -41,7 +41,7 @@ class LogEntry:
 
     - ``kind == "roll"``: ett tärningsutfall (indata). Ingen spelare har svarat
       än. Detta är steget där OK-knappen hör hemma.
-    - ``kind == "action"``: en spelares svar – ett påstående, en höjning utan titt, en
+    - ``kind == "action"``: en spelares svar – ett påstående, en höjning utan att titta, en
       syn eller ett skickande.
     - ``kind == "life"``: någon har förlorat ett (eller två) liv efter en syn.
       Raden ligger direkt efter synen och visar hur många liv som är kvar.
@@ -175,7 +175,7 @@ class Session:
     holder: int = 0  # spelarindex för den som ansvarar för påståendet (kan ha skickat vidare)
     actor: int = 0  # spelarindex som ska agera
     #: Spelarindex för den som senast *annonserade* ett påstående (påstående/höja/slå). Det är
-    #: den spelaren ett avslöjande attribueras till. Ett påstående utan titt är ett svagare
+    #: den spelaren ett avslöjande attribueras till. Ett påstående utan att titta är ett svagare
     #: löfte, så ``bid_was_unseen`` styr hur tungt avslöjandet väger.
     last_announcer: int = 0
     bid_was_unseen: bool = False
@@ -621,7 +621,7 @@ class Session:
         )
 
         # Facit är nu offentligt — tärningarna ligger på bordet. Först nu får
-        # motståndarmodellen veta om det senaste påståendet var en bluff. Ett påstående utan titt
+        # motståndarmodellen veta om det senaste påståendet var en bluff. Ett påstående utan att titta
         # är inget löfte och avslöjas aldrig (se ``_notify_reveal``).
         self._notify_reveal(
             self.last_announcer,

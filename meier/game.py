@@ -159,7 +159,7 @@ class Game:
                 )
                 bid = forced.bid
                 holder = bidder  # den som påstod ansvarar nu för det nya påståendet
-                unseen_note = " (utan titt)" if forced.unseen else ""
+                unseen_note = " (utan att titta)" if forced.unseen else ""
                 why = f" [{forced.choice_reasoning}]" if forced.choice_reasoning else ""
                 self._record(
                     f"  Bägaren tillbaka hos {self.players[bidder].name}, som slår om "

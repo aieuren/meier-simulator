@@ -206,6 +206,13 @@ högre – och då ta över risken själv. En bluff är inte värd mer än sanni
 flyttar risken över till motståndaren, och den lönar sig bara när motståndaren
 hellre avstår från att syna än tar den chansen.
 
+Bluffen är alltså sällan ett fritt val. Står bordet redan högt kan dina tärningar
+ligga under, och då finns inget sant påstående kvar att säga. Att höja är det
+enda lagliga draget, och höjningen blir en bluff vare sig du vill eller inte.
+Valet finns bara vid rundans början och när bordet står lågt. Då kan du säga det
+tärningarna visar och bära en sanning, eller lägga dig över den och hoppas på att
+ingen synar. Det valet är det som skiljer spelarna åt.
+
 ### Två slags höjningar
 
 När spelaren har sett sina tärningar och bluffar över det hen såg, är ett högre
@@ -308,10 +315,22 @@ Han hamnar i fyra olika situationer, och de skiljer sig åt i vad han vet:
 
 | Situation | Ser han tärningarna? | Vad han gör |
 |---|---|---|
-| 1. Rundans första påstående | ja | säger sanningen, eller bluffar ett steg om tärningarna är svaga |
+| 1. Rundans första påstående | ja | säger tärningarnas värde, eller ett steg högre om tärningarna är svaga |
 | 2. Någon annan har påstått | nej | väljer mellan att syna, skicka vidare eller slå |
-| 3. Han slår, alltså skakar utan att titta | nej | säger den minsta lagliga höjningen |
-| 4. Bägaren har gått ett varv | nej, han väljer först | tittar på de nya tärningarna |
+| 3. Han slår, alltså skakar bägaren utan att titta | nej | säger den minsta lagliga höjningen |
+| 4. Bägaren har gått ett varv, så han måste höja | nya tärningar | väljer först, tittar sedan |
+
+Två ord i tabellen behöver en förklaring.
+
+**Ett steg** betyder nästa steg i poängordningen, inte ett steg i tärningarnas
+värde. Öppnar han på 42 blir steget över 43. Öppnar han på 31 blir steget 32.
+En bluff läggs alltså aldrig flera steg över tärningarna.
+
+**Svaga tärningar** betyder 43 eller lägre. Där är det sant påståendet billigt
+för nästa spelare att slå över. Steget över kostar honom mindre risk än det
+köper. På 51 och uppåt lönar sig steget inte, så där säger han alltid sanningen.
+Brytpunkten sitter mellan 43 och 51 för att det sanna påståendets värde växer
+långsammare än kostnaden för att bli synad på nästa nivå.
 
 **När han börjar rundan.** Han har tittat i smyg och ställer det sanna
 påståendet mot varje bluff han kan tänka sig. Sedan tar han det som är värt
@@ -332,6 +351,12 @@ att stå emot en syn, och en bluff lägger bara till risk utan att köpa något.
 Har han 43 eller lägre bluffar han ett steg. Där är sanningen svag: säger han 31
 när han har 43 kan nästa spelare slå över billigt, så han höjer ribban i
 stället. Han bluffar aldrig högre än nödvändigt, alltid ett steg.
+
+Brytpunkten mellan 43 och 51 är den känsligaste siffran i hans spel. På 43
+skiljer det bara 0,014 liv mellan att säga sanningen och att bluffa ett steg. En
+aning mer tro på att motståndaren lägger sig hade räckt för att han också skulle
+bluffa på 51 och 52. Bluffen på 43 är alltså ett gränsfall, inte en grundpelare.
+Skruvar man på hans inställningar är det här den första siffran som rör sig.
 
 **När någon annan har påstått.** Nu ser han inte tärningarna. Han vet bara vad
 som sagts, och han räknar fram ett värde för varje svar: att syna, att skicka
@@ -357,7 +382,9 @@ blandade paren. Det ser bakvänt ut men är rätt.
 
 **När bägaren gått ett varv.** Tärningarna slås om och han måste höja. Han
 väljer först och tittar sedan. Nio gånger av tio tittar han på tärningarna.
-Annars påstår han utan att titta, för att inte gå att läsa.
+Annars påstår han utan att titta, för att inte gå att läsa. Står budet redan på
+Meier finns inget högre: då slår han om bägaren och börjar en ny runda, och
+valet faller bort.
 
 **Oförutsägbarheten.** Axel har en liten dos oförutsägbarhet, och den gör tre
 saker: han tar ibland den säkra vägen även när en bluff räknas som marginellt

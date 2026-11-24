@@ -395,7 +395,7 @@ tärningsmodell som koden inte längre använder.
 Två tal hör dit:
 
 - `DEFAULT_Q = 0,715` — populationens bluff-frekvens bland **avslöjade**
-  påståenden (frivilliga väger fullt, sådana utan titt halvt). Tvingade höjningar räknas
+  påståenden (frivilliga väger fullt, sådana som görs utan att titta halvt). Tvingade höjningar räknas
   aldrig, eftersom de är mekaniska för alla. Används som förhandstro innan en
   spelare avslöjats, och som nämnare när en motståndares benägenhet mäts relativt
   populationen. Observera att `bluff_ratio` delar med samma tal, så det absoluta
@@ -610,7 +610,7 @@ beslutstillfället. I synnerhet:
 - Bluffar kan bara räknas ur avslutade rundor, där en syn avslöjade
   tärningarna. Den pågående rundan får aldrig bidra.
 - Motståndarens dolda tärningar och framtida drag får aldrig ingå.
-- Ett påstående utan titt är inget löfte och räknas aldrig som en bluff.
+- Ett påstående utan att titta är inget löfte och räknas aldrig som en bluff.
 
 Anledningen är subtil men avgörande: `session.py` loggar `shown` (de faktiska
 tärningarna) för varje påstående. Bygger man profilen ur hela loggen läcker framtiden

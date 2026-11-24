@@ -526,7 +526,7 @@ def test_om_meier_does_not_claim_raises_are_always_one_step():
     """Dokumentet får inte påstå att *alla* höjningar är ett steg.
 
     ``decide_bid`` (sedda tärningar) höjer exakt ett steg, men ``decide_raise``
-    (utan titt) skalar med ``unpredictability`` och kan hoppa ända till Meier. Ett
+    (utan att titta) skalar med ``unpredictability`` och kan hoppa ända till Meier. Ett
     påstående om att höjningen "alltid" är ett steg beskriver bara det första
     beslutet.
     """
@@ -539,7 +539,7 @@ def test_om_meier_does_not_claim_raises_are_always_one_step():
     ):
         assert claim not in flat, (
             f"Om meier-simulatorn påstår {claim!r}. Minsta höjning gäller bluffen över sedda "
-            "tärningar; höjning utan titt styrs av unpredictability."
+            "tärningar; höjning utan att titta styrs av unpredictability."
         )
 
 
@@ -634,8 +634,39 @@ def test_axel_section_tables_match_the_policy():
     for bid in (41, 32, 31):
         assert axel.decide_response(bid).action == "slå", f"koden slår inte på {rules.name(bid)}"
 
-    # Slag utan titt: alltid minsta lagliga höjning.
+    # Slag utan att titta: alltid minsta lagliga höjning.
     for bid in (31, 32, 41, 42, 43, 51, 52, 53, 54, 61, 62, 63, 64, 65, 66):
         assert axel.decide_raise(bid).bid == rules.next_higher(bid), (
             f"koden höjer inte minimalt över {rules.name(bid)}"
         )
+
+
+def test_axel_section_margin_near_the_opening_breakpoint():
+    """Dokumentet säger att brytpunkten på 43 är ett gränsfall.
+
+    Påståendet är en siffra, inte en känsla: marginalen mellan sanning och bluff
+    på 43 ska vara liten men positiv. Glider koden iväg ska testet falla, inte
+    dokumentet tyst bli fel.
+    """
+    from meier import policy, rules
+
+    text = _om()
+    flat = " ".join(text.split())
+
+    axel = policy.BasePolicy(
+        policy.AgentParams(caution=0.5, statistics=0.5, unpredictability=0.0, reading=0.0)
+    )
+    truth = axel._p_called(43) * policy.CALL_ODDS[43].l_lose
+    nxt = rules.next_higher(43)
+    p_called = axel._p_called(nxt)
+    bluff = (1.0 - p_called) * policy.BLUFF_GAIN - p_called * policy.CALL_ODDS[nxt].l_win
+    margin = f"{bluff - truth:.3f}".replace(".", ",")
+
+    assert margin in flat, (
+        f"Dokumentet anger inte marginalen {margin} liv på 43. "
+        f"Koden ger sanning {truth:.3f} och bluff {bluff:.3f}."
+    )
+    assert 0.0 < bluff - truth < 0.03, (
+        "Påståendet att 43 är ett gränsfall kräver en liten positiv marginal, "
+        f"men koden ger {bluff - truth:+.3f} liv."
+    )

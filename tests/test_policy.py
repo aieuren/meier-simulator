@@ -175,7 +175,7 @@ def test_response_offers_all_three_actions():
 
 
 def test_response_can_shake_when_shaking_is_best():
-    # Slaget utan titt blir det minsta lagliga höjningen, och då är hållarvärdet
+    # Slaget utan att titta blir det minsta lagliga höjningen, och då är hållarvärdet
     # bättre än att skicka vidare 31.
     calm = BasePolicy(AgentParams(unpredictability=0.0))
     assert calm.decide_response(31).action == "slå"
@@ -301,7 +301,7 @@ def test_axel_reads_no_opponent():
 # -- Höjningens längd: två olika beslut, två olika regler ------------------
 
 def test_unseen_raise_is_minimum_without_unpredictability():
-    """Utan oförutsägbarhet är slaget utan titt alltid minsta lagliga höjning.
+    """Utan oförutsägbarhet är slaget utan att titta alltid minsta lagliga höjning.
 
     Spelaren ser inte tärningarna, så det minsta steget är det säkraste. Det är
     bara ``unpredictability`` som får agenten att hoppa högre.

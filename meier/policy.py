@@ -173,7 +173,7 @@ class Decision:
 
 
 #: Den typiska bluff-frekvensen i populationen, mätt på **avslöjade** påstående
-#: (frivilliga väger fullt, de utan titt halvt). Används som nämnare när en motståndares
+#: (frivilliga väger fullt, de som görs utan att titta halvt). Används som nämnare när en motståndares
 #: benägenhet mäts relativt populationen, och som förhandstro innan en spelare
 #: avslöjats.
 #:

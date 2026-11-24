@@ -78,11 +78,11 @@ def _player_stats(log: list[LogEntry], names: list[str]) -> dict[str, dict[str, 
     stats: dict[str, dict[str, Any]] = {
         name: {
             "bids": 0,          # egna påståenden (påstående/slå/höja)
-            "unseen": 0,        # egna påståenden efter ett slag utan titt (såg inte tärningarna)
+            "unseen": 0,        # egna påståenden efter ett slag utan att titta (såg inte tärningarna)
             "bluffs": 0,        # egna påståenden där spelaren tittat och inte sa sanningen
             "truths": 0,        # egna påståenden där spelaren tittat och sa sanningen
             "decisions": 0,     # svar på andras påståenden
-            "raises": 0,        # "slå" (höjning utan titt)
+            "raises": 0,        # "slå" (höjning utan att titta)
             "passes": 0,        # "skicka"
             "calls": 0,         # "syna"
             "calls_won": 0,     # syn där motståndaren förlorade
@@ -106,7 +106,7 @@ def _player_stats(log: list[LogEntry], names: list[str]) -> dict[str, dict[str, 
             continue
         if entry.action in BID_ACTIONS:
             s["bids"] += 1
-            # Ett slag utan titt är inget medvetet löfte – räkna det inte som bluff.
+            # Ett slag utan att titta är inget medvetet löfte – räkna det inte som bluff.
             if entry.unseen:
                 s["unseen"] += 1
             elif entry.truth:
