@@ -386,19 +386,16 @@ påståendet, och då förlorar den som synade: **Cecilia förlorar ett liv**.
 
 Nästa runda börjar hos spelaren före Cecilia, alltså Berit.
 
-**Runda 2.** Berit öppnar. Hon slår 43 och säger **43**. Cecilia får 43 och
-**skickar vidare**. Axel får 43 och **skickar vidare**. Nu har påståendet gått
+**Runda 2.** Berit öppnar. Hon skakar bägaren, ser 63 och säger **63**. Cecilia får 63 och
+**skickar vidare**. Axel får 63 och **skickar vidare**. Nu har påståendet gått
 ett helt varv och är tillbaka hos Berit, som måste höja.
 
-Hon slår om bägaren och tittar. Nu visar tärningarna 31 – sämre än det hon
+Hon slår om bägaren och tittar. Nu visar tärningarna 31 – långt under det hon
 måste höja över. Men regeln säger att den som slår måste säga högre, så hon
-säger **51**. Här är hon tvingad att ljuga.
+säger **64**. Här är hon tvingad att ljuga.
 
-Cecilia får 51 och **skickar vidare**. Axel får 51 och **skickar vidare**. Berit
-är tillbaka igen och måste höja ännu en gång. Tärningarna visar 31 igen, så hon
-säger **52**. Cecilia **skickar vidare**. Axel **skickar vidare**. Berit höjer
-igen till **53**, och nu synar Cecilia. Tärningarna visar 31 mot påståendet 53,
-och **Berit förlorar ett liv**.
+Cecilia får 64 och **synar**. Tärningarna visar 31 mot påståendet 64, och
+**Berit förlorar ett liv**.
 
 Lägg märke till tre saker. Axel bluffade aldrig i det här partiet – han sa 31
 när han hade 31. Berit ljög, men bara när regeln tvingade henne att höja. Och
