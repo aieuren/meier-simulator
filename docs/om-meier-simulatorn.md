@@ -310,18 +310,25 @@ benägenhet att syna med i underlaget när hen väljer påstående. Mot en som s
 synar är det friare fram; mot en som synar ofta lönar sig bara de påståenden som
 är nästan säkra.
 
-### Så spelar Axel – du kan spela som han
+### En spelare utan llm
 
-Axel har ingen språkmodell. Varje drag räknas fram ur samma fasta regel, och
-regeln går att lära sig. Det här avsnittet är skrivet så att du kan sitta vid
-ett riktigt bord och göra samma sak som han.
+En av rollerna, Axel, har ingen språkmodell. Hans drag räknas fram ur samma
+fasta regel varje gång, så hans spel går att lära sig. Resten av det här
+avsnittet beskriver den regeln. Axel är simulatorns referens: han visar vad en
+enkel och oföränderlig taktik klarar av.
+
+Regeln är vår konstruktion, inte en upptäckt om Meier. Vi satte ihop den ur två
+tankar: räkna i liv, och tro samma sak om bordet varje gång. Att den sedan
+spelar hyfsat säger något om spelet. Att den inte bluffar säger bara att vi
+byggde den så.
 
 Två saker gäller hela tiden. Han räknar i liv, inte i vunna rundor: att vinna
 en runda är inget värt i sig. Och han har bara en enda fast tro om bordet – hur
 ofta en syn brukar lyckas på en viss nivå. Han lär sig inget om dig som person.
 
-Om du vill följa honom exakt: skruva ner hans oförutsägbarhet till noll. Då
-gäller tabellerna nedan utan undantag.
+Tabellerna nedan gäller när hans oförutsägbarhet är noll. Den siffran är 0,2 i
+registret, så i en riktig match tar han ibland ett annat, nästan lika bra drag.
+Det är avsiktligt: en motståndare ska inte kunna läsa honom helt.
 
 #### Runda för runda: så sitter han vid bordet
 
@@ -333,14 +340,12 @@ tärningarna visar. Inget mer. Visar de 43 säger han 43. Visar de 31 säger han
 |---|---|
 | vilket värde som helst | samma värde |
 
-Det enda undantaget är när ett högre påstående redan ligger. Då måste han höja
-enligt regeln, och om tärningarna inte täcker höjningen blir påståendet osant.
-Det är regelns verkning, inte ett val. Den situationen kallas **tvingad
-höjning** och finns längre ner.
+Situationen där han inte får säga vad tärningarna visar – när han måste höja
+över ett påstående som redan ligger – heter **tvingad höjning**. Den beskrivs
+längre fram.
 
 **När någon annan har påstått** har han inte sett tärningarna. Då väger han
-tre svar mot varandra och tar det som är värt mest i liv. Svaren kommer i
-regelbokens ordning:
+tre svar mot varandra och tar det som är värt mest i liv:
 
 | Påståendet han får | Han gör |
 |---|---|
@@ -348,32 +353,41 @@ regelbokens ordning:
 | 63, 62, 61, 54, 53, 52, 51, 43, 42 | **skicka vidare** |
 | 41, 32, 31 | **slå** |
 
-Skälet till att han synar de låga påståendena är inte att de är bluffar. Det
-är att nästan varje slag ligger **under** dem. Säger någon 11 är det bara
-Meier som slår det, alltså vinner synen i 96 fall av 100. Säger någon 22 vinner
-synen i 94. Ju högre påståendet blir, desto fler slag ligger över det, och då
-blir synen sämre än att bära påståendet vidare.
+Han synar de låga påståendena eftersom nästan varje slag ligger **under** dem.
+Tärningarna är avlänga och viktade, så siffrorna följer tärningarnas vikter
+och inte jämna andelar. Säger någon 11 vinner synen i 96 fall av 100. Säger
+någon 22 vinner synen i 94. Ju högre påståendet blir, desto fler slag ligger
+över det, och då blir synen sämre än att bära påståendet vidare.
 
 Vid 64 vinner synen fortfarande i 65 fall av 100. Vid 63 har det jämnat ut sig
 helt: där skiljer det en halv tusendels liv mellan att syna och att skicka
 vidare, så 63 är i praktiken ett myntkast för honom.
 
-Två rader i tabellen ser bakvända ut men är rätt. **31 synar han aldrig** –
-bara Meier är högre, så där finns allt att vinna på att slå i stället. **61 och
-62 synar han inte** trots att de ligger högt, för att bära dem är billigare.
+Två rader i tabellen ser bakvända ut men är rätt. **31 synar han aldrig.** Han
+slår i stället, för ett slag ger ett nytt påstående som är lättare att bära än
+31. **61 och 62 synar han inte** trots att de ligger högt, för att bära dem är
+billigare än att betala för en syn.
 
 **När han slår** skakar han bägaren på nytt och lyfter på locket. Tärningarna
-är nya och ingen har påstått något om dem, så det finns inget att dölja. Räcker
-det han ser över det förra påståendet säger han det. Räcker det inte säger han
-nästa steg i ordningen.
+är nya och ingen har påstått något om dem, så titten avslöjar inget för bordet.
+Räcker det han ser över det förra påståendet säger han det. Räcker det inte
+säger han nästa steg i ordningen.
 
-Att avstå från att titta är ett eget val. Axel gör det aldrig.
+Att avstå från att titta är ett eget val. Med oförutsägbarheten noll tittar
+Axel alltid. Med 0,2 avstår han i ungefär ett fall av tio, och bara vid den
+tvingade höjningen.
 
-**När bägaren gått ett varv** måste han höja. Tärningarna slås om och han
-väljer först, tittar sedan. Står påståendet redan på Meier finns inget högre:
-då slår han om bägaren och börjar en ny runda, och valet faller bort.
+**När bägaren gått ett varv** måste han höja. Tärningarna slås om av bordet.
+Han väljer först om han vill titta, och tittar i så fall sedan. Står påståendet
+redan på Meier finns inget högre: då slår han om bägaren och börjar en ny runda,
+och valet faller bort.
 
-#### Ett parti att följa
+#### Ett exempelparti
+
+Partiet nedan är iscensatt. Alla tre spelar efter Axels regel, även Berit och
+Cecilia. Det är alltså ingen vanlig match: i en riktig match fattar Berit och
+Cecilia sina beslut med en språkmodell. Syftet är att visa regeln i rörelse, i
+en ordning som går att följa.
 
 Tre spelare: Axel, Berit och Cecilia. Alla har tre liv. Turen går Axel → Berit
 → Cecilia.
@@ -407,6 +421,10 @@ hon höjde alltid bara ett steg, aldrig mer.
 
 #### Fem regler att ta med till bordet
 
+Det här är Axels regel i korthet. Den som vill spela som han kan följa den
+utan att läsa tabellerna ovan. Reglerna gäller exakt när oförutsägbarheten är
+noll; med 0,2 tar han ibland ett annat, nästan lika bra drag.
+
 1. **Öppnar du rundan: säg vad tärningarna visar.** Alltid. Ingen bluff.
 2. **Får du ett påstående på 21, 11, 22, 33, 44, 55, 66, 65 eller 64, syna.**
    Där ligger nästan varje slag under påståendet, så synen vinner.
@@ -423,20 +441,24 @@ synen är som säkrast, alltså på de låga.
 
 #### Varför han inte bluffar
 
-En bluff kan bara löna sig om motståndaren lägger sig. Då vinner man inget liv
-– man slipper bara en syn. Men den som slår måste alltid höja, och då blir en
-del påståenden osanna ändå. Lögnen kommer alltså av sig själv när den behövs.
-Att ljuga i onödan lägger bara till en risk utan att köpa något.
+Därför att vi byggde honom så. Regeln säger: säg vad tärningarna visar. Bluffen
+är alltså bortvald i konstruktionen, inte upptäckt som olönsam.
 
-Det här är en förenkling av simulatorn, inte en sanning om Meier. En människa
-kan bluffa för att bli svårläst. Den mekanismen finns inte här: Axel lär sig
-inget om dig under matchen, så det finns ingen att luras.
+Skälet att välja bort den är att en bluff bara kan löna sig om motståndaren
+lägger sig. Då vinner man inget liv – man slipper bara en syn. Men den som slår
+måste alltid höja, och då blir en del påståenden osanna ändå. Lögnen kommer av
+sig själv när den behövs. Att ljuga i onödan lägger bara till en risk utan att
+köpa något. Det gör regeln enkel att följa och lätt att räkna på.
+
+En människa kan bluffa för att bli svårläst. Den mekanismen finns inte hos
+Axel: han lär sig inget om dig under matchen, så det finns ingen att luras.
 
 #### Det han aldrig gör
 
 Han lär sig inget om dig under matchen – samma regler gäller i runda 1 som i
 sista rundan. Han satsar inte på att vinna rundan, utan på att överleva
 matchen. Och han ljuger aldrig för nöjes skull, bara när regeln tvingar honom.
+
 
 ## Vad du kan göra i webbappen
 

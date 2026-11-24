@@ -617,8 +617,8 @@ def test_axel_section_tables_match_the_policy():
     from meier import policy, rules
 
     text = _om()
-    assert "### Så spelar Axel – du kan spela som han" in text, (
-        "Om meier-simulatorn saknar avsnittet om Axels speltaktik"
+    assert "### En spelare utan llm" in text, (
+        "Om meier-simulatorn saknar avsnittet om spelaren utan språkmodell"
     )
 
     axel = policy.BasePolicy(
@@ -792,3 +792,42 @@ def test_axel_section_says_63_is_a_coin_flip():
     assert "63 är i praktiken ett myntkast" in flat
     assert axel.decide_response(63).action == "skicka"
     assert rules.name(63) == "63"
+
+
+def test_axel_section_marks_the_example_part_as_constructed():
+    """Exempelpartiet ska stå som iscensatt.
+
+    Alla tre spelarna följer Axels regel i exemplet, men i en riktig match
+    fattar Berit och Cecilia sina beslut med en språkmodell. Utan den
+    upplysningen läser man exemplet som en vanlig match.
+    """
+    flat = " ".join(_om().split())
+    assert "Partiet nedan är iscensatt" in flat
+    assert "Alla tre spelar efter Axels regel" in flat
+    assert "i en riktig match fattar Berit och Cecilia sina beslut med en språkmodell" in flat
+
+
+def test_axel_section_says_the_bluff_ban_is_a_design_choice():
+    """Att Axel inte bluffar är ett val i konstruktionen, inte en upptäckt.
+
+    Avsnittet får inte påstå att en bluff vore olönsam i största allmänhet.
+    """
+    flat = " ".join(_om().split())
+    assert "Därför att vi byggde honom så" in flat
+    assert "Bluffen är alltså bortvald i konstruktionen, inte upptäckt som olönsam" in flat
+
+
+def test_axel_section_example_part_moves_match_the_policy():
+    """Varje drag i exempelpartiet ska vara det regeln faktiskt väljer."""
+    from meier import policy, rules
+
+    axel = policy.BasePolicy(
+        policy.AgentParams(caution=0.5, statistics=0.5, unpredictability=0.0, reading=0.0)
+    )
+    assert axel.decide_response(31).action == "slå"
+    assert axel.decide_response(64).action == "syna"
+    assert axel.decide_response(63).action == "skicka"
+    assert axel.decide_claim(31, previous_claim=63).claim == 64
+    # Runda 1: lika -> synaren förlorar. Runda 2: lägre -> påståendet förlorar.
+    assert not rules.is_higher(64, 64)
+    assert rules.is_higher(64, 31)

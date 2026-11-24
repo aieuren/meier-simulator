@@ -535,6 +535,25 @@ Three rules that keep the companion doc honest:
   This bit `tests/test_legality.py::test_agent_without_llm_is_deterministic`,
   which was flaky until it built its own params instead of `AgentParams()`.
 
+## The dice are weighted, so count outcomes, not pairs
+
+`rules.FACE_WEIGHTS` comes from a solid-angle model of the oblong dice, so
+1 and 2 are rarer than 3-6. `policy.OUTCOME_P` is the exact distribution and
+`policy.CALL_ODDS[claim].p_win` is the true `P(the caller wins)`. Never quote
+"x of 36" from a fair-dice count; that was wrong by about four points on 11
+(91.7 % vs the real 95.6 %). Read the numbers from `CALL_ODDS` and let
+`tests/test_docs.py` compare them.
+
+Two prose traps in the Axel section of the friend doc:
+
+- `axel` carries `unpredictability = 0.2`, so `decide_forced` returns
+  "unseen" about 10 % of the time. The text must not say he never declines to
+  look. The tables only hold at `unpredictability = 0`.
+- The example part has all three players following the rule-engine policy, so
+  it must be labelled as constructed. In a real match Berit and Cecilia decide
+  with the model. The moves are pinned by
+  `test_axel_section_example_part_moves_match_the_policy`.
+
 ## An LLM player never falls back to the rule engine
 
 This is a simulator, not a hardened game server. The numbers only mean
