@@ -41,8 +41,8 @@ class LogEntry:
 
     - ``kind == "roll"``: ett tärningsutfall (indata). Ingen spelare har svarat
       än. Detta är steget där OK-knappen hör hemma.
-    - ``kind == "action"``: en spelares svar – ett påstående, en höjning utan att titta, en
-      syn eller ett skickande.
+    - ``kind == "action"``: en spelares svar – ett påstående (efter titt eller
+      utan att titta), ett slag, en syn eller ett skickande.
     - ``kind == "life"``: någon har förlorat ett (eller två) liv efter en syn.
       Raden ligger direkt efter synen och visar hur många liv som är kvar.
     - ``kind == "game_over"``: matchen är slut och en vinnare står kvar. Sista
@@ -450,30 +450,33 @@ class Session:
 
         if decision.action == "slå":
             self._notify_decision(player.name, "slå")
-            # Spelaren skakar bägaren på nytt: ett färskt slag, och locket lyfts inte.
+            # Spelaren skakar bägaren på nytt. Reglerna låter spelaren lyfta på
+            # locket på sitt eget slag; att avstå är ett eget val (fintaktik).
             dice = rules.roll(self.rng)
             self._log_roll(player=player.name, dice=dice, shown=rules.read_dice(*dice))
-            ann = player.announce_unseen(
+            ann = player.announce_shake(
                 dice, previous_bid=bid, opponent=self.name_of(self._next_actor(self.actor))
             )
             ann = self._enforce_bid(ann, previous_bid=bid)
-            self._notify_bid(player.name, unseen=True)
+            self._notify_bid(player.name, unseen=ann.unseen)
             entry = self._log_entry(
                 player,
                 dice,
                 ann,
                 action="slå",
                 previous_bid=bid,
-                unseen=True,
+                unseen=ann.unseen,
                 accepted_bid=bid,
                 actor_idx=self.actor,
+                choice_line=ann.choice_line,
+                choice_reasoning=ann.choice_reasoning,
             )
             self.pending_dice = dice
             self.pending_bid = ann.bid
             self.bidder = self.actor
             self.holder = self.actor
             self.last_announcer = self.actor
-            self.bid_was_unseen = True
+            self.bid_was_unseen = ann.unseen
             self.bid_was_forced = False
             self._after_bid(actor=self.actor)
             return entry

@@ -304,11 +304,74 @@ class StrategicAgent(Agent):
             marked.append(f"{rules.name(v)} ({tag})")
         return "; ".join(marked)
 
-    # -- Beslut 2: slå (spelaren ser inte tärningarna) ---------------------
+    # -- Beslut 2: slå (spelaren ser tärningarna, om den inte väljer bort det) --
+    def announce_shake(
+        self, dice: tuple[int, int], *, previous_bid: int, opponent: str | None = None
+    ) -> Announcement:
+        """Spelaren slår: skakar bägaren på nytt och måste säga ett högre påstående.
+
+        Reglerna låter spelaren lyfta på locket på sitt eget slag, och det är det
+        normala. Spelaren väljer först om den vill titta, och sedan vad den säger.
+        Avstår den från att titta går påståendet genom :meth:`announce_unseen`, som
+        inte känner till tärningarna.
+        """
+        choice = self.policy.decide_shake(previous_bid)
+        seen, reason = self._ask(
+            self._shake_context(previous_bid, opponent), self._parse_seen
+        )
+        if seen is None:
+            seen = choice.action != "unseen"
+            reason = reason or choice.reason
+
+        ann = (
+            self.announce(dice, previous_bid=previous_bid, opponent=opponent)
+            if seen
+            else self.announce_unseen(dice, previous_bid=previous_bid, opponent=opponent)
+        )
+        return replace(
+            ann,
+            choice_line="Jag tittar på tärningarna." if seen else "Jag påstår utan att titta.",
+            choice_reasoning=reason,
+        )
+
+    @staticmethod
+    def _parse_seen(data: dict) -> tuple[bool | None, str]:
+        """Tolkar valet att titta (``seen``) eller avstå (``unseen``)."""
+        reason = str(data.get("reasoning") or "").strip()
+        value = data.get("seen")
+        if isinstance(value, bool):
+            return value, reason
+        if isinstance(value, str):
+            v = value.strip().lower()
+            if v in ("true", "ja", "j", "titta", "tittar"):
+                return True, reason
+            if v in ("false", "nej", "n", "unseen", "utan att titta"):
+                return False, reason
+        return None, reason
+
+    def _shake_context(self, previous_bid: int, opponent: str | None) -> str:
+        return "\n".join(
+            [
+                "SLAG – TITTA ELLER INTE TITTA",
+                f"Du skakar bägaren på nytt och måste säga ett strikt högre påstående "
+                f"än {rules.name(previous_bid)}.",
+                "Du får lyfta på locket och titta på tärningarna innan du påstår. "
+                "Det är det vanliga.",
+                self._opponent_note(opponent),
+                "",
+                "Att titta ger dig något att luta påståendet mot. Att avstå döljer "
+                "informationen för bordet, men du vet då inte vad du säger. En syn går "
+                "ändå hem om tärningarna visar påståendet eller högre.",
+                "",
+                "Svara med JSON:",
+                '{"seen": true | false, "reasoning": "<kort motivering>"}',
+            ]
+        )
+
     def announce_unseen(
         self, dice: tuple[int, int], *, previous_bid: int, opponent: str | None = None
     ) -> Announcement:
-        """Spelaren slår: bägaren är stängd och påståendet måste vara strikt högre."""
+        """Fintaktikens väg: spelaren har valt bort titten och påstår högre blint."""
         if not rules.is_valid_value(previous_bid):
             raise ValueError(f"{previous_bid} är inte ett giltigt påstående")
         legal = legality.unseen_bids(previous_bid=previous_bid)
@@ -345,8 +408,8 @@ class StrategicAgent(Agent):
     ) -> str:
         return "\n".join(
             [
-                "DU SLÅR",
-                "Du skakar bägaren själv och lyfter inte på locket. Du ser inte tärningarna.",
+                "SLAG UTAN ATT TITTA",
+                "Du har valt att inte lyfta på locket. Du ser inte tärningarna.",
                 f"Du måste säga ett strikt högre påstående än {rules.name(previous_bid)}.",
                 self._opponent_note(opponent),
                 "",

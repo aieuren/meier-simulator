@@ -399,14 +399,17 @@ class BasePolicy:
         lose = odds.p_win * odds.l_win
         return p_called * (win - lose)
 
-    # -- Beslut 2: slå (ser inte tärningarna) ---------------------------
+    # -- Beslut 2: slå (ser tärningarna, om spelaren inte väljer bort det) ----
     def decide_raise(self, bid: int) -> Decision:
         """Vilket påstående ska agenten säga när den slår utan att titta, över ``bid``?
 
-        Eftersom agenten inte ser sina tärningar är den minsta lagliga höjningen
-        säkrast (minst chans att tärningarna visar lägre). En oförutsägbar agent
-        hoppar ibland högre ändå, just för att den inte ska gå att läsa: en
-        motståndare som vet att påståendet alltid är det minsta kan planera efter det.
+        Detta är **fintaktikens** väg: spelaren har valt bort titten och vet därför
+        inte vad tärningarna visar. Den minsta lagliga höjningen är då säkrast
+        (minst chans att tärningarna visar lägre). En oförutsägbar agent hoppar
+        ibland högre ändå, just för att den inte ska gå att läsa.
+
+        Grundtaktiken går i stället via :meth:`decide_bid`, som får de sedda
+        tärningarna. Se :meth:`decide_shake`.
         """
         higher = rules.higher_options(bid)
         if not higher:
@@ -418,6 +421,20 @@ class BasePolicy:
                 steps = self.rng.randint(1, len(higher) - 1) if len(higher) > 1 else 0
         new_bid = higher[-(steps + 1)]
         return Decision("slå", bid=new_bid, reason=f"Slår till {rules.name(new_bid)}.")
+
+    def decide_shake(self, bid: int) -> Decision:
+        """Väljer spelaren att titta på de nya tärningarna när den slår?
+
+        Att titta är det normala: reglerna låter spelaren lyfta på locket på sitt
+        eget slag, och den som tittar kan lägga påståendet rätt. Att avstå är
+        fintaktik. Det köper ingen information, men det gör påståendet svårt att
+        läsa, och en syn går ändå hem om tärningarna visar påståendet eller högre.
+
+        Grundtaktiken väljer alltid titten. Det håller referensen enkel och
+        begriplig: fintaktiken hör till de profiler som uttryckligen har
+        ``unpredictability``.
+        """
+        return Decision("titta", reason="Tittar på tärningarna.")
 
     # -- Beslut 1: första påståendet (ser tärningarna) -----------------------
     def decide_bid(

@@ -270,30 +270,36 @@ Bluffen i sig är inte en parameter. Vikten av att motståndaren lägger sig är
 fasta `BLUFF_GAIN`: ett påstående över `shown` jämförs med det säkra
 grundpåståendet, och agenten tar bluffen när den räknas som lönsam.
 
-### Beslut 2 — Slå (ser dem inte)
+### Beslut 2 — Slå (får titta, väljer själv)
 
-Spelaren skakar en ny bägare och får inte lyfta locket. Det nya påståendet måste vara
-strikt högre än det förra. Agenten vet alltså inte vad tärningarna visar — men
-vet att motståndaren kommer att se dem vid en syn.
+Spelaren skakar en ny bägare. Reglerna låter spelaren **lyfta på locket och titta**
+på sina egna tärningar innan den påstår, och det är det normala. Det nya påståendet
+måste vara strikt högre än det förra, vad tärningarna än visar.
 
-Policy: `decide_raise` lägger påståendet på den minsta lagliga höjningen, som är
-säkrast (minst chans att tärningarna visar lägre). En oförutsägbar agent hoppar
-ibland högre ändå, just för att den inte ska gå att läsa: en motståndare som vet
-att påståendet alltid är det minsta kan planera efter det.
+Att avstå från att titta är ett eget val och hör till fintaktiken. Spelaren vet då
+inte vad tärningarna visar, men påståendet går inte att läsa, och en syn går ändå
+hem om tärningarna visar påståendet eller högre. I den här maskinen är det
+`unpredictability` som får en profil att ibland välja bort titten.
+
+Beslutet delas därför i två, i den här ordningen:
+
+1. **Titta eller inte?** `decide_shake`. Grundtaktiken väljer alltid titten.
+2. **Vad sägs?** Har spelaren tittat går frågan till `decide_bid`, som får de
+   sedda tärningarna. Har den avstått går frågan till `decide_raise`, som inte får
+   dem.
+
+`decide_raise` lägger påståendet på den minsta lagliga höjningen, som är säkrast när
+nivån är okänd (minst chans att tärningarna visar lägre). En oförutsägbar agent
+hoppar ibland högre ändå, just för att den inte ska gå att läsa: en motståndare som
+vet att påståendet alltid är det minsta kan planera efter det.
 
 ```python
 steps = rng.randint(1, len(higher) − 1)   # bara om rng.random() < unpredictability
 new_bid = higher[−(steps + 1)]            # 0 steg = minsta höjningen
 ```
 
-`unpredictability = 0` ger alltså alltid minsta lagliga höjning. Det finns ingen
-parameter som väljer hur långt över det lägsta påståendet agenten går.
-
-Skilj detta från beslut 1 (`decide_bid`), där spelaren *har* sett
-tärningarna. Där är bluffen alltid exakt ett steg över det visade utfallet:
-`min(higher_options(shown))`. Där finns ingen styrning alls, eftersom den
-kalkylen (sann påståendenivå + ett steg) inte har någon motsvarighet när nivån är
-okänd.
+Skilj detta från `decide_bid`, där spelaren *har* sett tärningarna. Där är bluffen
+alltid exakt ett steg över det visade utfallet: `min(higher_options(shown))`.
 
 ### Beslut 3 — Syna eller skicka (ser dem inte)
 

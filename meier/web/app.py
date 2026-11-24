@@ -128,9 +128,29 @@ def announce(req: AnnounceRequest) -> dict:
 
     agent = _get_agent(req.role)
     try:
-        ann = agent.announce((req.die1, req.die2), previous_bid=req.previous_bid)
+        if req.previous_bid is None:
+            # Rundans första påstående: spelaren har tittat i smyg.
+            ann = agent.announce((req.die1, req.die2))
+        elif rules.is_meier(req.previous_bid):
+            # Meier går inte att höja. Reglerna låter i stället hållaren slå om
+            # och börja en ny runda, så det finns inget slag att svara på här.
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "21 – Meier går inte att höja. I spelet slår hållaren om "
+                    "bägaren och börjar en ny runda i stället."
+                ),
+            )
+        else:
+            # Ett slag efter ett tidigare påstående. Spelaren får lyfta på locket
+            # och avgör själv om den vill det.
+            ann = agent.announce_shake(
+                (req.die1, req.die2), previous_bid=req.previous_bid
+            )
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=f"LLM-fel: {exc}") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return {
         "shown": shown,

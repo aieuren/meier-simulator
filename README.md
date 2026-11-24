@@ -217,9 +217,10 @@ I webbappen finns sektionen "Spelarna möter varandra":
    Hela matchen för att spela klart tills en vinnare står kvar.
 3. Flödet följer reglerna:
    - Den som börjar slår och tittar i smyg, sedan säger ett påstående.
-   - Nästa spelare slår (skakar sina egna tärningar på nytt, tittar inte på
-     dem och säger ett högre påstående — ett *påstående utan att titta*), synar eller skickar
-     vidare.
+   - Nästa spelare slår (skakar sina egna tärningar på nytt, **får lyfta på
+     locket och titta på dem** och säger sedan ett högre påstående), synar eller
+     skickar vidare. Att avstå från att titta är ett eget val, ett *påstående
+     utan att titta*, som hör till fintaktiken.
    - Kommer bägaren ett helt varv tillbaka till den som påstår måste denne höja.
      Tärningarna slås då om, och den som påstår får själv välja att titta på dem eller
      påstå utan att titta. Är påståendet Meier slår den som påstår i stället om och börjar en ny runda.
@@ -261,7 +262,8 @@ Protokollet är byggt för efteranalys. Varje match innehåller:
 - `events`: varje åtgärd med spelare, roll, tärningsutfall, påstående, om spelaren hade
   tittat på tärningarna (och om påståendet då var sant eller en bluff), tidigare påstående,
   livsställning och rundnummer,
-- `player_stats`: per spelare antal påståenden, slag utan att titta, bluffar, sanningar, synar,
+- `player_stats`: per spelare antal påståenden, slag utan att titta (det valda
+  undantaget), bluffar, sanningar, synar,
   höjningar, förlorade liv och om spelaren slogs ut.
 
 Med ett fast basfrö blir en serie reproducerbar. JSONL-formatet (en match per rad)

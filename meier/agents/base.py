@@ -36,6 +36,16 @@ class Agent:
     def system_prompt(self) -> str:
         raise NotImplementedError
 
+    def announce_shake(
+        self, dice: tuple[int, int], *, previous_bid: int, opponent: str | None = None
+    ):
+        """Standardbeteende för ett slag: titta på tärningarna och påstå högre.
+
+        Reglerna låter spelaren lyfta på locket på sitt eget slag. En agent som vill
+        avstå från att titta överskuggar detta och går via :meth:`announce_unseen`.
+        """
+        return self.announce(dice, previous_bid=previous_bid, opponent=opponent)
+
     def announce_forced(
         self, dice: tuple[int, int], *, previous_bid: int, opponent: str | None = None
     ):

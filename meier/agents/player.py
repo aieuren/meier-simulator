@@ -126,7 +126,7 @@ class MeierPlayerAgent(Agent):
         ``previous_bid`` är det senaste påståendet i rundan om spelaren höjer efter
         ett helt varv och alltså redan har tittat på tärningarna. Då måste påståendet
         vara strikt högre. Att **slå** mot ett påstående går i stället via
-        :meth:`announce_unseen`, för då får spelaren inte titta på tärningarna.
+        :meth:`announce_shake`, som först låter spelaren välja om den vill titta.
         """
         shown = rules.read_dice(*dice)
         higher = rules.higher_options(previous_bid) if previous_bid is not None else []
@@ -150,13 +150,45 @@ class MeierPlayerAgent(Agent):
             corrected=proposed != bid,
         )
 
+    def announce_shake(
+        self, dice: tuple[int, int], *, previous_bid: int, opponent: str | None = None
+    ) -> Announcement:
+        """Spelaren slår: skakar bägaren på nytt och måste säga ett högre påstående.
+
+        Reglerna låter spelaren lyfta på locket på sitt eget slag. Att titta är det
+        normala; att avstå är ett eget val som döljer informationen för bordet.
+        """
+        if not rules.is_valid_value(previous_bid):
+            raise ValueError(f"{previous_bid} är inte ett giltigt påstående")
+        seen = self._wants_seen_shake(previous_bid)
+        if seen:
+            ann = self.announce(dice, previous_bid=previous_bid, opponent=opponent)
+            return replace(
+                ann,
+                choice_line="Jag tittar på tärningarna.",
+                choice_reasoning="Tittar innan jag påstår.",
+            )
+        ann = self.announce_unseen(dice, previous_bid=previous_bid, opponent=opponent)
+        return replace(
+            ann,
+            choice_line="Jag påstår utan att titta.",
+            choice_reasoning="Fintaktik: påstår utan att titta.",
+        )
+
+    def _wants_seen_shake(self, previous_bid: int) -> bool:
+        """Fråga spelaren om den vill titta på sitt eget slag. Standard är ja."""
+        context = self._shake_choice_context(previous_bid)
+        data = self.respond(context)
+        return self._coerce_seen_choice(data.get("seen"))
+
     def announce_unseen(
         self, dice: tuple[int, int], *, previous_bid: int, opponent: str | None = None
     ) -> Announcement:
         """Spelaren **slår** och måste säga ett strikt högre påstående.
 
-        Spelaren skakar bägaren själv och får inte lyfta på locket – bägaren är
-        stängd och påståendet måste vara strikt högre oavsett vad tärningarna visar.
+        Detta är fintaktikens väg: spelaren har **valt** att inte lyfta på locket.
+        Bägaren är då stängd, och påståendet måste vara strikt högre oavsett vad
+        tärningarna visar.
         Tärningarna ``dice`` är det nya slaget; de används bara för att kunna
         avgöra en eventuell syn senare.
         """
@@ -248,6 +280,39 @@ class MeierPlayerAgent(Agent):
             ]
         )
 
+    def _shake_choice_context(self, previous_bid: int) -> str:
+        return "\n".join(
+            [
+                "SLAG – TITTA ELLER INTE TITTA",
+                "SITUATIONEN",
+                f"Du slår bägaren och måste säga ett strikt högre påstående än "
+                f"{rules.name(previous_bid)}.",
+                "Du har skakat bägaren själv och locket ligger på. Du får lyfta på det "
+                "och titta innan du påstår – det är det vanliga.",
+                "- Titta: du ser tärningarna och kan lägga påståendet rätt.",
+                "- Avstå: du påstår utan att veta vad tärningarna visar. Påståendet går "
+                "inte att läsa, men du gissar.",
+                "Båda är tillåtna. Valet är ditt.",
+                "",
+                "Svara med JSON:",
+                '{"seen": <true om du tittar, false om du påstår utan att titta>, '
+                '"reasoning": "<kort motivering>"}',
+            ]
+        )
+
+    @staticmethod
+    def _coerce_seen_choice(value: object) -> bool:
+        """Tolka modellens val av titta (True) eller påstå utan att titta (False)."""
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            v = value.strip().lower()
+            if v in ("true", "ja", "j", "titta", "tittar"):
+                return True
+            if v in ("false", "nej", "n", "utan att titta", "tittar inte", "unseen"):
+                return False
+        return True
+
     @staticmethod
     def _coerce_unseen_choice(value: object) -> bool:
         """Tolka modellens val av titta (False) eller påstå utan att titta (True)."""
@@ -266,12 +331,12 @@ class MeierPlayerAgent(Agent):
             [
                 "SITUATIONEN",
                 f"Du slår bägaren och måste säga ett strikt högre påstående än {rules.name(previous_bid)}.",
-                "Du skakar bägaren själv och lyfter inte på locket – du ser inte tärningarna.",
+                "Du har valt att inte lyfta på locket, så du ser inte tärningarna.",
                 "Du MÅSTE säga ett strikt högre påstående än det förra, vad tärningarna än visar.",
                 f"Giltiga påståenden: {', '.join(rules.name(v) for v in higher) or 'inga (påståendet är högst)'}.",
                 "",
                 "UPPGIFT",
-                "Säg ett högre påstående. Du får inte lyfta på locket.",
+                "Säg ett högre påstående utan att lyfta på locket. Du har redan valt bort titten.",
                 "",
                 "Svara med JSON:",
                 '{"bid": <heltal, ett giltigt utfall högre än det förra>, '

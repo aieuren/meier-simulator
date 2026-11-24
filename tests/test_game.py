@@ -178,7 +178,7 @@ def test_engine_accepts_lower_first_bid():
 
     class LowerLLM:
         def complete(self, system, user, json_mode=False):
-            return '{"bid": 31, "line": "31", "reasoning": "lägre"}' 
+            return '{"bid": 31, "line": "31", "reasoning": "lägre"}'
 
     role = Role(key="test", name="Test", description="t", style="t")
     agent = MeierPlayerAgent(role, llm=LowerLLM())
@@ -207,6 +207,9 @@ def test_pass_is_unseen_the_dice_never_reach_the_chooser():
         def announce_forced(self, dice, **kw):
             return self._inner.announce_forced(dice, **kw)
 
+        def announce_shake(self, dice, **kw):
+            return self._inner.announce_shake(dice, **kw)
+
         def decide(self, bid, **kw):
             seen_calls.append({"bid": bid, **kw})
             return self._inner.decide(bid, **kw)
@@ -234,3 +237,58 @@ def test_decide_signature_cannot_take_dice():
         f"decide har fått nya parametrar: {params}. Om tärningarna läggs till "
         "bryts regeln att skicka vidare sker utan att syna."
     )
+
+
+class ScriptedSeen:
+    """Svarar på slagets val: titta på tärningarna (seen) eller avstå."""
+
+    def __init__(self, seen: bool):
+        self.seen = seen
+
+    def complete(self, system, user, *, json_mode=False):
+        if "SLAG – TITTA ELLER INTE TITTA" in user:
+            return '{"seen": %s, "reasoning": "test"}' % (
+                "true" if self.seen else "false"
+            )
+        return '{"bid": 52, "reasoning": "test"}'
+
+
+def test_shake_offers_the_player_a_look():
+    """Reglerna låter spelaren lyfta på locket på sitt eget slag.
+
+    Att titta är det normala, och att avstå är ett eget val. Frågan ska därför
+    ställas, och prompten ska säga att titten är tillåten.
+    """
+    role = Role(key="test", name="Test", description="t", style="t")
+    agent = MeierPlayerAgent(role, llm=ScriptedSeen(True))
+
+    announcement = agent.announce_shake((5, 2), previous_bid=44)
+
+    assert announcement.unseen is False, "spelaren valde att titta"
+    assert announcement.choice_line == "Jag tittar på tärningarna."
+    # Tärningarna 52 får styra påståendet, eftersom spelaren såg dem.
+    assert announcement.shown == 52
+    assert rules.compare(announcement.bid, 44) > 0, "påståendet måste vara högre än det förra"
+
+
+def test_shake_can_choose_not_to_look():
+    """Utan att titta är ett val, inte ett tvång. Det ska fortfarande gå."""
+    role = Role(key="test", name="Test", description="t", style="t")
+    agent = MeierPlayerAgent(role, llm=ScriptedSeen(False))
+
+    announcement = agent.announce_shake((5, 2), previous_bid=44)
+
+    assert announcement.unseen is True
+    assert announcement.choice_line == "Jag påstår utan att titta."
+    assert rules.compare(announcement.bid, 44) > 0
+
+
+def test_shake_prompt_says_the_look_is_allowed():
+    """Prompten får aldrig påstå att locket måste ligga kvar vid ett slag."""
+    role = Role(key="test", name="Test", description="t", style="t")
+    agent = MeierPlayerAgent(role, llm=ScriptedSeen(True))
+    prompt = agent._shake_choice_context(44)
+
+    assert "får lyfta på det" in prompt
+    assert "Titta: du ser tärningarna" in prompt
+    assert "får inte" not in prompt.lower(), "prompten får inte förbjuda titten"

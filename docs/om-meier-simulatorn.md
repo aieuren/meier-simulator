@@ -222,8 +222,8 @@ påståendet. Att höja långt ökar alltså risken att åka dit.
 
 När spelaren i stället slår finns ingen sann nivå att lägga sig strax över,
 och kalkylen är en annan: ett lågt påstående är svårt för nästa spelare att slå
-över, ett högt sätter press men synas oftare. Spelaren slår utan att titta på
-tärningarna.
+över, ett högt sätter press men synas oftare. Spelaren får titta på sina nya
+tärningar innan den påstår. Väljer den bort titten vet den inget om utfallet.
 
 Vem väger det ena mot det andra? Modellen. Koden räknar bara upp vilka
 påståenden som är lagliga i läget, och modellen väljer bland dem. Den får
@@ -317,7 +317,7 @@ Han hamnar i fyra olika situationer, och de skiljer sig åt i vad han vet:
 |---|---|---|
 | 1. Rundans första påstående | ja | säger tärningarnas värde, eller ett steg högre om tärningarna är svaga |
 | 2. Någon annan har påstått | nej | väljer mellan att syna, skicka vidare eller slå |
-| 3. Han slår, alltså skakar bägaren utan att titta | nej | säger den minsta lagliga höjningen |
+| 3. Han slår, alltså skakar bägaren på nytt | ja | tittar, och säger sedan det han ser om det räcker, annars minsta lagliga höjning |
 | 4. Bägaren har gått ett varv, så han måste höja | nya tärningar | väljer först, tittar sedan |
 
 Två ord i tabellen behöver en förklaring.
@@ -374,11 +374,16 @@ aldrig, eftersom bara Meier är högre — där slår han i stället. Inte helle
 62 synar han, trots att de ligger högt: att bära dem är billigare än att syna
 dem.
 
-**När han slår.** Han skakar utan att titta på tärningarna. Då är den minsta
-lagliga höjningen säkrast, eftersom den har minst chans att tärningarna visar
-lägre. Han säger alltid nästa steg i rangordningen: 31 blir 32, 32 blir 41, och
-så vidare uppåt. Över 66 säger han 55, för alla dubbletter ligger över de
-blandade paren. Det ser bakvänt ut men är rätt.
+**När han slår.** Han skakar bägaren på nytt och lyfter på locket. Tärningarna
+är nya och ingen har påstått något om dem, så det finns inget att dölja. Han
+säger det han ser om det räcker över det förra påståendet. Räcker det inte säger
+han nästa steg i rangordningen: 31 blir 32, 32 blir 41, och så vidare uppåt.
+Över 66 säger han 55, för alla dubbletter ligger över de blandade paren. Det ser
+bakvänt ut men är rätt.
+
+Att avstå från att titta är ett eget val, och Axel gör det aldrig. Det är
+fintaktik som hör till profiler med hög oförutsägbarhet, inte till
+grundtaktiken.
 
 **När bägaren gått ett varv.** Tärningarna slås om och han måste höja. Han
 väljer först och tittar sedan. Nio gånger av tio tittar han på tärningarna.
@@ -386,10 +391,10 @@ Annars påstår han utan att titta, för att inte gå att läsa. Står budet red
 Meier finns inget högre: då slår han om bägaren och börjar en ny runda, och
 valet faller bort.
 
-**Oförutsägbarheten.** Axel har en liten dos oförutsägbarhet, och den gör tre
+**Oförutsägbarheten.** Axel har en liten dos oförutsägbarhet, och den gör två
 saker: han tar ibland den säkra vägen även när en bluff räknas som marginellt
-bättre, han hoppar ibland längre än minsta höjning när han slår, och han påstår
-ibland utan att titta vid tvingad höjning. Bruset är medvetet litet. Det ska göra honom
+bättre, och han påstår ibland utan att titta vid tvingad höjning. Vid ett eget
+slag tittar han alltid. Bruset är medvetet litet. Det ska göra honom
 svår att läsa, inte sämre. Skruvar man ner det till noll blir han helt mekanisk
 och tabellerna ovan gäller exakt.
 

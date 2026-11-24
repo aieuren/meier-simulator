@@ -71,9 +71,18 @@ slut på något annat sätt (se undantaget om Meier nedan).
 
 2. Nästa spelare väljer ett av tre:
 
-   - Slå – skakar utan att titta på förra slaget och säger ett högre resultat.
-     Den som slår måste alltid säga ett högre påstående än det förra, vad
-     tärningarna än visar.
+   - Slå – skakar bägaren på nytt och säger ett högre resultat. Den som slår
+     **får lyfta på locket och titta på sina egna tärningar** innan den påstår,
+     och det är det vanliga. Den måste ändå alltid säga ett högre påstående än
+     det förra, vad tärningarna än visar.
+
+     Det som skiljer slaget från att titta i smyg vid rundans start är bara
+     ordningen: här slås tärningarna om mitt i rundan, och kravet att höja gäller
+     oavsett utfall.
+
+     Att **avstå** från att titta är ett eget val. Det hör till fintaktiken, inte
+     till grundtaktiken, och reglerna tillåter det. Se avsnittet om utan att titta
+     längre ner.
    - Syna – lyfter locket.
      - Visar tärningarna lägre än det sagda: föregående spelare (den som
        ansvarar för påståendet) förlorar ett liv.
@@ -105,13 +114,29 @@ spelaren höja.
 - Är påståendet Meier: det går inte att höja. Spelaren slår i stället om och
   börjar en ny runda. Ingen förlorar liv.
 
+## Utan att titta
+
+Den som slår får alltid lyfta på locket och se sina egna tärningar. Att avstå är
+ett **eget val**, och det är fintaktik. Det ger ingen information, men det ger
+något annat: påståendet blir omöjligt att läsa.
+
+Varför det kan vara värt något: en syn går hem även när tärningarna visar **mer**
+än påståendet. Den som påstår 52 utan att titta vinner synen om tärningarna visar
+52, 53, 54 och så vidare uppåt. Risken är alltså mindre än den ser ut.
+
+Samma val finns när bägaren gått ett helt varv tillbaka och hållaren måste höja.
+
 ## Ett förtydligande som PDF:en bara antyder
 
 PDF:en säger att "skicka vidare" sker "utan att slå". Den säger inte ordagrant att
-spelaren inte ser tärningarna. Men alternativet vore orimligt: att lyfta på
-locket är att syna. Kunde man titta och sedan skicka vidare skulle "skicka
+spelaren inte ser tärningarna. Men alternativet vore orimligt: att lyfta på locket
+är att syna. Kunde man titta och sedan skicka vidare skulle "skicka
 vidare" vara en gratis syn, och syna-alternativet vore meningslöst. Därför ser
 den som skickar vidare inte tärningarna, utan vet bara vad påståendet säger.
+
+Skilj det från att **slå**. Där skakar spelaren bägaren själv och får lyfta på
+locket, eftersom tärningarna är nya och ingen har påstått något om dem än. Det är
+bara när spelaren väljer att avstå som locket ligger kvar.
 
 ## Några tolkningar för denna simulator
 

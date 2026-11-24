@@ -186,12 +186,22 @@ class Game:
                 # Bägaren går till föregående spelare, som slår och börjar ny runda.
                 return self._previous_active(loser)
 
-            if decision.action == "slå" and decision.bid is not None:
-                # Att slå är att skaka bägaren på nytt: nya tärningar gäller,
-                # så en senare syn döms mot det nya slaget.
+            if decision.action == "slå":
+                # Att slå är att skaka bägaren på nytt. Spelaren får lyfta på
+                # locket och titta innan den påstår; att avstå är ett eget val.
                 dice = self.roll()
                 shown = rules.read_dice(*dice)
-                bid = decision.bid
+                responder = order[(order.index(idx) + 1) % len(order)]
+                ann = player.agent.announce_shake(
+                    dice, previous_bid=bid, opponent=self.players[responder].name
+                )
+                unseen_note = " (utan att titta)" if ann.unseen else ""
+                why = f" [{ann.choice_reasoning}]" if ann.choice_reasoning else ""
+                self._record(
+                    f"  {player.name} slår om ({rules.name(shown)}) och säger "
+                    f"{rules.name(ann.bid)}{unseen_note} ({ann.line}).{why}"
+                )
+                bid = ann.bid
                 bidder = idx
                 holder = idx
             elif decision.action == "skicka":

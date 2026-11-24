@@ -33,10 +33,11 @@ class ScriptedLLM:
     ``actions`` används i tur och ordning för beslut mot ett påstående.
     """
 
-    def __init__(self, bids=None, actions=None, unseen=False):
+    def __init__(self, bids=None, actions=None, unseen=False, seen=True):
         self.bids = list(bids or [])
         self.actions = list(actions or [])
         self.unseen = unseen
+        self.seen = seen
         self._bid_i = 0
         self._act_i = 0
 
@@ -49,13 +50,20 @@ class ScriptedLLM:
 
     def complete(self, system, user, *, json_mode=False):
         # Tvingad höjning: spelaren väljer att titta eller bjuda utan att titta.
-        if "TITTA ELLER INTE TITTA" in user:
+        if "helt varv" in user and "TITTA ELLER INTE TITTA" in user:
             return (
                 '{"unseen": %s, "line": "Jag höjer.", "reasoning": "test"}'
                 % ("true" if self.unseen else "false")
             )
 
-        # Slag (bägaren skakas på nytt) eller vanligt påstående.
+        # Slag: spelaren väljer först om den vill titta på sina egna tärningar.
+        if "SLAG – TITTA ELLER INTE TITTA" in user:
+            return (
+                '{"seen": %s, "reasoning": "test"}'
+                % ("true" if self.seen else "false")
+            )
+
+        # Påstående (efter titt) eller slag utan att titta.
         if "MÅSTE säga" in user or "utan att titta" in user:
             bid = self._next_bid(52)
             return '{"bid": %s, "line": "Jag höjer.", "reasoning": "test"}' % bid
@@ -318,14 +326,40 @@ def test_slag_logs_fresh_roll_before_action():
     kinds = [row["kind"] for row in session.to_dict()["log"]]
     assert kinds == ["roll", "action", "roll", "action"]
     assert entry.action == "slå"
-    assert entry.unseen is True
+    # Att titta är det normala vid ett slag: spelaren ser sina nya tärningar.
+    assert entry.unseen is False
+    assert entry.choice_line == "Jag tittar på tärningarna."
 
 
-def test_unseen_slag_is_not_counted_as_bluff():
-    # Ett slag utan att titta ("slå") är inget medvetet löfte: spelaren såg inte
-    # tärningarna. Det ska räknas som "unseen", inte som bluff eller sanning.
+def test_slag_after_a_look_is_a_truth_or_bluff_claim():
+    # Den som tittar på sitt eget slag gör ett medvetet påstående: det räknas
+    # som sanning eller bluff, precis som ett vanligt påstående.
     players = [
-        make_player(k, ScriptedLLM(bids=[44], actions=["slå"])) for k in ("a", "b")
+        make_player(k, ScriptedLLM(bids=[44, 31], actions=["slå"])) for k in ("a", "b")
+    ]
+    session = Session.new(players)
+    session.advance()  # påstående 44
+    entry = session.advance()  # nästa spelare slår och tittar
+
+    assert entry.action == "slå"
+    assert entry.unseen is False
+    # Spelaren såg tärningarna, så påståendet är ett medvetet löfte: antingen
+    # sant eller en bluff, aldrig "unseen".
+    assert entry.to_dict()["lie"] is (not entry.truth)
+
+    stats = match._player_stats(session.log, [p.name for p in players])
+    slagger = stats[entry.player_name]
+    assert slagger["unseen"] == 0
+    assert slagger["truths"] + slagger["bluffs"] == 1
+
+
+def test_unseen_slag_is_still_possible_and_not_counted_as_bluff():
+    # Fintaktiken finns kvar: spelaren kan välja bort titten. Då såg den inte
+    # tärningarna, och påståendet är inget medvetet löfte. Det räknas som
+    # "unseen", inte som bluff eller sanning.
+    players = [
+        make_player(k, ScriptedLLM(bids=[44], actions=["slå"], seen=False))
+        for k in ("a", "b")
     ]
     session = Session.new(players)
     session.advance()  # påstående 44 (spelaren tittade)
@@ -342,22 +376,25 @@ def test_unseen_slag_is_not_counted_as_bluff():
 
 
 def test_unseen_flag_is_serialized():
+    # Den som väljer bort titten får flaggan i protokollet.
     players = [
-        make_player(k, ScriptedLLM(bids=[44], actions=["slå"])) for k in ("a", "b")
+        make_player(k, ScriptedLLM(bids=[44], actions=["slå"], seen=False))
+        for k in ("a", "b")
     ]
     session = Session.new(players)
     session.advance()
-    entry = session.advance()
+    session.advance()
 
     row = next(r for r in session.to_dict()["log"] if r["action"] == "slå")
     assert row["unseen"] is True
 
 
 def test_illegal_slag_is_corrected_to_smallest_legal_raise():
-    # ScriptedLLM föreslår 66 när den slår, men 66 är lägre än påståendet 44.
-    # Påståendet som står rättas till minsta lagliga höjning.
+    # Utan att titta får spelaren ingen hjälp av tärningarna. Föreslår modellen
+    # 66 när påståendet är 44 är budet för lågt; det rättas till minsta lagliga höjning.
     players = [
-        make_player(k, ScriptedLLM(bids=[44], actions=["slå"])) for k in ("a", "b")
+        make_player(k, ScriptedLLM(bids=[44, 66], actions=["slå"], seen=False))
+        for k in ("a", "b")
     ]
     session = Session.new(players)
     session.advance()  # påstående 44

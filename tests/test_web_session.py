@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
+from meier import rules
 from meier.agents.base import Role
 from meier.agents.player import MeierPlayerAgent
 from meier.web import app as web_app
@@ -40,3 +41,80 @@ def test_session_end_without_session_is_404(monkeypatch):
     client = _client(monkeypatch)
     res = client.post("/api/session/end")
     assert res.status_code == 404
+
+
+def test_announce_endpoint_shakes_when_a_previous_bid_is_given(monkeypatch):
+    """"Avancerat"-panelen är ett slag, inte ett första påstående.
+
+    Ett tidigare påstående ska gå via ``announce_shake`` så att spelaren får
+    välja att titta. Annars hoppas titt-valet över i webbappen.
+    """
+    calls = []
+
+    class SpyAgent(MeierPlayerAgent):
+        def announce(self, dice, **kw):
+            calls.append("announce")
+            return super().announce(dice, **kw)
+
+        def announce_shake(self, dice, **kw):
+            calls.append("announce_shake")
+            return super().announce_shake(dice, **kw)
+
+    role = Role(key="k", name="K", description="test", style="spela")
+    agent = SpyAgent(role=role, llm=ScriptedLLM(bids=[11, 21], seen=True))
+    web_app._session = None
+    monkeypatch.setattr(web_app, "_get_agent", lambda key: agent)
+
+    client = TestClient(web_app.app)
+
+    first = client.post("/api/announce", json={"die1": 5, "die2": 2, "role": "cecilia"})
+    assert first.status_code == 200
+    assert calls == ["announce"]
+
+    calls.clear()
+    shaken = client.post(
+        "/api/announce",
+        json={"die1": 5, "die2": 2, "role": "cecilia", "previous_bid": 44},
+    )
+    assert shaken.status_code == 200
+    assert calls[0] == "announce_shake", (
+        "slag efter påstående måste gå via announce_shake"
+    )
+    body = shaken.json()["announcement"]
+    assert body["unseen"] is False, "standard är att spelaren tittar"
+
+
+def test_announce_endpoint_marks_the_unseen_choice(monkeypatch):
+    """Väljer spelaren bort titten ska svaret säga det."""
+    role = Role(key="k", name="K", description="test", style="spela")
+    agent = MeierPlayerAgent(role=role, llm=ScriptedLLM(bids=[11, 21], seen=False))
+    web_app._session = None
+    monkeypatch.setattr(web_app, "_get_agent", lambda key: agent)
+    client = TestClient(web_app.app)
+
+    res = client.post(
+        "/api/announce", json={"die1": 5, "die2": 2, "role": "cecilia", "previous_bid": 44}
+    )
+    assert res.status_code == 200
+    body = res.json()["announcement"]
+    assert body["unseen"] is True
+    assert body["choice_line"] == "Jag påstår utan att titta."
+    assert rules.is_higher(body["bid"], 44)
+
+
+def test_announce_rejects_raising_over_meier(monkeypatch):
+    """21 – Meier går inte att höja. API:t ska säga det, inte krascha.
+
+    Reglerna låter hållaren slå om och börja en ny runda i stället.
+    """
+    role = Role(key="k", name="K", description="test", style="spela")
+    agent = MeierPlayerAgent(role=role, llm=ScriptedLLM(bids=[11], seen=True))
+    web_app._session = None
+    monkeypatch.setattr(web_app, "_get_agent", lambda key: agent)
+    client = TestClient(web_app.app)
+
+    res = client.post(
+        "/api/announce", json={"die1": 5, "die2": 2, "role": "cecilia", "previous_bid": 21}
+    )
+    assert res.status_code == 400
+    assert "Meier" in res.json()["detail"]

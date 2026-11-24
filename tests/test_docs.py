@@ -539,7 +539,7 @@ def test_om_meier_does_not_claim_raises_are_always_one_step():
     ):
         assert claim not in flat, (
             f"Om meier-simulatorn påstår {claim!r}. Minsta höjning gäller bluffen över sedda "
-            "tärningar; höjning utan att titta styrs av unpredictability."
+            "tärningar; den som valt bort titten styr höjningen med unpredictability."
         )
 
 
@@ -670,3 +670,45 @@ def test_axel_section_margin_near_the_opening_breakpoint():
         "Påståendet att 43 är ett gränsfall kräver en liten positiv marginal, "
         f"men koden ger {bluff - truth:+.3f} liv."
     )
+
+
+def test_docs_say_the_shaker_may_always_look():
+    """Reglerna låter spelaren lyfta på locket på sitt eget slag.
+
+    Det får inte finnas en enda mening i dokumentationen som säger att den som
+    slår är förbjuden att titta. Att avstå är ett eget val och ska beskrivas som
+    fintaktik, inte som ett tvång.
+    """
+    from meier.agents.player import MeierPlayerAgent
+
+    for path in (REGLER, OM_MEIER, AGENT_MODEL, README):
+        flat = _flat(path.read_text(encoding="utf-8"))
+        for forbud in (
+            "får inte lyfta på locket",
+            "får inte titta",
+            "måste inte titta",
+        ):
+            assert forbud not in flat, f"{path.name} förbjuder titten: {forbud!r}"
+
+    regler = _flat(REGLER.read_text(encoding="utf-8"))
+    assert "får lyfta på locket och titta på sina egna tärningar" in regler
+    assert "eget val" in regler
+
+    # Prompten för själva slaget ska erbjuda titten.
+    agent = MeierPlayerAgent.__new__(MeierPlayerAgent)
+    shake = MeierPlayerAgent._shake_choice_context(agent, 44)
+    assert "får lyfta på det" in shake
+    assert "Valet är ditt" in shake
+
+
+def test_unseen_prompt_says_the_choice_is_already_made():
+    """Utan att titta ska prompten säga att spelaren redan valt bort titten.
+
+    Annars läser modellen de två situationerna som samma och tror att den kan
+    titta även när den redan avstått.
+    """
+    from meier.agents.player import MeierPlayerAgent
+
+    unseen = MeierPlayerAgent._unseen_announce_context(None, 44, [51, 52, 53])
+    assert "har valt att inte lyfta på locket" in unseen
+    assert "Du har redan valt bort titten" in unseen

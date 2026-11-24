@@ -37,15 +37,20 @@ async function boot() {
     list.appendChild(div);
   });
 
-  // Tidigare påstående + motståndarens påstående
+  // Tidigare påstående + motståndarens påstående. Meier går inte att höja,
+  // så det erbjuds inte som tidigare påstående.
   for (const v of data.ranking) {
+    if (v.value === 21) continue;  // Meier
     const o1 = document.createElement("option");
     o1.value = v.value;
     o1.textContent = v.name;
     $("previousBid").appendChild(o1);
-
-    const o2 = o1.cloneNode(true);
-    $("oppBid").appendChild(o2);
+  }
+  for (const v of data.ranking) {
+    const o = document.createElement("option");
+    o.value = v.value;
+    o.textContent = v.name;
+    $("oppBid").appendChild(o);
   }
 
   // Poängordning
@@ -199,11 +204,19 @@ function renderAnnounce(data) {
 
   const facts = $("facts");
   facts.innerHTML = "";
-  const rows = [
-    ["Tärningarna visar", data.shown_name],
-    ["Spelaren säger", a.bid_name],
-    ["Lögn?", a.lie ? "Ja" : "Nej"],
-  ];
+  if (data.previous_bid) {
+    v.className = "verdict " + (a.unseen ? "lie" : "truth");
+    v.textContent = a.unseen
+      ? "Slag utan att titta"
+      : "Slag med titt";
+  }
+
+  const rows = [["Tärningarna visar", data.shown_name]];
+  if (data.previous_bid) {
+    rows.push(["Spelaren valde", a.unseen ? "att inte titta" : "att titta"]);
+  }
+  rows.push(["Spelaren säger", a.bid_name]);
+  if (!a.unseen) rows.push(["Lögn?", a.lie ? "Ja" : "Nej"]);
   if (data.previous_bid) rows.push(["Tidigare påstående", data.previous_bid]);
   rows.forEach(([k, val]) => {
     const dt = document.createElement("dt");
@@ -213,7 +226,8 @@ function renderAnnounce(data) {
     facts.append(dt, dd);
   });
 
-  $("reasoning").textContent = a.reasoning ? "Motivering: " + a.reasoning : "";
+  const why = [a.choice_reasoning, a.reasoning].filter(Boolean).join(" ");
+  $("reasoning").textContent = why ? "Motivering: " + why : "";
 }
 
 async function doDecide() {
