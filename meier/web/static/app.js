@@ -646,15 +646,15 @@ function renderLog(entries, result) {
     } else {
       main = `<span class="log-action">Säger</span> <strong>${textOr(e.bid_name, "?")}</strong>`;
     }
-    // Etiketten "sant/bluff" gäller bara påståenden där spelaren tittat på sina tärningar.
-    // Ett påstående utan att titta ("slå") kan inte vara en bluff – spelaren såg dem inte.
+    // "sant/bluff" gäller bara påståenden där spelaren tittat. Har spelaren valt
+    // bort titten går det inte att döma påståendet mot tärningarna.
     const showsTruth =
       (e.action === "bud" || e.action === "höja") && !e.unseen;
     const truthTag = showsTruth
       ? `<span class="log-bid ${e.lie ? "lie" : "truth"}">${e.lie ? "bluff" : "sant"}</span>`
       : "";
     const unseenTag = e.unseen
-      ? `<span class="log-unseen">påstående utan att titta – spelaren såg inte sina tärningar</span>`
+      ? `<span class="log-unseen">påstod utan att titta – spelaren valde bort titten</span>`
       : "";
     // Vid tvingad höjning valde spelaren att titta eller påstå utan att titta; visa varför.
     const choiceTag = e.choice_reasoning
