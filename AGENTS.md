@@ -85,6 +85,11 @@ lower bid). Multiple agents with distinct roles can also play full games.
   `check_in` set, each finished match is committed and pushed to the log repo
   (see below); the outcome lands in the status field `push_status`. A push
   failure never fails the run.
+  `/api/announce` takes `previous_bid`. With no previous bid the player has
+  peeked and simply announces. With a previous bid the call is a *slag* and
+  goes through `announce_shake`, so the look choice is not skipped. 21 –
+  Meier cannot be raised: that request returns 400, and Meier is left out of
+  the "tidigare påstående" list in the UI.
 - `meier/match.py` – batch play of many full matches between the roles, for
   strategy analysis. `play_match` plays one match to the end via
   `Session.play_to_end()` and returns a `GameRecord`; `run_matches` yields a
