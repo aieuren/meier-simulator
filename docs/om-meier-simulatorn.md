@@ -316,32 +316,34 @@ En av rollerna, Axel, har ingen språkmodell. Hans drag räknas fram ur samma
 fasta regler varje gång, så hans spel går att lära sig. Resten av det här
 avsnittet beskriver de reglerna. 
 
-Axel är simulatorns referens: han visar vad en enkel och oföränderlig taktik klarar av. dessutom fungerar den som referens taktik, att mäta andra taktiker mot.
+Axel är simulatorns referens: han visar vad en enkel och oföränderlig taktik
+klarar av. Han fungerar också som måttstock när andra taktiker jämförs.
 
-Reglerna är vår konstruktion, inte en upptäckt om Meier. Vi satte ihop den ur två
-tankar: räkna i liv, och tro samma sak om bordet varje gång. Att den sedan
-spelar hyfsat säger något om spelet. Att den inte bluffar brtor bara på att vi
-byggde den så.
+Reglerna är vår konstruktion, inte en upptäckt om Meier. Vi satte ihop dem ur
+två tankar: räkna i liv, och tro samma sak om bordet varje gång. Att de sedan
+spelar hyfsat säger något om spelet. Att de inte bluffar beror bara på att vi
+byggde dem så.
 
-Han räknar i liv, inte i vunna rundor: att vinna
-en runda är inget värt i sig. Och han har en statistisk syn på bordet - hur
-ofta en syn brukar lyckas på en viss nivå. Han lär sig inget om övriga spelare eller deras speltyper.
+Han räknar i liv, inte i vunna rundor: att vinna en runda är inget värt i sig.
+Och han har en statistisk syn på bordet – hur ofta en syn brukar lyckas på en
+viss nivå. Han lär sig inget om övriga spelare eller deras speltyper.
 
-Tabellerna nedan gäller när hans oförutsägbarhet är noll. Den siffran är dock 0,2 i
-simulatorn, så i en riktig match tar han ibland ett annat, nästan lika bra drag.
-Det är avsiktligt: en motståndare ska inte kunna läsa honom helt.
+Tabellerna nedan gäller när hans oförutsägbarhet är noll. I simulatorn är den
+0,2, så i en riktig match tar han ibland ett annat, nästan lika bra drag. Det är
+avsiktligt: en motståndare ska inte kunna läsa honom helt.
 
 #### Runda för runda: så sitter han vid bordet
 
-**När det är hans tur att öppna rundan** slår han tärningarna, tittar i bägaren och säger vad
-tärningarna visar. Visar de 43 säger han 43. Han ljuger inte frivilligt.
+**När det är hans tur att öppna rundan** slår han tärningarna, tittar i bägaren
+och säger vad tärningarna visar. Visar de 43 säger han 43. Han ljuger inte
+frivilligt.
 
 | Tärningarna visar | Han säger |
 |---|---|
 | vilket värde som helst | samma värde |
 
-**När någon annan har påstått vad tärningarna visar** väger han
-tre svar mot varandra och tar det som är värt mest i liv:
+**När någon annan har påstått** har han inte sett tärningarna. Då väger han tre
+svar mot varandra och tar det som är värt mest i liv:
 
 | Påståendet han får | Han gör |
 |---|---|
@@ -349,17 +351,21 @@ tre svar mot varandra och tar det som är värt mest i liv:
 | 63, 62, 61, 54, 53, 52, 51, 43, 42 | **skicka vidare** |
 | 41, 32, 31 | **slå** |
 
-Han synar de låga påståendena eftersom nästan varje slag ligger **under** dem.
+Han synar helst de låga påståendena, för nästan varje slag ligger **under**
+dem.
 
 Säger någon 11 vinner synen i 96 fall av 100. Säger någon 22 vinner synen i 94.
-Vid 64 vinner synen fortfarande i 65 fall av 100. Vid 63 vinner den i 58. Chansen att syna framgångsrikt blir bättre och bättre ju högre påståendet som sägs om tärningarna, det det blir allt mer osannolikt att det värdet faktiskt slagits.
+Vid 64 vinner synen fortfarande i 65 fall av 100. Vid 63 vinner den i 58.
+Chansen faller alltså ju närmare Meier påståendet ligger, för då är det allt
+mindre sannolikt att tärningarna når upp till det.
 
 Men sannolikheten att vinna är inte hela kalkylen. Han räknar i liv, och en
 syn som slår fel kan kosta mer än ett liv: visar tärningarna Meier kostar den
-två. Han synar bara när synen är
-värd mer i liv än att låta påståendet stå kvar.
+två. Han synar bara när synen är värd mer i liv än att låta påståendet stå
+kvar.
 
-Gränsen hamnar vid 63. Dår är ungefär lika sannolikt att ha fått ett lägre kast som ett högre.
+Gränsen hamnar vid 63. Där skiljer det bara en halv tusendels liv mellan de två
+vägarna, så 63 är i praktiken ett myntkast för honom.
 
 **När han slår** skakar han bägaren på nytt och lyfter på locket. Räcker det han
 ser över det förra påståendet säger han det. Räcker det inte säger han nästa
@@ -368,8 +374,9 @@ steg i ordningen.
 När bägaren gått ett helt varv tillbaka till honom måste han höja, och då slås
 tärningarna om. Då finns ett val: titta på de nya tärningarna, eller påstå utan
 att titta. Han väljer slumpmässigt, och sannolikheten för att han avstår från
-titten är hans oförutsägbarhet. I Axels fall med faktor 0,2 blir det ett fall av
-tio. Avstår han från titten måste han alltså säga ett högre påstående utan att veta vad tärningarna visar.
+titten är hans oförutsägbarhet delad med två. Med Axels 0,2 blir det ett fall av
+tio. Avstår han från titten måste han säga ett högre påstående utan att veta vad
+tärningarna visar.
 
 #### Ett exempelparti
 
