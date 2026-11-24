@@ -36,21 +36,21 @@ def make_agent(payload, role="kalkyl"):
     return MeierPlayerAgent(role=_role(role), llm=FakeLLM(payload))
 
 
-def test_announce_parses_valid_bid():
-    agent = make_agent({"bid": 52, "reasoning": "lagom"})
+def test_announce_parses_valid_claim():
+    agent = make_agent({"claim": 52, "reasoning": "lagom"})
     ann = agent.announce((2, 5))
     assert ann.shown == 52
-    assert ann.bid == 52
+    assert ann.claim == 52
     assert ann.truth is True
     assert ann.line == "Jag säger 52."
 
 
 def test_announce_ignores_line_from_model():
     """Modellen ska bara ta fram påståendet, inte formulera repliken."""
-    agent = make_agent({"bid": 52, "line": "MITT EGET BUD", "reasoning": "lagom"})
+    agent = make_agent({"claim": 52, "line": "MITT EGET PÅSTÅENDE", "reasoning": "lagom"})
     ann = agent.announce((2, 5))
     assert ann.line == "Jag säger 52."
-    assert "MITT EGET BUD" not in ann.line
+    assert "MITT EGET PÅSTÅENDE" not in ann.line
 
 
 def test_prompts_do_not_ask_for_line():
@@ -66,51 +66,51 @@ def test_prompts_do_not_ask_for_line():
 
 
 def test_announce_detects_lie():
-    agent = make_agent({"bid": 65, "line": "65!", "reasoning": "bluffar"})
+    agent = make_agent({"claim": 65, "line": "65!", "reasoning": "bluffar"})
     ann = agent.announce((2, 5))
     assert ann.shown == 52
-    assert ann.bid == 65
+    assert ann.claim == 65
     assert ann.truth is False
 
 
-def test_lower_bid_under_the_dice_counts_as_true():
+def test_lower_claim_under_the_dice_counts_as_true():
     """Ett påstående under tärningarna är sant, inte en bluff.
 
     Reglerna: visar tärningarna minst påståendet förlorar synaren. Att säga 31 när
     man har 52 är alltså sant, bara svagare. Koden krävde förut exakt likhet och
     märkte det som bluff, vilket blåste upp bluffstatistiken.
     """
-    agent = make_agent({"bid": 31, "reasoning": "svag sanning"})
+    agent = make_agent({"claim": 31, "reasoning": "svag sanning"})
     ann = agent.announce((2, 5))
     assert ann.shown == 52
-    assert ann.bid == 31
+    assert ann.claim == 31
     assert ann.truth is True
     assert ann.to_dict()["lie"] is False
 
 
-def test_announce_falls_back_to_truth_on_invalid_bid():
-    agent = make_agent({"bid": "trams", "line": "?", "reasoning": ""})
+def test_announce_falls_back_to_truth_on_invalid_claim():
+    agent = make_agent({"claim": "trams", "line": "?", "reasoning": ""})
     ann = agent.announce((3, 4))
-    assert ann.bid == ann.shown == 43
+    assert ann.claim == ann.shown == 43
 
 
-def test_announce_forces_higher_bid_when_required():
+def test_announce_forces_higher_claim_when_required():
     # Modellen föreslår ett för lågt påstående trots att den måste höja.
     from meier import rules
 
-    agent = make_agent({"bid": 41, "line": "41", "reasoning": ""})
-    ann = agent.announce((2, 1), previous_bid=52)  # tärningarna visar 21 (Meier)
-    assert rules.is_higher(ann.bid, 52)
+    agent = make_agent({"claim": 41, "line": "41", "reasoning": ""})
+    ann = agent.announce((2, 1), previous_claim=52)  # tärningarna visar 21 (Meier)
+    assert rules.is_higher(ann.claim, 52)
 
 
-def test_announce_accepts_string_bid():
-    agent = make_agent({"bid": "63", "line": "", "reasoning": ""})
+def test_announce_accepts_string_claim():
+    agent = make_agent({"claim": "63", "line": "", "reasoning": ""})
     ann = agent.announce((3, 6))
-    assert ann.bid == 63
+    assert ann.claim == 63
 
 
 def test_system_prompt_contains_rules():
-    agent = make_agent({"bid": 11})
+    agent = make_agent({"claim": 11})
     prompt = agent.system_prompt()
     assert "Meier" in prompt
     assert "21" in prompt
@@ -124,39 +124,39 @@ def test_decide_parses_actions():
         ("skicka", "skicka"),
         ("Syna!", "syna"),
     ]:
-        agent = make_agent({"action": raw, "bid": 65, "line": "", "reasoning": ""})
+        agent = make_agent({"action": raw, "claim": 65, "line": "", "reasoning": ""})
         decision = agent.decide(52)
         assert decision.action == expected
 
 
-def test_decide_raise_gets_higher_bid():
-    agent = make_agent({"action": "slå", "bid": 65, "line": "höjer", "reasoning": ""})
+def test_decide_raise_gets_higher_claim():
+    agent = make_agent({"action": "slå", "claim": 65, "line": "höjer", "reasoning": ""})
     decision = agent.decide(52)
     assert decision.action == "slå"
-    assert decision.bid == 65
+    assert decision.claim == 65
 
 
-def test_decide_raise_with_invalid_bid_picks_higher():
-    agent = make_agent({"action": "slå", "bid": 11, "line": "", "reasoning": ""})
+def test_decide_raise_with_invalid_claim_picks_higher():
+    agent = make_agent({"action": "slå", "claim": 11, "line": "", "reasoning": ""})
     decision = agent.decide(52)  # måste höja över 52
     from meier import rules
 
-    assert decision.bid is not None
-    assert rules.is_higher(decision.bid, 52)
+    assert decision.claim is not None
+    assert rules.is_higher(decision.claim, 52)
 
 
 def test_decide_unknown_action_defaults_to_skicka():
-    agent = make_agent({"action": "???", "bid": None, "line": "", "reasoning": ""})
+    agent = make_agent({"action": "???", "claim": None, "line": "", "reasoning": ""})
     decision = agent.decide(43)
     assert decision.action == "skicka"
 
 
 def test_decide_cannot_raise_over_meier():
     # Påståendet är Meier (högst) – går inte att slå, agenten får skicka vidare.
-    agent = make_agent({"action": "slå", "bid": 11, "line": "", "reasoning": ""})
+    agent = make_agent({"action": "slå", "claim": 11, "line": "", "reasoning": ""})
     decision = agent.decide(21)
     assert decision.action == "skicka"
-    assert decision.bid is None
+    assert decision.claim is None
 
 
 def test_roster_has_the_five_players():

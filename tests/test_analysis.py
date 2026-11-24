@@ -30,7 +30,7 @@ def test_parse_jsonl_skips_invalid_lines():
 def test_build_digest_has_expected_keys():
     digest = analysis.build_digest(_records(3))
     assert digest["games"] == 3
-    for key in ("roles", "actions", "bids", "outcomes", "call_outcomes"):
+    for key in ("roles", "actions", "claims", "outcomes", "call_outcomes"):
         assert key in digest
     assert isinstance(digest["games_series"], list)
 

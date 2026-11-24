@@ -10,26 +10,26 @@ de faktiska tärningarna för varje påstående, och bygger man profilen ur hela
 from meier.opponents import OpponentTracker
 
 
-def test_unseen_bids_are_not_promises():
+def test_unseen_claims_are_not_promises():
     tracker = OpponentTracker()
-    tracker.observe_bid("a", unseen=True)
+    tracker.observe_claim("a", unseen=True)
     # Ett påstående utan att titta är inget löfte: ingen profil skapas alls för det.
     assert "a" not in tracker.stats
-    tracker.observe_bid("a", unseen=False)
-    assert tracker.stats["a"].visible_bids == 1
+    tracker.observe_claim("a", unseen=False)
+    assert tracker.stats["a"].visible_claims == 1
 
 
 def test_bluff_estimate_defaults_to_global_before_any_reveal():
     tracker = OpponentTracker()
-    tracker.observe_bid("a", unseen=False)
+    tracker.observe_claim("a", unseen=False)
     assert tracker.bluff_estimate("a") == tracker.global_q
 
 
-def test_bluff_estimate_uses_only_revealed_bids():
+def test_bluff_estimate_uses_only_revealed_claims():
     tracker = OpponentTracker()
     # Fyra synliga påståenden, men bara ett avslöjat — och det var en bluff.
     for _ in range(4):
-        tracker.observe_bid("a", unseen=False)
+        tracker.observe_claim("a", unseen=False)
     tracker.reveal("a", was_bluff=True)
     # Ett avslöjat påstående som var en bluff höjer tron över förhandstron:
     # (1 + 4*DEFAULT_Q) / (1 + 4) > DEFAULT_Q för alla DEFAULT_Q > 0.
@@ -55,15 +55,15 @@ def test_bluff_ratio_tracks_a_serial_bluffer():
     assert tracker.bluff_ratio("a") > 1.0
 
 
-def test_effective_prior_keeps_the_bid_profile_at_reading_zero():
+def test_effective_prior_keeps_the_claim_profile_at_reading_zero():
     from meier.policy import CALL_PRIOR
 
     tracker = OpponentTracker()
     for _ in range(10):
         tracker.reveal("a", was_bluff=True)
     # reading = 0 ska ge exakt den frysta tabellen, oavsett motståndare.
-    for bid in CALL_PRIOR:
-        assert tracker.effective_prior(bid, "a", reading=0.0) == CALL_PRIOR[bid]
+    for claim in CALL_PRIOR:
+        assert tracker.effective_prior(claim, "a", reading=0.0) == CALL_PRIOR[claim]
 
 
 def test_effective_prior_scales_relative_not_absolute():

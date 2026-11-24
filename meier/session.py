@@ -53,15 +53,15 @@ class LogEntry:
     round: int
     dice: tuple[int, int]
     shown: int
-    action: str = "bud"  # "bud", "slå", "skicka", "syna", "höja", "liv", "slut"
+    action: str = "påstå"  # "påstå", "slå", "skicka", "syna", "höja", "liv", "slut"
     player: str | None = None  # rollens nyckel (endast action/life)
     player_name: str | None = None
-    bid: int | None = None  # sagt påstående (endast action)
+    claim: int | None = None  # sagt påstående (endast action)
     truth: bool = False
     line: str = ""
     reasoning: str = ""
-    previous_bid: int | None = None
-    accepted_bid: int | None = None  # påståendet spelaren svarar på (slå/skicka/syna)
+    previous_claim: int | None = None
+    accepted_claim: int | None = None  # påståendet spelaren svarar på (slå/skicka/syna)
     proposed: int | None = None  # rått påstående från modellen
     corrected: bool = False  # korrigerades påståendet?
     unseen: bool = False  # slog spelaren bägaren på nytt (fick inte lyfta locket)?
@@ -87,19 +87,19 @@ class LogEntry:
             "action": self.action,
             "player": self.player,
             "player_name": self.player_name,
-            "bid": self.bid,
-            "bid_name": rules.name(self.bid) if self.bid is not None else None,
+            "claim": self.claim,
+            "claim_name": rules.name(self.claim) if self.claim is not None else None,
             "truth": self.truth,
-            "lie": (not self.truth) if self.bid is not None else None,
+            "lie": (not self.truth) if self.claim is not None else None,
             "line": self.line,
             "reasoning": self.reasoning,
-            "previous_bid": self.previous_bid,
-            "previous_bid_name": rules.name(self.previous_bid)
-            if self.previous_bid is not None
+            "previous_claim": self.previous_claim,
+            "previous_claim_name": rules.name(self.previous_claim)
+            if self.previous_claim is not None
             else None,
-            "accepted_bid": self.accepted_bid,
-            "accepted_bid_name": rules.name(self.accepted_bid)
-            if self.accepted_bid is not None
+            "accepted_claim": self.accepted_claim,
+            "accepted_claim_name": rules.name(self.accepted_claim)
+            if self.accepted_claim is not None
             else None,
             "proposed": self.proposed,
             "corrected": self.corrected,
@@ -122,10 +122,10 @@ class LogEntry:
 class CallResult:
     """Utfallet av en syn."""
 
-    bid: int
+    claim: int
     shown: int
     caller: str
-    bidder: str  # den som satte påståendet
+    claimer: str  # den som satte påståendet
     holder: str  # den som är ansvarig för påståendet (kan ha skickat vidare)
     caller_loses: bool
     loser: str  # namn på den som förlorar liv
@@ -135,12 +135,12 @@ class CallResult:
 
     def to_dict(self) -> dict:
         return {
-            "bid": self.bid,
-            "bid_name": rules.name(self.bid),
+            "claim": self.claim,
+            "claim_name": rules.name(self.claim),
             "shown": self.shown,
             "shown_name": rules.name(self.shown),
             "caller": self.caller,
-            "bidder": self.bidder,
+            "claimer": self.claimer,
             "holder": self.holder,
             "caller_loses": self.caller_loses,
             "loser": self.loser,
@@ -170,19 +170,19 @@ class Session:
     # -- Steg som väntar på bekräftelse ------------------------------------
     step_kind: str = ""  # "roll", "action" eller "raise"
     pending_dice: tuple[int, int] | None = None  # det hemliga slaget (tärningar)
-    pending_bid: int | None = None  # aktuellt påstående
-    bidder: int = 0  # spelarindex för den som satte påståendet
+    pending_claim: int | None = None  # aktuellt påstående
+    claimer: int = 0  # spelarindex för den som satte påståendet
     holder: int = 0  # spelarindex för den som ansvarar för påståendet (kan ha skickat vidare)
     actor: int = 0  # spelarindex som ska agera
     #: Spelarindex för den som senast *annonserade* ett påstående (påstående/höja/slå). Det är
     #: den spelaren ett avslöjande attribueras till. Ett påstående utan att titta är ett svagare
-    #: löfte, så ``bid_was_unseen`` styr hur tungt avslöjandet väger.
+    #: löfte, så ``claim_was_unseen`` styr hur tungt avslöjandet väger.
     last_announcer: int = 0
-    bid_was_unseen: bool = False
+    claim_was_unseen: bool = False
     #: Sant om det stående påståendet kom från en **tvingad** höjning (bägaren har gått
     #: ett helt varv). En sådan är mekanisk — den som påstod måste höja vad tärningarna
     #: än visar — och får aldrig räknas in i motståndarprofilen.
-    bid_was_forced: bool = False
+    claim_was_forced: bool = False
 
     @classmethod
     def new(
@@ -220,9 +220,9 @@ class Session:
         self.pending_dice = rules.roll(self.rng)
         self.step_kind = "roll"
         self.actor = starter
-        self.bidder = starter
+        self.claimer = starter
         self.holder = starter
-        self.pending_bid = None
+        self.pending_claim = None
         self._log_roll(
             player=self.players[starter].name,
             dice=self.pending_dice,
@@ -248,7 +248,7 @@ class Session:
 
     def _prepare_raise(self) -> None:
         """Hållaren måste höja efter ett helt varv."""
-        self.actor = self.bidder
+        self.actor = self.claimer
         self.step_kind = "raise"
 
     def _next_actor(self, idx: int) -> int:
@@ -275,9 +275,9 @@ class Session:
         return [i for i in self.order if self.lives[i] > 0]
 
     # -- Motståndarmodell: mata spåraren när något blir offentligt ----------
-    def _notify_bid(self, player_name: str, *, unseen: bool, forced: bool = False) -> None:
+    def _notify_claim(self, player_name: str, *, unseen: bool, forced: bool = False) -> None:
         if self.tracker is not None:
-            self.tracker.observe_bid(player_name, unseen=unseen, forced=forced)
+            self.tracker.observe_claim(player_name, unseen=unseen, forced=forced)
 
     def _notify_decision(self, player_name: str, action: str) -> None:
         if self.tracker is not None:
@@ -296,14 +296,14 @@ class Session:
                 forced=forced,
             )
 
-    def _ask_decide(self, player, bid: int):
+    def _ask_decide(self, player, claim: int):
         """Fråga spelaren om ett påstående och skicka med vem som håller det.
 
         Den som överväger att syna får veta *vem* den möter, så en läsande agent
         kan använda motståndarens profil. Icke-läsande agenter ignorerar det.
         """
         return player.decide(
-            bid, lives=self.lives[self.actor], opponent=self.name_of(self.holder)
+            claim, lives=self.lives[self.actor], opponent=self.name_of(self.holder)
         )
 
     def _log_game_over(self) -> LogEntry | None:
@@ -332,7 +332,7 @@ class Session:
         self.step_kind = ""
         self._log_game_over()
         self.pending_dice = None
-        self.pending_bid = None
+        self.pending_claim = None
 
     # -- Grinden: bekräfta och utför nästa steg ----------------------------
     def advance(self) -> LogEntry | None:
@@ -424,25 +424,25 @@ class Session:
         player = self.players[self.actor]
         # Den som sitter näst efter är den som först får svara på påståendet.
         ann = player.announce(dice, opponent=self.name_of(self._next_actor(self.actor)))
-        self._notify_bid(player.name, unseen=False)
+        self._notify_claim(player.name, unseen=False)
         entry = self._log_entry(
-            player, dice, ann, action="bud", previous_bid=None, unseen=False, actor_idx=self.actor
+            player, dice, ann, action="påstå", previous_claim=None, unseen=False, actor_idx=self.actor
         )
-        self.pending_bid = ann.bid
-        self.bidder = self.actor
+        self.pending_claim = ann.claim
+        self.claimer = self.actor
         self.holder = self.actor
         self.last_announcer = self.actor
-        self.bid_was_unseen = False
-        self.bid_was_forced = False
+        self.claim_was_unseen = False
+        self.claim_was_forced = False
         self._prepare_action(actor=self._next_actor(self.actor))
         return entry
 
     # -- Steg 2: slå, syna eller skicka vidare -----------------------------
     def _resolve_action(self) -> LogEntry | None:
-        bid = self.pending_bid
-        assert bid is not None
+        claim = self.pending_claim
+        assert claim is not None
         player = self.players[self.actor]
-        decision = self._ask_decide(player, bid)
+        decision = self._ask_decide(player, claim)
 
         if decision.action == "syna":
             self._notify_decision(player.name, "syna")
@@ -455,30 +455,30 @@ class Session:
             dice = rules.roll(self.rng)
             self._log_roll(player=player.name, dice=dice, shown=rules.read_dice(*dice))
             ann = player.announce_shake(
-                dice, previous_bid=bid, opponent=self.name_of(self._next_actor(self.actor))
+                dice, previous_claim=claim, opponent=self.name_of(self._next_actor(self.actor))
             )
-            ann = self._enforce_bid(ann, previous_bid=bid)
-            self._notify_bid(player.name, unseen=ann.unseen)
+            ann = self._enforce_claim(ann, previous_claim=claim)
+            self._notify_claim(player.name, unseen=ann.unseen)
             entry = self._log_entry(
                 player,
                 dice,
                 ann,
                 action="slå",
-                previous_bid=bid,
+                previous_claim=claim,
                 unseen=ann.unseen,
-                accepted_bid=bid,
+                accepted_claim=claim,
                 actor_idx=self.actor,
                 choice_line=ann.choice_line,
                 choice_reasoning=ann.choice_reasoning,
             )
             self.pending_dice = dice
-            self.pending_bid = ann.bid
-            self.bidder = self.actor
+            self.pending_claim = ann.claim
+            self.claimer = self.actor
             self.holder = self.actor
             self.last_announcer = self.actor
-            self.bid_was_unseen = ann.unseen
-            self.bid_was_forced = False
-            self._after_bid(actor=self.actor)
+            self.claim_was_unseen = ann.unseen
+            self.claim_was_forced = False
+            self._after_claim(actor=self.actor)
             return entry
 
         # Skicka vidare: samma påstående går vidare. Spelaren tar över ansvaret för påståendet.
@@ -490,79 +490,79 @@ class Session:
             shown=rules.read_dice(*(self.pending_dice or (1, 1))),
             player=player.role.key,
             player_name=player.name,
-            bid=bid,
+            claim=claim,
             truth=False,
             line=decision.line,
             reasoning=decision.reasoning,
             action="skicka",
-            previous_bid=bid,
-            accepted_bid=bid,
+            previous_claim=claim,
+            accepted_claim=claim,
             actor_lives=self.lives[self.actor],
             active_players=len(self._active_indices()),
         )
         self.log.append(entry)
         self.holder = self.actor
-        self._after_bid(actor=self.actor)
+        self._after_claim(actor=self.actor)
         return entry
 
     # -- Steg 3: tvingad höjning när bägaren gått ett helt varv ------------
     def _resolve_raise(self) -> LogEntry:
-        bid = self.pending_bid
-        assert bid is not None
-        player = self.players[self.bidder]
+        claim = self.pending_claim
+        assert claim is not None
+        player = self.players[self.claimer]
         # Tärningarna slås om när bägaren gått ett helt varv. Hållaren väljer
         # själv om den tittar på dem eller påstår utan att titta (som vid ett slag).
         dice = rules.roll(self.rng)
         self._log_roll(player=player.name, dice=dice, shown=rules.read_dice(*dice))
         ann = player.announce_forced(
-            dice, previous_bid=bid, opponent=self.name_of(self._next_actor(self.bidder))
+            dice, previous_claim=claim, opponent=self.name_of(self._next_actor(self.claimer))
         )
-        ann = self._enforce_bid(ann, previous_bid=bid)
+        ann = self._enforce_claim(ann, previous_claim=claim)
         # Tvingad höjning: mekanisk, räknas separat i motståndarprofilen.
-        self._notify_bid(player.name, unseen=ann.unseen, forced=True)
+        self._notify_claim(player.name, unseen=ann.unseen, forced=True)
         entry = self._log_entry(
             player,
             dice,
             ann,
             action="höja",
-            previous_bid=bid,
+            previous_claim=claim,
             unseen=ann.unseen,
-            actor_idx=self.bidder,
+            actor_idx=self.claimer,
             choice_line=ann.choice_line,
             choice_reasoning=ann.choice_reasoning,
         )
         self.pending_dice = dice
-        self.pending_bid = ann.bid
-        self.holder = self.bidder
-        self.last_announcer = self.bidder
-        self.bid_was_unseen = ann.unseen
-        self.bid_was_forced = True
-        self._after_bid(actor=self.bidder)
+        self.pending_claim = ann.claim
+        self.holder = self.claimer
+        self.last_announcer = self.claimer
+        self.claim_was_unseen = ann.unseen
+        self.claim_was_forced = True
+        self._after_claim(actor=self.claimer)
         return entry
 
-    def _enforce_bid(self, ann, *, previous_bid: int):
+    def _enforce_claim(self, ann, *, previous_claim: int):
         """Se till att ett påstående som står kvar är strikt högre än det förra.
 
         Spelaragenten korrigerar redan ett olagligt påstående (se
-        ``MeierPlayerAgent._coerce_bid``), men påståendet som *står* får aldrig vara
+        ``MeierPlayerAgent._coerce_claim``), men påståendet som *står* får aldrig vara
         lägre än det förra. Minsta lagliga höjning tar över i så fall, och
         ``corrected`` markeras så att loggen visar att påståendet rättades.
         """
-        if rules.is_valid_value(ann.bid) and rules.is_higher(ann.bid, previous_bid):
+        if rules.is_valid_value(ann.claim) and rules.is_higher(ann.claim, previous_claim):
             return ann
-        higher = rules.higher_options(previous_bid)
+        higher = rules.higher_options(previous_claim)
         if not higher:
             # Ingen höjning finns (påståendet är Meier) – kan inte korrigeras här.
             return ann
-        return replace(ann, bid=higher[-1], truth=False, corrected=True)
+        return replace(ann, claim=higher[-1], truth=False, corrected=True)
 
-    def _after_bid(self, *, actor: int) -> None:
+    def _after_claim(self, *, actor: int) -> None:
         """Efter ett påstående: gå vidare till nästa spelare – eller hela varvet runt."""
         nxt = self._next_actor(actor)
-        if nxt == self.bidder:
-            if rules.is_meier(self.pending_bid):
+        if nxt == self.claimer:
+            if rules.is_meier(self.pending_claim):
                 # Påståendet är Meier – den som påstod slår om och börjar en ny runda.
-                starter = self.bidder
+                starter = self.claimer
                 self.round += 1
                 self._prepare_round(starter=starter)
             else:
@@ -572,9 +572,9 @@ class Session:
 
     # -- Steg 4: synen -----------------------------------------------------
     def _resolve_call(self, caller_agent: MeierPlayerAgent, decision=None) -> LogEntry:
-        bid = self.pending_bid
+        claim = self.pending_claim
         dice = self.pending_dice
-        assert bid is not None and dice is not None
+        assert claim is not None and dice is not None
         shown = rules.read_dice(*dice)
         caller_idx = self.actor
         # Den som ansvarar för påståendet: den som sa det senast (eller skickade
@@ -582,7 +582,7 @@ class Session:
         # i regeln, inte nödvändigtvis den som först satte påståendet.
         holder_idx = self.holder
 
-        result = rules.resolve_call(bid, shown)
+        result = rules.resolve_call(claim, shown)
         loser_idx = caller_idx if result.caller_loses else holder_idx
         self.lives[loser_idx] = max(0, self.lives[loser_idx] - result.lives)
 
@@ -593,13 +593,13 @@ class Session:
             shown=shown,
             player=caller_agent.role.key,
             player_name=caller_agent.name,
-            bid=bid,
+            claim=claim,
             truth=False,
             line=getattr(decision, "line", "") or "",
             reasoning=getattr(decision, "reasoning", "") or "",
             action="syna",
-            previous_bid=bid,
-            accepted_bid=bid,
+            previous_claim=claim,
+            accepted_claim=claim,
             actor_lives=self.lives[caller_idx],
             active_players=len(self._active_indices()),
             caller_loses=result.caller_loses,
@@ -611,10 +611,10 @@ class Session:
         self._log_life(loser_idx, result.lives, active_players=len(self._active_indices()))
 
         self.result = CallResult(
-            bid=bid,
+            claim=claim,
             shown=shown,
             caller=self.name_of(caller_idx),
-            bidder=self.name_of(self.bidder),
+            claimer=self.name_of(self.claimer),
             holder=self.name_of(holder_idx),
             caller_loses=result.caller_loses,
             loser=self.name_of(loser_idx),
@@ -628,9 +628,9 @@ class Session:
         # är inget löfte och avslöjas aldrig (se ``_notify_reveal``).
         self._notify_reveal(
             self.last_announcer,
-            unseen=self.bid_was_unseen,
-            forced=self.bid_was_forced,
-            was_bluff=(bid != shown),
+            unseen=self.claim_was_unseen,
+            forced=self.claim_was_forced,
+            was_bluff=(claim != shown),
         )
         if self.tracker is not None:
             self.tracker.record_call_outcome(
@@ -673,9 +673,9 @@ class Session:
         ann,
         *,
         action: str,
-        previous_bid: int | None,
+        previous_claim: int | None,
         unseen: bool,
-        accepted_bid: int | None = None,
+        accepted_claim: int | None = None,
         actor_idx: int | None = None,
         choice_line: str = "",
         choice_reasoning: str = "",
@@ -687,13 +687,13 @@ class Session:
             player_name=player.name,
             dice=dice,
             shown=ann.shown,
-            bid=ann.bid,
+            claim=ann.claim,
             truth=ann.truth,
             line=ann.line,
             reasoning=ann.reasoning,
             action=action,
-            previous_bid=previous_bid,
-            accepted_bid=accepted_bid,
+            previous_claim=previous_claim,
+            accepted_claim=accepted_claim,
             proposed=ann.proposed,
             corrected=ann.corrected,
             unseen=unseen,
@@ -709,7 +709,7 @@ class Session:
         self.finished = True
         self.step_kind = ""
         self.pending_dice = None
-        self.pending_bid = None
+        self.pending_claim = None
 
     def _standings(self) -> list[dict]:
         """Livsställning per spelare i spelordning (för sammanställningen)."""
@@ -742,10 +742,10 @@ class Session:
                 pending["dice"] = list(self.pending_dice)
                 pending["shown"] = shown
                 pending["shown_name"] = rules.name(shown)
-            if self.pending_bid is not None:
-                pending["bid"] = self.pending_bid
-                pending["bid_name"] = rules.name(self.pending_bid)
-                pending["bidder"] = self.name_of(self.bidder)
+            if self.pending_claim is not None:
+                pending["claim"] = self.pending_claim
+                pending["claim_name"] = rules.name(self.pending_claim)
+                pending["claimer"] = self.name_of(self.claimer)
                 pending["holder"] = self.name_of(self.holder)
 
         return {

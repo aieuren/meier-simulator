@@ -20,20 +20,20 @@ class ScriptedAgent(Agent):
     def system_prompt(self):
         return ""
 
-    def announce(self, dice, *, previous_bid=None, opponent=None):
+    def announce(self, dice, *, previous_claim=None, opponent=None):
         shown = rules.read_dice(*dice)
-        if previous_bid is not None:
+        if previous_claim is not None:
             # Tvingad höjning: välj nästa högre påstående.
-            bid = rules.next_higher(previous_bid) or rules.MEIER
+            claim = rules.next_higher(previous_claim) or rules.MEIER
         else:
-            bid = self._announcements.pop(0) if self._announcements else shown
+            claim = self._announcements.pop(0) if self._announcements else shown
         return Announcement(
-            dice=dice, shown=shown, bid=bid, truth=bid == shown, line="", reasoning="", role=self.role.key
+            dice=dice, shown=shown, claim=claim, truth=claim == shown, line="", reasoning="", role=self.role.key
         )
 
-    def decide(self, bid, *, lives=3, opponent=None):
-        action, new_bid = self._decisions.pop(0) if self._decisions else ("skicka", None)
-        return ActionDecision(action=action, bid=new_bid, line="", reasoning="", role=self.role.key)
+    def decide(self, claim, *, lives=3, opponent=None):
+        action, new_claim = self._decisions.pop(0) if self._decisions else ("skicka", None)
+        return ActionDecision(action=action, claim=new_claim, line="", reasoning="", role=self.role.key)
 
 
 def test_game_requires_two_players():
@@ -74,7 +74,7 @@ def test_game_meier_costs_double():
     assert game.players[0].lives == 1  # 3 - 2 = 1
 
 
-def test_full_loop_forces_bidder_to_raise():
+def test_full_loop_forces_claimer_to_raise():
     # B skickar vidare så bägaren går tillbaka till A, som tvingas höja.
     a = ScriptedAgent("A", [62], [])
     b = ScriptedAgent("B", [11], [("skicka", None), ("syna", None)])
@@ -167,7 +167,7 @@ def test_bag_goes_to_previous_active_player_every_round():
     assert checks > 300, "för få rundor för att testet ska betyda något"
 
 
-def test_engine_accepts_lower_first_bid():
+def test_engine_accepts_lower_first_claim():
     """Reglerna tillåter 'det sanna, ett högre eller ett lägre'.
 
     Motorn ska acceptera ett lägre påstående. Att policyn sedan aldrig väljer det är
@@ -178,13 +178,13 @@ def test_engine_accepts_lower_first_bid():
 
     class LowerLLM:
         def complete(self, system, user, json_mode=False):
-            return '{"bid": 31, "line": "31", "reasoning": "lägre"}'
+            return '{"claim": 31, "line": "31", "reasoning": "lägre"}'
 
     role = Role(key="test", name="Test", description="t", style="t")
     agent = MeierPlayerAgent(role, llm=LowerLLM())
     announcement = agent.announce((5, 2))  # tärningarna visar 52
-    assert announcement.bid == 31
-    assert rules.compare(announcement.bid, 52) < 0
+    assert announcement.claim == 31
+    assert rules.compare(announcement.claim, 52) < 0
 
 
 def test_pass_is_unseen_the_dice_never_reach_the_chooser():
@@ -210,9 +210,9 @@ def test_pass_is_unseen_the_dice_never_reach_the_chooser():
         def announce_shake(self, dice, **kw):
             return self._inner.announce_shake(dice, **kw)
 
-        def decide(self, bid, **kw):
-            seen_calls.append({"bid": bid, **kw})
-            return self._inner.decide(bid, **kw)
+        def decide(self, claim, **kw):
+            seen_calls.append({"claim": claim, **kw})
+            return self._inner.decide(claim, **kw)
 
     for _ in range(5):
         spied = [Spy(p) for p in make_players(["axel", "berit", "cecilia", "david"])[0]]
@@ -220,12 +220,12 @@ def test_pass_is_unseen_the_dice_never_reach_the_chooser():
 
     assert len(seen_calls) > 100, "för få beslut för att testet ska betyda något"
     for call in seen_calls:
-        assert set(call) == {"bid", "lives"}, (
+        assert set(call) == {"claim", "lives"}, (
             f"beslutsmottagaren fick mer än påstående och liv: {sorted(call)}. "
             "Tärningarna får aldrig nå den som väljer handling – att titta är att syna."
         )
-        assert isinstance(call["bid"], int)
-        assert rules.is_valid_value(call["bid"])
+        assert isinstance(call["claim"], int)
+        assert rules.is_valid_value(call["claim"])
 
 
 def test_decide_signature_cannot_take_dice():
@@ -233,7 +233,7 @@ def test_decide_signature_cannot_take_dice():
     import inspect
 
     params = set(inspect.signature(MeierPlayerAgent.decide).parameters)
-    assert params == {"self", "bid", "lives", "opponent"}, (
+    assert params == {"self", "claim", "lives", "opponent"}, (
         f"decide har fått nya parametrar: {params}. Om tärningarna läggs till "
         "bryts regeln att skicka vidare sker utan att syna."
     )
@@ -250,7 +250,7 @@ class ScriptedSeen:
             return '{"seen": %s, "reasoning": "test"}' % (
                 "true" if self.seen else "false"
             )
-        return '{"bid": 52, "reasoning": "test"}'
+        return '{"claim": 52, "reasoning": "test"}'
 
 
 def test_shake_offers_the_player_a_look():
@@ -262,13 +262,13 @@ def test_shake_offers_the_player_a_look():
     role = Role(key="test", name="Test", description="t", style="t")
     agent = MeierPlayerAgent(role, llm=ScriptedSeen(True))
 
-    announcement = agent.announce_shake((5, 2), previous_bid=44)
+    announcement = agent.announce_shake((5, 2), previous_claim=44)
 
     assert announcement.unseen is False, "spelaren valde att titta"
     assert announcement.choice_line == "Jag tittar på tärningarna."
     # Tärningarna 52 får styra påståendet, eftersom spelaren såg dem.
     assert announcement.shown == 52
-    assert rules.compare(announcement.bid, 44) > 0, "påståendet måste vara högre än det förra"
+    assert rules.compare(announcement.claim, 44) > 0, "påståendet måste vara högre än det förra"
 
 
 def test_shake_can_choose_not_to_look():
@@ -276,11 +276,11 @@ def test_shake_can_choose_not_to_look():
     role = Role(key="test", name="Test", description="t", style="t")
     agent = MeierPlayerAgent(role, llm=ScriptedSeen(False))
 
-    announcement = agent.announce_shake((5, 2), previous_bid=44)
+    announcement = agent.announce_shake((5, 2), previous_claim=44)
 
     assert announcement.unseen is True
     assert announcement.choice_line == "Jag påstår utan att titta."
-    assert rules.compare(announcement.bid, 44) > 0
+    assert rules.compare(announcement.claim, 44) > 0
 
 
 def test_shake_prompt_says_the_look_is_allowed():

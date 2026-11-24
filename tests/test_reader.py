@@ -54,7 +54,7 @@ class BrokenLLM:
 def _tracker_with_bluffer() -> OpponentTracker:
     tracker = OpponentTracker()
     for _ in range(6):
-        tracker.observe_bid("bluffare", unseen=False)
+        tracker.observe_claim("bluffare", unseen=False)
         tracker.reveal("bluffare", was_bluff=True)
     for _ in range(6):
         tracker.observe_decision("bluffare", "syna")
@@ -120,7 +120,7 @@ def test_reader_uses_the_llm_when_available():
 def test_confidence_is_capped_by_the_evidence_at_the_table():
     """En bild byggd på en enda syn får inte räknas som säker."""
     tracker = OpponentTracker()
-    tracker.observe_bid("bluffare", unseen=False)
+    tracker.observe_claim("bluffare", unseen=False)
     tracker.reveal("bluffare", was_bluff=True)
     reader = OpponentReader(llm=FakeLLM(confidence=1.0))
     profile = reader.profile(tracker, "bluffare")
@@ -133,7 +133,7 @@ def test_confidence_grows_as_more_calls_are_revealed():
     for reveals in (1, 3, 9):
         tracker = OpponentTracker()
         for _ in range(reveals):
-            tracker.observe_bid("bluffare", unseen=False)
+            tracker.observe_claim("bluffare", unseen=False)
             tracker.reveal("bluffare", was_bluff=True)
         reader = OpponentReader(llm=FakeLLM(confidence=1.0))
         seen.append(reader.profile(tracker, "bluffare").confidence)
@@ -160,7 +160,7 @@ def test_reader_caches_until_new_evidence_arrives():
     assert llm.calls == 1, "profilen ska cachas mellan beslut"
 
     # Ny syn → nytt bevis → profilen räknas om.
-    tracker.observe_bid("bluffare", unseen=False)
+    tracker.observe_claim("bluffare", unseen=False)
     tracker.reveal("bluffare", was_bluff=False)
     reader.profile(tracker, "bluffare")
     assert llm.calls == 2
@@ -253,7 +253,7 @@ def test_call_factor_is_damped_by_confidence():
     assert sure > unsure
 
 
-def test_opponent_factor_never_lowers_the_bid_below_the_truth():
+def test_opponent_factor_never_lowers_the_claim_below_the_truth():
     """En synbenägen motståndare får aldrig locka fram en *högre* bluff.
 
     Ju oftare motståndaren synar, desto dyrare blir bluffen. Faktorn får
@@ -267,10 +267,10 @@ def test_opponent_factor_never_lowers_the_bid_below_the_truth():
     for shown in rules.RANKING:
         if rules.is_meier(shown):
             continue
-        neutral = policy.decide_bid(shown)
+        neutral = policy.decide_claim(shown)
         for factor in (2.0, 3.0):
-            vs_caller = policy.decide_bid(shown, opponent_factor=factor)
-            assert rules.compare(vs_caller.bid, neutral.bid) <= 0, (
+            vs_caller = policy.decide_claim(shown, opponent_factor=factor)
+            assert rules.compare(vs_caller.claim, neutral.claim) <= 0, (
                 f"faktor {factor} höjde påståendet på {rules.name(shown)}"
             )
 
@@ -282,11 +282,11 @@ def test_call_ratio_is_relative_to_the_population():
     n = 100
     normal_calls = round(n * POPULATION_CALL_RATE)
     for _ in range(n):
-        tracker.observe_bid("normal", unseen=False)
+        tracker.observe_claim("normal", unseen=False)
     for i in range(n):
         tracker.observe_decision("normal", "syna" if i < normal_calls else "skicka")
     for _ in range(n):
-        tracker.observe_bid("synare", unseen=False)
+        tracker.observe_claim("synare", unseen=False)
     for i in range(n):
         tracker.observe_decision("synare", "syna" if i < 60 else "skicka")
     normal = tracker.call_ratio("normal")
@@ -295,7 +295,7 @@ def test_call_ratio_is_relative_to_the_population():
     assert synare > normal
 
 
-def test_call_tendency_reaches_the_bid_through_the_agent():
+def test_call_tendency_reaches_the_claim_through_the_agent():
     """Synbenägenheten ska faktiskt styra agentens påståenden, inte bara räknas ut."""
     from meier.agents.base import Role
     from meier.agents.strategic import StrategicAgent
@@ -305,7 +305,7 @@ def test_call_tendency_reaches_the_bid_through_the_agent():
         tracker = OpponentTracker()
         n = 40
         for _ in range(n):
-            tracker.observe_bid("X", unseen=False)
+            tracker.observe_claim("X", unseen=False)
             tracker.reveal("X", was_bluff=False)
         for i in range(n):
             tracker.observe_decision("X", "syna" if i < int(call_rate * n) else "skicka")
@@ -325,8 +325,8 @@ def test_call_tendency_reaches_the_bid_through_the_agent():
         for shown in rules.RANKING:
             if rules.is_meier(shown):
                 continue
-            d = agent.policy.decide_bid(shown, opponent_factor=agent._call_factor("X"))
-            if d.bid is not None and rules.compare(d.bid, shown) > 0:
+            d = agent.policy.decide_claim(shown, opponent_factor=agent._call_factor("X"))
+            if d.claim is not None and rules.compare(d.claim, shown) > 0:
                 count += 1
         return count
 

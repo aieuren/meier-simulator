@@ -17,31 +17,31 @@ from dataclasses import dataclass
 
 from . import rules
 
-#: De tre svar en spelare kan ge på ett påstående, i presentationsordning.
-RESPONSES: tuple[str, ...] = ("syna", "skicka", "slå")
+#: De tre svar en spelare kan ge på ett påstående, i den ordning reglerna listar dem.
+RESPONSES: tuple[str, ...] = ("syna", "slå", "skicka")
 
 #: De två valen vid en tvingad höjning (bägaren har gått ett helt varv).
 FORCED_CHOICES: tuple[str, ...] = ("titta", "unseen")
 
 
-def response_actions(*, bid: int) -> list[str]:
-    """Vilka svar som är lagliga på påståendet ``bid``.
+def response_actions(*, claim: int) -> list[str]:
+    """Vilka svar som är lagliga på påståendet ``claim``.
 
     ``syna`` och ``skicka`` är alltid lagliga. ``slå`` kräver att det finns ett
     högre påstående att säga, så mot Meier — som är högst — faller det bort. Att erbjuda
     ett slag utan högre påstående vore att erbjuda ett drag som inte går att utföra.
     """
-    if not rules.is_valid_value(bid):
-        raise ValueError(f"{bid} är inte ett giltigt påstående")
-    if rules.higher_options(bid):
+    if not rules.is_valid_value(claim):
+        raise ValueError(f"{claim} är inte ett giltigt påstående")
+    if rules.higher_options(claim):
         return list(RESPONSES)
     return [a for a in RESPONSES if a != "slå"]
 
 
-def legal_bids(*, shown: int, previous_bid: int | None = None) -> list[int]:
+def legal_claims(*, shown: int, previous_claim: int | None = None) -> list[int]:
     """Alla påståenden spelaren får säga, givet vad tärningarna visar.
 
-    ``shown`` är det spelaren ser i bägaren. ``previous_bid`` är påståendet som ligger
+    ``shown`` är det spelaren ser i bägaren. ``previous_claim`` är påståendet som ligger
     (``None`` vid rundans första påstående). Regeln är att påståendet måste vara **strikt
     högre** än det som ligger, och att det alltid måste vara ett giltigt utfall.
 
@@ -51,25 +51,25 @@ def legal_bids(*, shown: int, previous_bid: int | None = None) -> list[int]:
     """
     if not rules.is_valid_value(shown):
         raise ValueError(f"{shown} är inte ett giltigt utfall")
-    if previous_bid is None:
+    if previous_claim is None:
         return list(rules.RANKING)
-    if not rules.is_valid_value(previous_bid):
-        raise ValueError(f"{previous_bid} är inte ett giltigt påstående")
-    return rules.higher_options(previous_bid)
+    if not rules.is_valid_value(previous_claim):
+        raise ValueError(f"{previous_claim} är inte ett giltigt påstående")
+    return rules.higher_options(previous_claim)
 
 
-def unseen_bids(*, previous_bid: int) -> list[int]:
+def unseen_claims(*, previous_claim: int) -> list[int]:
     """Påståenden som är lagliga när spelaren slår utan att titta.
 
     Samma krav som annars: strikt högre än påståendet som ligger. Att spelaren inte
     ser tärningarna ändrar inte vad som är lagligt, bara vad som är klokt.
     """
-    if not rules.is_valid_value(previous_bid):
-        raise ValueError(f"{previous_bid} är inte ett giltigt påstående")
-    return rules.higher_options(previous_bid)
+    if not rules.is_valid_value(previous_claim):
+        raise ValueError(f"{previous_claim} är inte ett giltigt påstående")
+    return rules.higher_options(previous_claim)
 
 
-def forced_choices(*, previous_bid: int) -> list[str]:
+def forced_choices(*, previous_claim: int) -> list[str]:
     """Vilka val som är lagliga vid en tvingad höjning.
 
     Bägaren har gått ett helt varv tillbaka till den som påstod, som måste höja.
@@ -77,34 +77,34 @@ def forced_choices(*, previous_bid: int) -> list[str]:
     att påstå utan att titta. Är påståendet redan Meier finns inget högre: då slår spelaren om
     och börjar en ny runda, och valet faller bort.
     """
-    if not rules.is_valid_value(previous_bid):
-        raise ValueError(f"{previous_bid} är inte ett giltigt påstående")
-    if not rules.higher_options(previous_bid):
+    if not rules.is_valid_value(previous_claim):
+        raise ValueError(f"{previous_claim} är inte ett giltigt påstående")
+    if not rules.higher_options(previous_claim):
         return []
     return list(FORCED_CHOICES)
 
 
-def is_legal_bid(bid: int, *, previous_bid: int | None = None) -> bool:
-    """Är ``bid`` ett lagligt påstående att säga?"""
-    if not rules.is_valid_value(bid):
+def is_legal_claim(claim: int, *, previous_claim: int | None = None) -> bool:
+    """Är ``claim`` ett lagligt påstående att säga?"""
+    if not rules.is_valid_value(claim):
         return False
-    if previous_bid is None:
+    if previous_claim is None:
         return True
-    if not rules.is_valid_value(previous_bid):
+    if not rules.is_valid_value(previous_claim):
         return False
-    return rules.is_higher(bid, previous_bid)
+    return rules.is_higher(claim, previous_claim)
 
 
-def is_legal_response(action: str, *, bid: int) -> bool:
-    """Är ``action`` ett lagligt svar på påståendet ``bid``?"""
-    if not rules.is_valid_value(bid):
+def is_legal_response(action: str, *, claim: int) -> bool:
+    """Är ``action`` ett lagligt svar på påståendet ``claim``?"""
+    if not rules.is_valid_value(claim):
         return False
     return action in RESPONSES
 
 
-def is_legal_forced(choice: str, *, previous_bid: int) -> bool:
-    """Är ``choice`` lagligt vid en tvingad höjning över ``previous_bid``?"""
-    return choice in forced_choices(previous_bid=previous_bid)
+def is_legal_forced(choice: str, *, previous_claim: int) -> bool:
+    """Är ``choice`` lagligt vid en tvingad höjning över ``previous_claim``?"""
+    return choice in forced_choices(previous_claim=previous_claim)
 
 
 @dataclass(frozen=True)

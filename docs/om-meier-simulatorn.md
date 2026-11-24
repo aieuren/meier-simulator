@@ -387,7 +387,7 @@ grundtaktiken.
 
 **När bägaren gått ett varv.** Tärningarna slås om och han måste höja. Han
 väljer först och tittar sedan. Nio gånger av tio tittar han på tärningarna.
-Annars påstår han utan att titta, för att inte gå att läsa. Står budet redan på
+Annars påstår han utan att titta, för att inte gå att läsa. Står påståendet redan på
 Meier finns inget högre: då slår han om bägaren och börjar en ny runda, och
 valet faller bort.
 

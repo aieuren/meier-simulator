@@ -146,14 +146,14 @@ def is_higher(a: int, b: int) -> bool:
     return compare(a, b) > 0
 
 
-def is_true_bid(bid: int, shown: int) -> bool:
+def is_true_claim(claim: int, shown: int) -> bool:
     """Är påståendet sant, alltså högst vad tärningarna visar?
 
     Ett påstående på eller under tärningarna kan ingen syna utan att förlora, så
     det är sant. Det gäller även ett *svagare* påstående: att säga 31 när man har
     52 är sant, bara lägre. Bluff är det bara när påståendet ligger över tärningarna.
     """
-    return compare(bid, shown) <= 0
+    return compare(claim, shown) <= 0
 
 
 def next_higher(value: int) -> int | None:
@@ -184,24 +184,24 @@ def format_dice(a: int, b: int) -> str:
 class CallResult:
     """Resultatet av att någon synar ett påstående."""
 
-    bid: int
+    claim: int
     shown: int
     caller_loses: bool  # True om den som synade förlorar, annars den som påstod
     lives: int  # antal liv som förloras (1 eller 2)
 
     @property
     def loser(self) -> str:
-        return "caller" if self.caller_loses else "bidder"
+        return "caller" if self.caller_loses else "claimer"
 
     def describe(self) -> str:
         who = "den som synade" if self.caller_loses else "den som påstod"
         return (
-            f"Tärningarna visar {name(self.shown)} mot påståendet {name(self.bid)}. "
+            f"Tärningarna visar {name(self.shown)} mot påståendet {name(self.claim)}. "
             f"{who.capitalize()} förlorar {self.lives} liv."
         )
 
 
-def resolve_call(bid: int, shown: int) -> CallResult:
+def resolve_call(claim: int, shown: int) -> CallResult:
     """Avgör en syn (ett "call").
 
     - Visar tärningarna lägre än det sagda förlorar föregående spelare (den som påstod).
@@ -209,18 +209,18 @@ def resolve_call(bid: int, shown: int) -> CallResult:
     - Meier kostar dubbelt: om påståendet är Meier, eller om tärningarna visar Meier
       när någon synar, förloras två liv i stället för ett.
     """
-    if not is_valid_value(bid):
-        raise ValueError(f"{bid} är inte ett giltigt påstående")
+    if not is_valid_value(claim):
+        raise ValueError(f"{claim} är inte ett giltigt påstående")
     if not is_valid_value(shown):
         raise ValueError(f"{shown} är inte ett giltigt utfall")
 
     # Lägre visat värde än påståendet -> den som påstod förlorar.
-    caller_loses = compare(shown, bid) >= 0
+    caller_loses = compare(shown, claim) >= 0
 
-    double = is_meier(bid) or is_meier(shown)
+    double = is_meier(claim) or is_meier(shown)
     lives = 2 if double else 1
 
-    return CallResult(bid=bid, shown=shown, caller_loses=caller_loses, lives=lives)
+    return CallResult(claim=claim, shown=shown, caller_loses=caller_loses, lives=lives)
 
 
 def lives_for_meier(value: int) -> int:

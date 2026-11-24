@@ -240,8 +240,8 @@ def _clamp01(value: float) -> float:
 class OpponentStats:
     """Vad vi vet om en motståndare, allt ur offentlig information.
 
-    ``visible_bids``       – antal där spelaren tittat *frivilliga* påståenden (första påståendet) vi sett.
-    ``forced_bids``        – antal tvingade höjningar (mekaniska, säger inget om personen).
+    ``visible_claims``       – antal där spelaren tittat *frivilliga* påståenden (första påståendet) vi sett.
+    ``forced_claims``        – antal tvingade höjningar (mekaniska, säger inget om personen).
     ``revealed``           – hur många frivilliga påståenden som avslöjats genom en syn.
     ``revealed_bluffs``    – hur många av de avslöjade som var lögner.
     ``decisions``          – antal svar mot ett påstående (slå/skicka/syna).
@@ -251,8 +251,8 @@ class OpponentStats:
     ``calls_won``          – hur ofta synen gick hem.
     """
 
-    visible_bids: int = 0
-    forced_bids: int = 0
+    visible_claims: int = 0
+    forced_claims: int = 0
     revealed: int = 0
     revealed_bluffs: int = 0
     revealed_unseen: int = 0
@@ -265,8 +265,8 @@ class OpponentStats:
 
     def to_dict(self) -> dict:
         return {
-            "visible_bids": self.visible_bids,
-            "forced_bids": self.forced_bids,
+            "visible_claims": self.visible_claims,
+            "forced_claims": self.forced_claims,
             "revealed": self.revealed,
             "revealed_bluffs": self.revealed_bluffs,
             "revealed_unseen": self.revealed_unseen,
@@ -285,7 +285,7 @@ class OpponentTracker:
 
     Anropas av motorn i takt med att händelser blir offentliga:
 
-    - :meth:`observe_bid` när en spelare säger ett påstående (offentligt direkt).
+    - :meth:`observe_claim` när en spelare säger ett påstående (offentligt direkt).
     - :meth:`observe_decision` när en spelare svarar på ett påstående (offentligt direkt).
     - :meth:`reveal` **endast efter** att en syn avgjorts, med facit.
 
@@ -300,7 +300,7 @@ class OpponentTracker:
         return self.stats.setdefault(player, OpponentStats())
 
     # -- Offentliga observationer ---------------------------------------
-    def observe_bid(self, player: str, *, unseen: bool, forced: bool = False) -> None:
+    def observe_claim(self, player: str, *, unseen: bool, forced: bool = False) -> None:
         """En spelare säger ett påstående. Påståenden utan att titta är inga löften — räknas inte.
 
         ``forced`` markerar en **tvingad höjning** (bägaren har gått ett helt
@@ -311,9 +311,9 @@ class OpponentTracker:
         en värre bluffare än en riktig bluffare.
         """
         if forced:
-            self._bucket(player).forced_bids += 1
+            self._bucket(player).forced_claims += 1
         elif not unseen:
-            self._bucket(player).visible_bids += 1
+            self._bucket(player).visible_claims += 1
         # Ett påstående utan att titta skapar ingen profil: det är inget löfte, och en spelare
         # som bara har slagit ska fortfarande ligga på den globala förhandstron.
 
@@ -391,7 +391,7 @@ class OpponentTracker:
 
         Detta är nyckeln till läsningen. Att byta ut den påståendespecifika tron mot
         spelarens *absoluta* bluff-frekvens vore ett fel: ett lågt påstående (där
-        nästan ingen bluffar, ``CALL_PRIOR[bid] ≈ 0,05``) skulle då plötsligt
+        nästan ingen bluffar, ``CALL_PRIOR[claim] ≈ 0,05``) skulle då plötsligt
         bedömas med t.ex. 0,4 och agenten skulle syna påståenden som nästan alltid är
         sanna. I stället skalas tron **relativt** populationens nivå: en spelare
         som bluffar dubbelt så ofta som normalt får ratio 2,0, och då dubblas
@@ -401,7 +401,7 @@ class OpponentTracker:
             return 1.0
         return self.bluff_estimate(player) / self.global_q
 
-    def effective_prior(self, bid: int, player: str, *, reading: float) -> float:
+    def effective_prior(self, claim: int, player: str, *, reading: float) -> float:
         """Påståendespecifik tro på att en syn vinner, justerad för spelaren.
 
         ``reading = 0`` ger den frysta populationstabellen (ingen läsning).
@@ -410,7 +410,7 @@ class OpponentTracker:
         """
         from .policy import CALL_PRIOR
 
-        base = CALL_PRIOR[bid]
+        base = CALL_PRIOR[claim]
         ratio = self.bluff_ratio(player) ** reading
         return min(0.95, base * ratio)
 
@@ -455,7 +455,7 @@ class OpponentTracker:
         bucket = self.stats.get(player)
         if bucket is None:
             return {
-                "visible_bids": 0,
+                "visible_claims": 0,
                 "revealed": 0,
                 "revealed_bluffs": 0,
                 "decisions": 0,
@@ -470,7 +470,7 @@ class OpponentTracker:
         revealed = bucket.revealed + bucket.revealed_unseen
         bluffs = bucket.revealed_bluffs + bucket.revealed_unseen_bluffs
         return {
-            "visible_bids": bucket.visible_bids,
+            "visible_claims": bucket.visible_claims,
             "revealed": revealed,
             "revealed_bluffs": bluffs,
             "decisions": bucket.decisions,

@@ -29,27 +29,27 @@ class _FixedRoll(random.Random):
 class ScriptedLLM:
     """LLM som svarar enligt ett manus beroende på sammanhanget.
 
-    ``bids`` används i tur och ordning för påståenden (första påståendet och höjningar).
+    ``claims`` används i tur och ordning för påståenden (första påståendet och höjningar).
     ``actions`` används i tur och ordning för beslut mot ett påstående.
     """
 
-    def __init__(self, bids=None, actions=None, unseen=False, seen=True):
-        self.bids = list(bids or [])
+    def __init__(self, claims=None, actions=None, unseen=False, seen=True):
+        self.claims = list(claims or [])
         self.actions = list(actions or [])
         self.unseen = unseen
         self.seen = seen
-        self._bid_i = 0
+        self._claim_i = 0
         self._act_i = 0
 
-    def _next_bid(self, default):
-        if self._bid_i < len(self.bids):
-            v = self.bids[self._bid_i]
-            self._bid_i += 1
+    def _next_claim(self, default):
+        if self._claim_i < len(self.claims):
+            v = self.claims[self._claim_i]
+            self._claim_i += 1
             return v
         return default
 
     def complete(self, system, user, *, json_mode=False):
-        # Tvingad höjning: spelaren väljer att titta eller bjuda utan att titta.
+        # Tvingad höjning: spelaren väljer att titta eller påstå utan att titta.
         if "helt varv" in user and "TITTA ELLER INTE TITTA" in user:
             return (
                 '{"unseen": %s, "line": "Jag höjer.", "reasoning": "test"}'
@@ -65,8 +65,8 @@ class ScriptedLLM:
 
         # Påstående (efter titt) eller slag utan att titta.
         if "MÅSTE säga" in user or "utan att titta" in user:
-            bid = self._next_bid(52)
-            return '{"bid": %s, "line": "Jag höjer.", "reasoning": "test"}' % bid
+            claim = self._next_claim(52)
+            return '{"claim": %s, "line": "Jag höjer.", "reasoning": "test"}' % claim
 
         # Beslut mot ett påstående.
         if "DITT VAL" in user:
@@ -76,16 +76,16 @@ class ScriptedLLM:
             else:
                 act = "syna"
             if act == "slå":
-                bid = self._next_bid(66)
+                claim = self._next_claim(66)
                 return (
-                    '{"action": "slå", "bid": %s, "line": "Jag slår!", "reasoning": "test"}'
-                    % bid
+                    '{"action": "slå", "claim": %s, "line": "Jag slår!", "reasoning": "test"}'
+                    % claim
                 )
             return '{"action": "%s", "line": "Jag gör så.", "reasoning": "test"}' % act
 
         # Första påståendet (tittat i smyg).
-        bid = self._next_bid(52)
-        return '{"bid": %s, "line": "Jag säger så.", "reasoning": "test"}' % bid
+        claim = self._next_claim(52)
+        return '{"claim": %s, "line": "Jag säger så.", "reasoning": "test"}' % claim
 
 
 def make_player(key, llm=None):
@@ -118,21 +118,21 @@ def test_session_starts_with_pending_roll():
     assert 11 <= state["pending"]["shown"] <= 66
 
 
-def test_first_roll_produces_bid_then_awaits_action():
-    players = [make_player(k, ScriptedLLM(bids=[44])) for k in ("a", "b")]
+def test_first_roll_produces_claim_then_awaits_action():
+    players = [make_player(k, ScriptedLLM(claims=[44])) for k in ("a", "b")]
     session = Session.new(players)
     first = session.current_player.name
     entry = session.advance()
 
     assert entry.player_name == first
-    assert entry.action == "bud"
-    assert entry.bid == 44
+    assert entry.action == "påstå"
+    assert entry.claim == 44
 
     state = session.to_dict()
     assert state["step_kind"] == "action"
     assert state["pending"]["kind"] == "action"
-    assert state["pending"]["bid"] == 44
-    assert state["pending"]["bidder"] == first
+    assert state["pending"]["claim"] == 44
+    assert state["pending"]["claimer"] == first
 
 
 def test_session_dict_reports_order_and_starter():
@@ -146,9 +146,9 @@ def test_session_dict_reports_order_and_starter():
     assert state["starter"] == players[session.order[0]].name
 
 
-def test_skicka_logs_accepted_bid_and_keeps_same_bid():
+def test_skicka_logs_accepted_claim_and_keeps_same_claim():
     players = [
-        make_player(k, ScriptedLLM(bids=[44], actions=["skicka"])) for k in ("a", "b")
+        make_player(k, ScriptedLLM(claims=[44], actions=["skicka"])) for k in ("a", "b")
     ]
     session = Session.new(players)
     session.advance()  # påstående 44
@@ -156,14 +156,14 @@ def test_skicka_logs_accepted_bid_and_keeps_same_bid():
 
     assert entry.action == "skicka"
     # Påståendet spelaren svarar på, och det är oförändrat efter ett skickande.
-    assert entry.accepted_bid == 44
-    assert entry.bid == 44
-    assert entry.to_dict()["accepted_bid_name"] == "44"
+    assert entry.accepted_claim == 44
+    assert entry.claim == 44
+    assert entry.to_dict()["accepted_claim_name"] == "44"
 
 
-def test_slag_logs_accepted_bid_and_new_bid_separately():
+def test_slag_logs_accepted_claim_and_new_claim_separately():
     players = [
-        make_player(k, ScriptedLLM(bids=[44], actions=["slå"])) for k in ("a", "b")
+        make_player(k, ScriptedLLM(claims=[44], actions=["slå"])) for k in ("a", "b")
     ]
     session = Session.new(players)
     session.advance()  # påstående 44
@@ -171,28 +171,28 @@ def test_slag_logs_accepted_bid_and_new_bid_separately():
 
     assert entry.action == "slå"
     # Påståendet spelaren svarar på är 44; det nya (sagda) påståendet är högre.
-    assert entry.accepted_bid == 44
-    assert entry.bid != entry.accepted_bid
-    assert rules.is_higher(entry.bid, entry.accepted_bid)
+    assert entry.accepted_claim == 44
+    assert entry.claim != entry.accepted_claim
+    assert rules.is_higher(entry.claim, entry.accepted_claim)
 
 
-def test_syna_logs_accepted_bid():
+def test_syna_logs_accepted_claim():
     players = [
-        make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b")
+        make_player(k, ScriptedLLM(claims=[66], actions=["syna"])) for k in ("a", "b")
     ]
     session = Session.new(players)
     session.advance()  # påstående 66
     entry = session.advance()  # synar påståendet
 
     assert entry.action == "syna"
-    assert entry.accepted_bid == 66
-    assert entry.to_dict()["accepted_bid_name"] == "66"
+    assert entry.accepted_claim == 66
+    assert entry.to_dict()["accepted_claim_name"] == "66"
 
 
 def test_syna_keeps_the_callers_reasoning():
     # Synen är spelarens mest avgörande beslut – motiveringen måste bevaras.
     players = [
-        make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b")
+        make_player(k, ScriptedLLM(claims=[66], actions=["syna"])) for k in ("a", "b")
     ]
     session = Session.new(players)
     session.advance()  # påstående 66
@@ -208,9 +208,9 @@ def test_syna_keeps_the_callers_reasoning():
     assert session.to_dict()["result"]["reasoning"] == "test"
 
 
-def test_skicka_passes_bid_and_forces_raise_with_two_players():
+def test_skicka_passes_claim_and_forces_raise_with_two_players():
     players = [
-        make_player(k, ScriptedLLM(bids=[44], actions=["skicka"])) for k in ("a", "b")
+        make_player(k, ScriptedLLM(claims=[44], actions=["skicka"])) for k in ("a", "b")
     ]
     session = Session.new(players)
     order = session.order
@@ -218,16 +218,16 @@ def test_skicka_passes_bid_and_forces_raise_with_two_players():
     entry = session.advance()  # nästa spelare skickar vidare
 
     assert entry.action == "skicka"
-    assert entry.bid == 44
+    assert entry.claim == 44
     # Nästa aktör är hållaren (bara två spelare) -> tvingad höjning.
     assert session.to_dict()["step_kind"] == "raise"
     assert session.current_player.name == players[order[0]].name
 
 
-def test_full_loop_forces_bidder_to_raise():
+def test_full_loop_forces_claimer_to_raise():
     # 33 är högre än 44 i Meier-ordningen, så hållaren kan höja till 33.
     players = [
-        make_player(k, ScriptedLLM(bids=[44, 33], actions=["skicka"]))
+        make_player(k, ScriptedLLM(claims=[44, 33], actions=["skicka"]))
         for k in ("a", "b")
     ]
     session = Session.new(players)
@@ -237,8 +237,8 @@ def test_full_loop_forces_bidder_to_raise():
 
     entry = session.advance()  # hållaren höjer
     assert entry.action == "höja"
-    assert entry.bid == 33
-    assert entry.previous_bid == 44
+    assert entry.claim == 33
+    assert entry.previous_claim == 44
     assert rules.is_higher(33, 44)
     assert session.to_dict()["step_kind"] == "action"
 
@@ -247,7 +247,7 @@ def test_forced_raise_rerolls_the_dice():
     # När bägaren gått ett helt varv slås tärningarna om: en ny "roll"-rad
     # loggas och pending_dice uppdateras till det nya slaget.
     players = [
-        make_player(k, ScriptedLLM(bids=[44, 33], actions=["skicka"]))
+        make_player(k, ScriptedLLM(claims=[44, 33], actions=["skicka"]))
         for k in ("a", "b")
     ]
     session = Session.new(players)
@@ -276,9 +276,9 @@ def test_forced_raise_rerolls_the_dice():
 
 
 def test_forced_raise_can_be_unseen():
-    # Hållaren får själv välja att bjuda utan att titta på de omslagna tärningarna.
+    # Hållaren får själv välja att påstå utan att titta på de omslagna tärningarna.
     players = [
-        make_player(k, ScriptedLLM(bids=[44, 33], actions=["skicka"], unseen=True))
+        make_player(k, ScriptedLLM(claims=[44, 33], actions=["skicka"], unseen=True))
         for k in ("a", "b")
     ]
     session = Session.new(players)
@@ -291,15 +291,15 @@ def test_forced_raise_can_be_unseen():
     stats = match._player_stats(session.log, [p.name for p in players])
     # Höjningsbudet utan att titta räknas som "unseen", inte som bluff eller sanning.
     assert stats[entry.player_name]["unseen"] == 1
-    assert stats[entry.player_name]["bids"] == 2
+    assert stats[entry.player_name]["claims"] == 2
     assert stats[entry.player_name]["bluffs"] + stats[entry.player_name]["truths"] == 1
 
 
 def test_forced_raise_keeps_the_look_or_unseen_reasoning():
-    # Vid tvingad höjning väljer spelaren att titta eller bjuda utan att titta.
+    # Vid tvingad höjning väljer spelaren att titta eller påstå utan att titta.
     # Motiveringen för *det valet* ska bevaras på höjningsraden.
     players = [
-        make_player(k, ScriptedLLM(bids=[44, 33], actions=["skicka"], unseen=True))
+        make_player(k, ScriptedLLM(claims=[44, 33], actions=["skicka"], unseen=True))
         for k in ("a", "b")
     ]
     session = Session.new(players)
@@ -318,7 +318,7 @@ def test_forced_raise_keeps_the_look_or_unseen_reasoning():
 def test_slag_logs_fresh_roll_before_action():
     # Att slå är att skaka bägaren på nytt: ett färskt slag loggas före påståendet.
     players = [
-        make_player(k, ScriptedLLM(bids=[44], actions=["slå"])) for k in ("a", "b")
+        make_player(k, ScriptedLLM(claims=[44], actions=["slå"])) for k in ("a", "b")
     ]
     session = Session.new(players)
     session.advance()  # påstående 44
@@ -335,7 +335,7 @@ def test_slag_after_a_look_is_a_truth_or_bluff_claim():
     # Den som tittar på sitt eget slag gör ett medvetet påstående: det räknas
     # som sanning eller bluff, precis som ett vanligt påstående.
     players = [
-        make_player(k, ScriptedLLM(bids=[44, 31], actions=["slå"])) for k in ("a", "b")
+        make_player(k, ScriptedLLM(claims=[44, 31], actions=["slå"])) for k in ("a", "b")
     ]
     session = Session.new(players)
     session.advance()  # påstående 44
@@ -358,7 +358,7 @@ def test_unseen_slag_is_still_possible_and_not_counted_as_bluff():
     # tärningarna, och påståendet är inget medvetet löfte. Det räknas som
     # "unseen", inte som bluff eller sanning.
     players = [
-        make_player(k, ScriptedLLM(bids=[44], actions=["slå"], seen=False))
+        make_player(k, ScriptedLLM(claims=[44], actions=["slå"], seen=False))
         for k in ("a", "b")
     ]
     session = Session.new(players)
@@ -378,7 +378,7 @@ def test_unseen_slag_is_still_possible_and_not_counted_as_bluff():
 def test_unseen_flag_is_serialized():
     # Den som väljer bort titten får flaggan i protokollet.
     players = [
-        make_player(k, ScriptedLLM(bids=[44], actions=["slå"], seen=False))
+        make_player(k, ScriptedLLM(claims=[44], actions=["slå"], seen=False))
         for k in ("a", "b")
     ]
     session = Session.new(players)
@@ -391,9 +391,9 @@ def test_unseen_flag_is_serialized():
 
 def test_illegal_slag_is_corrected_to_smallest_legal_raise():
     # Utan att titta får spelaren ingen hjälp av tärningarna. Föreslår modellen
-    # 66 när påståendet är 44 är budet för lågt; det rättas till minsta lagliga höjning.
+    # 66 när påståendet är 44 är påståendet för lågt; det rättas till minsta lagliga höjning.
     players = [
-        make_player(k, ScriptedLLM(bids=[44, 66], actions=["slå"], seen=False))
+        make_player(k, ScriptedLLM(claims=[44, 66], actions=["slå"], seen=False))
         for k in ("a", "b")
     ]
     session = Session.new(players)
@@ -401,17 +401,17 @@ def test_illegal_slag_is_corrected_to_smallest_legal_raise():
     entry = session.advance()  # slår med ett för lågt påstående
 
     assert entry.action == "slå"
-    assert entry.bid == 33  # minsta lagliga höjning över 44
-    assert entry.previous_bid == 44
-    assert rules.is_higher(entry.bid, entry.previous_bid)
+    assert entry.claim == 33  # minsta lagliga höjning över 44
+    assert entry.previous_claim == 44
+    assert rules.is_higher(entry.claim, entry.previous_claim)
     assert entry.corrected is True
     # Påståendet som står i sessionen är det korrigerade.
-    assert session.to_dict()["pending"]["bid"] == 33
+    assert session.to_dict()["pending"]["claim"] == 33
 
 
-def test_bid_never_decreases_when_slagging():
+def test_claim_never_decreases_when_slagging():
     players = [
-        make_player(k, ScriptedLLM(bids=[44], actions=["slå"])) for k in ("a", "b")
+        make_player(k, ScriptedLLM(claims=[44], actions=["slå"])) for k in ("a", "b")
     ]
     session = Session.new(players)
     session.advance()  # påstående 44
@@ -421,14 +421,14 @@ def test_bid_never_decreases_when_slagging():
             break
         entry = session.advance()
         if entry is not None and entry.action == "slå":
-            assert entry.previous_bid is not None
-            assert rules.is_higher(entry.bid, entry.previous_bid)
+            assert entry.previous_claim is not None
+            assert rules.is_higher(entry.claim, entry.previous_claim)
 
 
 def test_forced_raise_is_stopped_if_not_higher():
     # Hållaren måste höja men föreslår 43, som är lägre än 44.
     players = [
-        make_player(k, ScriptedLLM(bids=[44, 43], actions=["skicka"]))
+        make_player(k, ScriptedLLM(claims=[44, 43], actions=["skicka"]))
         for k in ("a", "b")
     ]
     session = Session.new(players)
@@ -436,7 +436,7 @@ def test_forced_raise_is_stopped_if_not_higher():
     session.advance()  # skicka -> tvingad höjning
     entry = session.advance()  # höjningen rättas till minsta lagliga höjning
     assert entry.action == "höja"
-    assert rules.is_higher(entry.bid, entry.previous_bid)
+    assert rules.is_higher(entry.claim, entry.previous_claim)
     assert entry.corrected is True
 
 
@@ -452,11 +452,11 @@ def test_out_player_is_skipped_in_turn_order():
 
 def test_new_round_starts_with_previous_active_before_loser():
     players = [
-        make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b", "c")
+        make_player(k, ScriptedLLM(claims=[66], actions=["syna"])) for k in ("a", "b", "c")
     ]
     session = Session.new(players)
     session.order = [0, 1, 2]
-    session.advance()  # a bjuder 66
+    session.advance()  # a påstår 66
     session.advance()  # b synar -> någon tappar ett liv
 
     result = session.result
@@ -473,7 +473,7 @@ def test_new_round_starts_with_previous_active_before_loser():
 def test_lives_never_go_negative_on_meier_call():
     # Meier kostar två liv. Med bara ett liv kvar får livet aldrig bli negativt.
     players = [
-        make_player(k, ScriptedLLM(bids=[21], actions=["syna"])) for k in ("a", "b")
+        make_player(k, ScriptedLLM(claims=[21], actions=["syna"])) for k in ("a", "b")
     ]
     session = Session.new(players, lives=1)
     session.advance()  # påstående Meier
@@ -484,7 +484,7 @@ def test_lives_never_go_negative_on_meier_call():
 
 def test_call_resolves_lives_and_result():
     players = [
-        make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b")
+        make_player(k, ScriptedLLM(claims=[66], actions=["syna"])) for k in ("a", "b")
     ]
     session = Session.new(players)
     session.advance()  # påstående
@@ -493,16 +493,16 @@ def test_call_resolves_lives_and_result():
     assert entry.action == "syna"
     assert session.result is not None
     result = session.result
-    assert result.bid == 66
+    assert result.claim == 66
 
     # Utfallet ska följa reglerna för en syn.
-    expected = rules.resolve_call(result.bid, result.shown)
+    expected = rules.resolve_call(result.claim, result.shown)
     assert result.caller_loses == expected.caller_loses
     assert result.lives == expected.lives
-    assert result.loser == (result.caller if expected.caller_loses else result.bidder)
+    assert result.loser == (result.caller if expected.caller_loses else result.claimer)
 
     state = session.to_dict()
-    assert state["result"]["bid"] == 66
+    assert state["result"]["claim"] == 66
     total = sum(p["lives"] for p in state["order"])
     assert total == 6 - result.lives
 
@@ -513,7 +513,7 @@ def test_call_resolves_lives_and_result():
 
 def test_meier_call_costs_two_lives():
     players = [
-        make_player(k, ScriptedLLM(bids=[21], actions=["syna"])) for k in ("a", "b")
+        make_player(k, ScriptedLLM(claims=[21], actions=["syna"])) for k in ("a", "b")
     ]
     session = Session.new(players)
     session.advance()  # påstående Meier
@@ -525,7 +525,7 @@ def test_meier_call_costs_two_lives():
 def test_run_to_call_reaches_a_call():
     players = [
         make_player(
-            k, ScriptedLLM(bids=[11, 22, 33, 44], actions=["skicka", "skicka", "syna"])
+            k, ScriptedLLM(claims=[11, 22, 33, 44], actions=["skicka", "skicka", "syna"])
         )
         for k in ("a", "b", "c", "d")
     ]
@@ -537,7 +537,7 @@ def test_run_to_call_reaches_a_call():
 
 def test_run_to_round_end_stops_after_a_call():
     players = [
-        make_player(k, ScriptedLLM(bids=[11], actions=["syna"])) for k in ("a", "b", "c", "d")
+        make_player(k, ScriptedLLM(claims=[11], actions=["syna"])) for k in ("a", "b", "c", "d")
     ]
     session = Session.new(players)
     start_round = session.round
@@ -549,7 +549,7 @@ def test_run_to_round_end_stops_after_a_call():
 
 def test_run_to_round_end_starts_a_new_round_with_a_roll():
     players = [
-        make_player(k, ScriptedLLM(bids=[11], actions=["syna"])) for k in ("a", "b", "c", "d")
+        make_player(k, ScriptedLLM(claims=[11], actions=["syna"])) for k in ("a", "b", "c", "d")
     ]
     session = Session.new(players)
     session.run_to_round_end()
@@ -559,7 +559,7 @@ def test_run_to_round_end_starts_a_new_round_with_a_roll():
 
 def test_run_to_end_finishes_the_whole_match():
     players = [
-        make_player(k, ScriptedLLM(bids=[11], actions=["syna"])) for k in ("a", "b", "c", "d")
+        make_player(k, ScriptedLLM(claims=[11], actions=["syna"])) for k in ("a", "b", "c", "d")
     ]
     session = Session.new(players, lives=1)
     created = session.run_to_end()
@@ -573,7 +573,7 @@ def test_run_to_end_finishes_the_whole_match():
 
 def test_session_finishes_when_one_player_left():
     players = [
-        make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b")
+        make_player(k, ScriptedLLM(claims=[66], actions=["syna"])) for k in ("a", "b")
     ]
     session = Session.new(players, lives=1)
     session.advance()  # påstående
@@ -660,24 +660,24 @@ def test_roll_step_pending_has_dice_and_shown():
     assert pending["shown_name"]
 
 
-def test_action_step_pending_has_bid_bidder_and_dice():
-    players = [make_player(k, ScriptedLLM(bids=[44])) for k in ("a", "b")]
+def test_action_step_pending_has_claim_claimer_and_dice():
+    players = [make_player(k, ScriptedLLM(claims=[44])) for k in ("a", "b")]
     session = Session.new(players)
     session.advance()  # första påståendet -> action-steg
     state = session.to_dict()
     assert state["step_kind"] == "action"
     pending = state["pending"]
     # Både påståendet och tärningarna måste finnas: påståendet är indata till beslutet.
-    assert pending["bid"] == 44
-    assert pending["bid_name"]
-    assert pending["bidder"] == players[session.bidder].name
+    assert pending["claim"] == 44
+    assert pending["claim_name"]
+    assert pending["claimer"] == players[session.claimer].name
     assert isinstance(pending["dice"], list) and len(pending["dice"]) == 2
     assert pending["shown_name"]
 
 
-def test_raise_step_pending_has_bid_and_dice():
+def test_raise_step_pending_has_claim_and_dice():
     players = [
-        make_player(k, ScriptedLLM(bids=[44, 33], actions=["skicka"]))
+        make_player(k, ScriptedLLM(claims=[44, 33], actions=["skicka"]))
         for k in ("a", "b")
     ]
     session = Session.new(players)
@@ -686,12 +686,12 @@ def test_raise_step_pending_has_bid_and_dice():
     state = session.to_dict()
     assert state["step_kind"] == "raise"
     pending = state["pending"]
-    assert pending["bid"] == 44
-    assert pending["bid_name"]
+    assert pending["claim"] == 44
+    assert pending["claim_name"]
     assert isinstance(pending["dice"], list) and len(pending["dice"]) == 2
 
 
-def test_log_starts_with_roll_entry_before_any_bid():
+def test_log_starts_with_roll_entry_before_any_claim():
     players = [make_player(k) for k in ("a", "b")]
     session = Session.new(players)
     log = session.to_dict()["log"]
@@ -704,7 +704,7 @@ def test_log_starts_with_roll_entry_before_any_bid():
 
 def test_new_round_logs_a_fresh_roll_entry():
     players = [
-        make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b")
+        make_player(k, ScriptedLLM(claims=[66], actions=["syna"])) for k in ("a", "b")
     ]
     session = Session.new(players)
     session.advance()  # påstående
@@ -717,7 +717,7 @@ def test_new_round_logs_a_fresh_roll_entry():
 def test_run_to_call_log_is_ordered_downward():
     players = [
         make_player(
-            k, ScriptedLLM(bids=[11, 22, 33, 44], actions=["skicka", "skicka", "syna"])
+            k, ScriptedLLM(claims=[11, 22, 33, 44], actions=["skicka", "skicka", "syna"])
         )
         for k in ("a", "b", "c", "d")
     ]
@@ -734,7 +734,7 @@ def test_run_to_call_log_is_ordered_downward():
 def test_log_entries_always_have_frontend_fields():
     players = [
         make_player(
-            k, ScriptedLLM(bids=[11, 22, 33, 44], actions=["skicka", "skicka", "syna"])
+            k, ScriptedLLM(claims=[11, 22, 33, 44], actions=["skicka", "skicka", "syna"])
         )
         for k in ("a", "b", "c", "d")
     ]
@@ -754,7 +754,7 @@ def test_log_entries_always_have_frontend_fields():
         if row["kind"] == "roll":
             # Tärningsutfallet är ren indata: inget påstående.
             assert row["player_name"]
-            assert row["bid"] is None
+            assert row["claim"] is None
         elif row["kind"] == "life":
             # Livsraden: vem som förlorade och hur många liv som är kvar.
             assert row["player_name"]
@@ -779,9 +779,9 @@ def test_pass_moves_call_responsibility_to_the_passer():
     # än påståendet, så den som ansvarar för påståendet förlorar – och det är C, som
     # skickade vidare sist, inte A som satte påståendet från början.
     session, players = _session_with_state([0, 1, 2, 3])
-    session.pending_bid = 52
+    session.pending_claim = 52
     session.pending_dice = (3, 1)  # visar 31, lägre än 52
-    session.bidder = 0
+    session.claimer = 0
     session.holder = 2  # C skickade vidare sist
     session.actor = 3  # D synar
 
@@ -790,7 +790,7 @@ def test_pass_moves_call_responsibility_to_the_passer():
     result = session.result
     assert result.caller_loses is False
     assert result.holder == players[2].name
-    assert result.bidder == players[0].name
+    assert result.claimer == players[0].name
     assert result.loser == players[2].name
     assert session.lives[2] == 2
     assert session.lives[0] == 3
@@ -799,9 +799,9 @@ def test_pass_moves_call_responsibility_to_the_passer():
 def test_caller_loses_when_dice_are_high_enough():
     # Påståendet är lågt men tärningarna visar högre: den som synade förlorar.
     session, players = _session_with_state([0, 1, 2, 3])
-    session.pending_bid = 31
+    session.pending_claim = 31
     session.pending_dice = (5, 2)  # visar 52, högre än 31
-    session.bidder = 1
+    session.claimer = 1
     session.holder = 1
     session.actor = 3
 
@@ -816,9 +816,9 @@ def test_caller_loses_when_dice_are_high_enough():
 
 def test_life_loss_is_logged_as_its_own_row():
     session, players = _session_with_state([0, 1, 2, 3])
-    session.pending_bid = 52
+    session.pending_claim = 52
     session.pending_dice = (3, 1)
-    session.bidder = 0
+    session.claimer = 0
     session.holder = 0
     session.actor = 3
 
@@ -837,9 +837,9 @@ def test_life_loss_is_logged_as_its_own_row():
 
 def test_meier_call_logs_two_lives_lost():
     session, players = _session_with_state([0, 1])
-    session.pending_bid = 21  # Meier
+    session.pending_claim = 21  # Meier
     session.pending_dice = (2, 1)  # visar Meier
-    session.bidder = 0
+    session.claimer = 0
     session.holder = 0
     session.actor = 1
 
@@ -866,7 +866,7 @@ def test_standings_lists_all_players_in_order():
 
 def test_standings_reflect_lives_after_a_call():
     players = [
-        make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b", "c")
+        make_player(k, ScriptedLLM(claims=[66], actions=["syna"])) for k in ("a", "b", "c")
     ]
     session = Session.new(players, lives=3)
     session.advance()  # påstående
@@ -882,7 +882,7 @@ def test_standings_reflect_lives_after_a_call():
 
 def test_standings_marks_eliminated_player_inactive():
     players = [
-        make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b")
+        make_player(k, ScriptedLLM(claims=[66], actions=["syna"])) for k in ("a", "b")
     ]
     session = Session.new(players, lives=1)
     session.advance()  # påstående
@@ -900,7 +900,7 @@ def test_winner_is_none_while_match_runs():
 
 def test_finished_match_logs_a_game_over_row_with_winner():
     players = [
-        make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b")
+        make_player(k, ScriptedLLM(claims=[66], actions=["syna"])) for k in ("a", "b")
     ]
     session = Session.new(players, lives=1)
     session.advance()  # påstående
@@ -924,7 +924,7 @@ def test_finished_match_logs_a_game_over_row_with_winner():
 
 def test_game_over_row_is_last_and_only_one():
     players = [
-        make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b", "c")
+        make_player(k, ScriptedLLM(claims=[66], actions=["syna"])) for k in ("a", "b", "c")
     ]
     session = Session.new(players, lives=1)
     session.run_to_end()
@@ -938,7 +938,7 @@ def test_winner_row_is_ignored_by_player_stats():
     from meier import match as match_mod
 
     players = [
-        make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b")
+        make_player(k, ScriptedLLM(claims=[66], actions=["syna"])) for k in ("a", "b")
     ]
     session = Session.new(players, lives=1)
     session.play_to_end()
@@ -947,14 +947,14 @@ def test_winner_row_is_ignored_by_player_stats():
     stats = match_mod._player_stats(session.log, [p.name for p in players])
     # ... men räknas inte: summan matchar antalet riktiga action-rader.
     action_rows = [e for e in session.log if e.kind == "action"]
-    counted = sum(s["bids"] + s["decisions"] for s in stats.values())
+    counted = sum(s["claims"] + s["decisions"] for s in stats.values())
     assert counted == len(action_rows)
 
 
 def test_every_life_row_carries_a_standings_snapshot():
     # Livsställningen ska finnas med på varje livsrad, inte bara den sista.
     players = [
-        make_player(k, ScriptedLLM(bids=[66], actions=["syna"])) for k in ("a", "b", "c")
+        make_player(k, ScriptedLLM(claims=[66], actions=["syna"])) for k in ("a", "b", "c")
     ]
     session = Session.new(players, lives=2)
     session.run_to_end()

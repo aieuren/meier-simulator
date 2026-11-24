@@ -62,43 +62,43 @@ def test_higher_options():
     assert rules.higher_options(21) == []
 
 
-def test_resolve_call_bidder_loses_when_shown_lower():
+def test_resolve_call_claimer_loses_when_shown_lower():
     # Påstående 65, tärningarna visar 62 (lägre) -> hållaren förlorar ett liv.
-    result = rules.resolve_call(bid=65, shown=62)
+    result = rules.resolve_call(claim=65, shown=62)
     assert result.caller_loses is False
     assert result.lives == 1
 
 
 def test_resolve_call_caller_loses_when_shown_equal_or_higher():
     # Påstående 62, tärningarna visar 65 (högre) -> den som synade förlorar.
-    result = rules.resolve_call(bid=62, shown=65)
+    result = rules.resolve_call(claim=62, shown=65)
     assert result.caller_loses is True
     assert result.lives == 1
 
     # Samma värde -> den som synade förlorar.
-    result = rules.resolve_call(bid=52, shown=52)
+    result = rules.resolve_call(claim=52, shown=52)
     assert result.caller_loses is True
     assert result.lives == 1
 
 
-def test_meier_costs_double_as_bid():
-    result = rules.resolve_call(bid=21, shown=11)
+def test_meier_costs_double_as_claim():
+    result = rules.resolve_call(claim=21, shown=11)
     assert result.lives == 2
     assert result.caller_loses is False  # visar lägre -> hållaren förlorar
 
 
 def test_meier_costs_double_when_shown():
     # Påstående 66 men tärningarna visar Meier -> den som synade förlorar två liv.
-    result = rules.resolve_call(bid=66, shown=21)
+    result = rules.resolve_call(claim=66, shown=21)
     assert result.caller_loses is True
     assert result.lives == 2
 
 
 def test_resolve_call_rejects_invalid():
     with pytest.raises(ValueError):
-        rules.resolve_call(bid=99, shown=11)
+        rules.resolve_call(claim=99, shown=11)
     with pytest.raises(ValueError):
-        rules.resolve_call(bid=11, shown=99)
+        rules.resolve_call(claim=11, shown=99)
 
 
 def test_name_meier():

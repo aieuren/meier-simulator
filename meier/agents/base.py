@@ -37,24 +37,24 @@ class Agent:
         raise NotImplementedError
 
     def announce_shake(
-        self, dice: tuple[int, int], *, previous_bid: int, opponent: str | None = None
+        self, dice: tuple[int, int], *, previous_claim: int, opponent: str | None = None
     ):
         """Standardbeteende för ett slag: titta på tärningarna och påstå högre.
 
         Reglerna låter spelaren lyfta på locket på sitt eget slag. En agent som vill
         avstå från att titta överskuggar detta och går via :meth:`announce_unseen`.
         """
-        return self.announce(dice, previous_bid=previous_bid, opponent=opponent)
+        return self.announce(dice, previous_claim=previous_claim, opponent=opponent)
 
     def announce_forced(
-        self, dice: tuple[int, int], *, previous_bid: int, opponent: str | None = None
+        self, dice: tuple[int, int], *, previous_claim: int, opponent: str | None = None
     ):
         """Standardbeteende för tvingad höjning: höj som vid ett vanligt påstående.
 
         Agenten får de omslagna tärningarna ``dice`` och måste säga ett högre
         påstående. Spelaragenter kan överskugga detta för att i stället påstå utan att titta.
         """
-        return self.announce(dice, previous_bid=previous_bid, opponent=opponent)
+        return self.announce(dice, previous_claim=previous_claim, opponent=opponent)
 
     def respond(self, context: str, *, json_mode: bool = True) -> dict:
         """Skicka sammanhanget till modellen och tolka svaret som JSON."""

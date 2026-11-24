@@ -7,12 +7,12 @@ Repository memory for the Meier AI-agent project.
 A Python library plus FastAPI web app where independent, LLM-based AI agents
 play the Swedish dice game Meier. The core deliverable: given the outcome of
 a two-dice roll, an agent decides how the player responds (truth, higher, or
-lower bid). Multiple agents with distinct roles can also play full games.
+lower claim). Multiple agents with distinct roles can also play full games.
 
 ## Layout
 
 - `meier/rules.py` – game rules. Single source of truth for the ranking order,
-  bid comparison, and call resolution. Change rules here only. The dice are
+  claim comparison, and call resolution. Change rules here only. The dice are
   elongated (length/width = `DIE_ELONGATION` = 1.3). `_face_weights` derives
   each face weight from its solid angle seen from the centre of mass, so faces
   3-6 (the long sides) are 1.562x as likely as 1-2 (the square end faces).
@@ -23,7 +23,7 @@ lower bid). Multiple agents with distinct roles can also play full games.
   on the ends (one odd, one even).
 - `meier/llm.py` – LLM client, Gemini only. Key via
   `GEMINI_API_KEY`/`GOOGLE_API_KEY` (or `$MEIER_SECRETS_DIR/gemini.key`).
-  Anthropic/Claude support was removed 2026-11-08 at the user's request.
+  This is the only provider; do not add another one.
   There is no fallback to the OpenHands agent-server. Gemini uses the
   OpenAI-compatible endpoint
   `https://generativelanguage.googleapis.com/v1beta/openai`.
@@ -34,7 +34,7 @@ lower bid). Multiple agents with distinct roles can also play full games.
 - `meier/session.py` – interactive session: full flow to a call (roll → raise
   (new shake) / pass → forced raise → call), random player order, and the log.
   The log is built downward: each shake starts with a `kind="roll"`
-  entry (the dice, pure input), then one `kind="action"` entry per answer (bid,
+  entry (the dice, pure input), then one `kind="action"` entry per answer (claim,
   raise, pass, or call), and after a call a `kind="life"` entry (who lost how
   many lives, and how many remain). Every `kind="life"` entry also carries a
   `standings` snapshot (each player's name, role and remaining lives, in seating
@@ -42,8 +42,8 @@ lower bid). Multiple agents with distinct roles can also play full games.
   ends, `_finish()` appends one `kind="game_over"` entry naming the winner, and
   `to_dict()` adds `standings` and `winner` at the top level (the game-over row is
   not counted as a player action by the analysis). Every action entry carries
-  `accepted_bid`
-  (the bid the player answers) next to `bid` (the bid they then say), so the UI
+  `accepted_claim`
+  (the claim the player answers) next to `claim` (the claim they then say), so the UI
   can show "Slår över X, säger Y" as separate parts. `to_dict` also reports
   `order` and `starter` so the UI can show the seating and who begins.
   `advance()` does one gated step;
@@ -53,18 +53,18 @@ lower bid). Multiple agents with distinct roles can also play full games.
   The web UI moves the *Ett drag* button into the log so it sits under the
   latest dice roll; the *Till slut på runda*, *Till syn* and *Hela matchen*
   buttons run multiple steps at once (all four controls are disabled while a
-  call runs). When a raise is not strictly higher than the previous bid,
-  `_enforce_bid` replaces it with the smallest legal raise.
+  call runs). When a raise is not strictly higher than the previous claim,
+  `_enforce_claim` replaces it with the smallest legal raise.
 - Call responsibility: the player who loses a life on a call is the one who
-  *holds* the bid — the last player to say or pass the bid — not necessarily the
-  one who first set it. `Session.holder` tracks this and is updated on every bid,
+  *holds* the claim — the last player to say or pass the claim — not necessarily the
+  one who first set it. `Session.holder` tracks this and is updated on every claim,
   shake without a look, forced raise, and pass. The next round starts with the active
   player *before* the loser in turn order (`_previous_active`). `meier/game.py`
   keeps the same `holder` logic in its text log.
 - `meier/agents/base.py` – `Agent`/`Role` base classes.
 - `meier/agents/player.py` – `MeierPlayerAgent` and the role registry. The agent
-  is the source of truth for legality: `_coerce_bid` and `_coerce_unseen_bid`
-  keep every bid valid and strictly higher, and `Session._enforce_bid` is the
+  is the source of truth for legality: `_coerce_claim` and `_coerce_unseen_claim`
+  keep every claim valid and strictly higher, and `Session._enforce_claim` is the
   engine's backstop. The tests guard the rules.
 - `meier/web/app.py` + `meier/web/static/` – web UI and JSON API. The UI has
   five tabs: *Rollerna* (one card per player, with name, description, and
@@ -85,8 +85,8 @@ lower bid). Multiple agents with distinct roles can also play full games.
   `check_in` set, each finished match is committed and pushed to the log repo
   (see below); the outcome lands in the status field `push_status`. A push
   failure never fails the run.
-  `/api/announce` takes `previous_bid`. With no previous bid the player has
-  peeked and simply announces. With a previous bid the call is a *slag* and
+  `/api/announce` takes `previous_claim`. With no previous claim the player has
+  peeked and simply announces. With a previous claim the call is a *slag* and
   goes through `announce_shake`, so the look choice is not skipped. 21 –
   Meier cannot be raised: that request returns 400, and Meier is left out of
   the "tidigare påstående" list in the UI.
@@ -97,14 +97,19 @@ lower bid). Multiple agents with distinct roles can also play full games.
   match per line; `summarize` aggregates a series per role (win rate, bluff
   rate, raise/call rates, call success, lives lost). `GameRecord.events` is the
   full session log (`LogEntry.to_dict()`), which carries the analysis fields
-  (`accepted_bid`, `proposed`, `corrected`, `unseen`, `lives_lost`, `lives_left`,
+  (`accepted_claim`, `proposed`, `corrected`, `unseen`, `lives_lost`, `lives_left`,
   `actor_lives`, `active_players`, `caller_loses`). Tests swap the module-level
   `_new_agents` factory for scripted agents.
+- `meier/legacy.py` – reads protocols written before the rename (`bid`, `bud`,
+  `bids`, `blind`). `upgrade_record` rewrites an old record to the current keys
+  at load time, so historical JSONL files keep working and are never rewritten
+  on disk. Both `read_jsonl` and `analysis.parse_jsonl_text` call it. Do not
+  delete it while old logs exist under `meier-logs/`.
 - `meier/cli.py` – command line entry points (`announce`, `decide`, `play`,
   `session`, `match`, `summarize`).
 - `meier/analysis.py` – analysis of collected match protocols. `build_digest`
   turns a list of `GameRecord.to_dict()` records into a compact summary
-  (per-role stats from `summarize`, plus action/bid/outcome distributions and a
+  (per-role stats from `summarize`, plus action/claim/outcome distributions and a
   per-match series) so it fits in the model context — the full event logs do
   not. `render_digest_text` formats it for the prompt (and for the UI). `ask`
   sends a question with the digest and expects JSON
@@ -112,7 +117,7 @@ lower bid). Multiple agents with distinct roles can also play full games.
   charts the frontend cannot draw, and `cannot_answer` (a short Swedish note,
   else null) is surfaced as a warning when the question needs detail the digest
   does not carry. `render_digest_text` also ends with a "VAD SAMMANSTÄLLNINGEN
-  INTE INNEHÅLLER" section listing what the digest omits (raw rolls, per-bid
+  INTE INNEHÅLLER" section listing what the digest omits (raw rolls, per-claim
   detail, agent reasoning), so the model can tell a missing-detail question from
   a thin-data one. `AnalysisStore` keeps the loaded records grouped per source
   file, so a single log can be dropped again when the user unchecks it. The
@@ -134,24 +139,24 @@ higher than `44`, and `55` is higher than `66`. Always compare with
 
 ## Slå = a fresh shake, not a peek (gotcha)
 
-The three choices are: slå (shake the cup again and name a higher bid
-without looking), syna (lift the lid) and skicka (pass the same bid).
+The three choices are: slå (shake the cup again and name a higher claim
+without looking), syna (lift the lid) and skicka (pass the same claim).
 So slå is *not* a peek at the old dice — the player shakes a brand new roll, and
-the bid must be strictly higher than the previous one whatever the dice show.
+the claim must be strictly higher than the previous one whatever the dice show.
 This is why the engine logs a fresh `kind="roll"` entry before every slå, and
 why `announce_unseen` (not `announce`) is used for it. A slå that is not strictly
-higher is corrected to the smallest legal raise: `Session._enforce_bid`.
+higher is corrected to the smallest legal raise: `Session._enforce_claim`.
 
 ## Two different raises — do not conflate them (gotcha)
 
 The docs used to claim "the raise is always one step, never more". That is true
 of exactly one of the two decisions. Keep them apart:
 
-- `decide_bid(shown)` — bidder *has* seen the dice. A bluff over `shown` is
+- `decide_claim(shown)` — claimer *has* seen the dice. A bluff over `shown` is
   always exactly one step above it (`min(higher_options(shown))`), at every
-  `unpredictability`. Higher bids get called more often, so a longer jump is
+  `unpredictability`. Higher claims get called more often, so a longer jump is
   pure downside.
-- `decide_raise(bid)` — shake without a look, dice unseen. The minimum legal raise is
+- `decide_raise(claim)` — shake without a look, dice unseen. The minimum legal raise is
   safest. With probability `unpredictability` the agent instead picks a random
   higher option (up to Meier), so it cannot be read as "always the minimum".
   There is no "true level" to sit just above when the dice are unknown.
@@ -160,23 +165,23 @@ Measured on 80 no-LLM matches: 63.3 % of raises were one step, 36.7 % were
 more, up to 18. So "always one step" was wrong for the table as played.
 
 Guarded by `tests/test_policy.py::test_unpredictability_makes_unseen_raises_vary` and
-`::test_seen_bid_bluff_is_always_exactly_one_step`, plus
+`::test_seen_claim_bluff_is_always_exactly_one_step`, plus
 `tests/test_docs.py::test_om_meier_does_not_claim_raises_are_always_one_step`.
 
 ## Forced raise (full lap) = a fresh shake too (gotcha)
 
-When the cup comes back to the bidder after a full lap, the rule we play is
+When the cup comes back to the claimer after a full lap, the rule we play is
 that the dice are re-rolled — not just a higher number said over the old
-dice. The bidder may then look at the new dice or bid without looking; both are allowed,
-just like any other bid. So `Session._resolve_raise` and `Game._play_round`
+dice. The claimer may then look at the new dice or claim without looking; both are allowed,
+just like any other claim. So `Session._resolve_raise` and `Game._play_round`
 roll new dice, log a fresh `kind="roll"` entry, and call
 `MeierPlayerAgent.announce_forced` (which asks the model "look or not?" via
 `_forced_choice_context`, then delegates to `announce` or `announce_unseen`).
 `pending_dice` must be updated to the new roll, otherwise a later syna would be
-judged against the stale dice. The holder must also become the bidder in
-`Game._play_round` (Session already does `self.holder = self.bidder`) — miss it
+judged against the stale dice. The holder must also become the claimer in
+`Game._play_round` (Session already does `self.holder = self.claimer`) — miss it
 and a later syna blames the wrong player. A forced raise is `unseen=True` only
-when the bidder chose not to look. (`höja` is still a bid, so it counts in
+when the claimer chose not to look. (`höja` is still a claim, so it counts in
 `BID_ACTIONS`; raises without a look count as `unseen`, not bluffs.)
 
 ## Prose style for docs: no bold
@@ -188,6 +193,21 @@ instead; if a point needs weight, give it its own sentence or paragraph.
 Bold is still fine for table row labels and short list labels, where it marks
 structure rather than emphasis.
 
+## The game says "påstående", and the order is syna, slå, skicka
+
+The word for what a player says about the dice is **påstående**. The older
+Swedish term is out of the game, the code, the docs and the tests; do not
+reintroduce it. In code the field is `claim`, the action label is `"påstå"`, and
+the actor is `claimer`. Unrelated verbs (`bjuda`, `erbjuda`, `förbjuda`) are
+ordinary Swedish and stay as they are.
+
+The current rules PDF (fetched 2026-11-24) lists the three answers in the order
+**syna, slå, skicka vidare**, and that order is the presentation order in
+`legality.RESPONSES`, in the prompts and in the UI. It also states that the
+player who *slår* may always lift the lid and look at their own dice; not looking
+is a deliberate choice. `tests/test_docs.py` guards both the word and the order
+inside the PDF.
+
 ## The rules file describes the game, not the code
 
 `docs/regler/meier-regler.md` holds the rules of Meier and nothing else. Keep
@@ -196,7 +216,8 @@ no strategy choices, no notes about how the engine or an agent behaves. Those
 belong in `docs/agent-model.md` or `docs/regler/granskning.md`.
 
 Two things bridge the gap to the repo without turning the file into a spec.
-One is the wording note: the PDF says "bud", this text says "påstående". The
+One is the wording note: the PDF and this text both say "påstående", and the
+older Swedish term is gone from the game, the code and the docs. The
 other is the short closing section "Några tolkningar för denna simulator",
 which lists the open choices (passing without a look, raising without a look, bluff frequency,
 die shape) as choices, not rules. Keep that section to a handful of bullets and
@@ -216,14 +237,15 @@ guards the specific claim.
 
 ## The `line` is built locally, never written by the model
 
-The model only produces the move (`bid`, `action`, `unseen`). The spoken `line`
-is assembled in code from the move: `StrategicAgent._say` for a bid,
+The model only produces the move (`claim`, `action`, `unseen`). The spoken `line`
+is assembled in code from the move: `StrategicAgent._say` for a claim,
 `_say_action` for syna/skicka/slå, and a fixed string for the look-or-not
 choice. No prompt asks for `"line"` any more, and any `"line"` in a model reply
 is ignored.
 
 This keeps the line short and predictable, and it stops the model from inventing
-wording (it used to slip back to "bud" even after the rename). When you add a
+wording (it used to slip back to the older term after the rename; guard tests
+in `tests/test_docs.py` keep that term out of the docs). When you add a
 new decision path, build its line the same way — do not add `"line"` to the
 prompt. `tests/test_strategic.py` has three tests that lock this down: one feeds
 a reply containing `"line"` and asserts it is dropped, one asserts no prompt
@@ -250,9 +272,9 @@ Note: `build_digest` does not include reasoning — to analyse it you must
 feed selected raw events to the model, not the digest.
 
 Investigated a reported "raise after an unseen slå" bug: it is not reproducible.
-`accepted_bid` is the bid the player *answers*, so a raise showing
-`accepted=52, bid=61` is just the forced raise at the end of a full lap, not a
-double raise. A property check over 500 random matches (200 for `bid >=
+`accepted_claim` is the claim the player *answers*, so a raise showing
+`accepted=52, claim=61` is just the forced raise at the end of a full lap, not a
+double raise. A property check over 500 random matches (200 for `claim >=
 accepted`, 300 for the `slå → höja` pattern) found 0 violations, and every `slå`
 is `unseen=True`.
 
@@ -267,7 +289,7 @@ raises `LLMError` when no key exists.
 
 Consequences to keep in mind:
 
-- There is no proxy fallback. Without `ANTHROPIC_API_KEY` / `GEMINI_API_KEY`
+- There is no proxy fallback. Without `GEMINI_API_KEY`
   (or the key files) the app fails fast with a clear message instead of quietly
   spending a conversation per call.
 - The self-healing profile logic (`_MissingProfile`, `_ensure_profile`,
@@ -391,8 +413,8 @@ Manual fallback: `pip install -r requirements.txt`, then
 ## The engine is the source of truth
 
 Legality lives in the engine and the player agent, not in a separate judge:
-`MeierPlayerAgent._coerce_bid` / `_coerce_unseen_bid` keep every bid valid and
-strictly higher, and `Session._enforce_bid` is the engine's backstop for the bid
+`MeierPlayerAgent._coerce_claim` / `_coerce_unseen_claim` keep every claim valid and
+strictly higher, and `Session._enforce_claim` is the engine's backstop for the claim
 that actually stands. The tests in `tests/` guard the rules. There is no referee
 agent — do not reintroduce a deterministic check as a "judge".
 
@@ -432,7 +454,7 @@ the model and needs them.
 
 `docs/regler/granskning.md` records the rule audit: 19 checks, each measured
 in running code. It documents one known deviation – the engine accepts a
-lower first bid (as the rules allow), but `BasePolicy` never chooses one.
+lower first claim (as the rules allow), but `BasePolicy` never chooses one.
 That is a strategy choice, not a rule break, and it means policy players and
 LLM players are not perfectly comparable.
 
@@ -440,7 +462,7 @@ When you change a player parameter, a measured statistic, or the dice weights,
 update the affected files and let the tests tell you what else broke. The
 tests read the markdown as text and compare against `ROSTER`, `describe_params`
 and `FACE_WEIGHTS`. They caught real drift already: the README described roles
-that had been deleted, the companion doc claimed a bid the policy never makes,
+that had been deleted, the companion doc claimed a claim the policy never makes,
 and it called a round "always ending in a life loss" when the Meier full loop
 ends one without.
 
@@ -472,29 +494,29 @@ Three rules that keep the companion doc honest:
   61, 54, 53, 52, 51, 43, 42, 41, 32, 31. Meier (21) is highest and costs double.
 - Agents must always respond with a JSON object; parsing tolerates code fences
   and surrounding text (`llm.parse_json_object`).
-- `truth` on an announcement means the bid is at or below the dice
-  (`rules.is_true_bid`), not that it equals them. Saying 31 while holding 52 is
-  true, just weaker — a call on it still loses for the caller. Only a bid
+- `truth` on an announcement means the claim is at or below the dice
+  (`rules.is_true_claim`), not that it equals them. Saying 31 while holding 52 is
+  true, just weaker — a call on it still loses for the caller. Only a claim
   *above* the dice is a bluff.
-- `decide_bid` values the safe bid as `p_called * l_lose` (the caller loses
+- `decide_claim` values the safe claim as `p_called * l_lose` (the caller loses
   their lives, I win them). Bluff losses use `l_win` — *my* lives. `l_lose` is
   the caller's loss, i.e. my gain; swapping them makes bluffs look free.
 - `BLUFF_GAIN` is a fixed assumption about the table, not a rule. Meier's rules
-  say nothing about what an uncalled bid is worth. Do not "fix" it to make the
+  say nothing about what an uncalled claim is worth. Do not "fix" it to make the
   agents play better — the goal is to show what they do, not to find the best
   strategy.
-- The bid prompt lists every legal bid with its direction against the dice
-  (`StrategicAgent._legal_bids_listed`): "högre, alltså bluff", "exakt dina
+- The claim prompt lists every legal claim with its direction against the dice
+  (`StrategicAgent._legal_claims_listed`): "högre, alltså bluff", "exakt dina
   tärningar", or "lägre, alltså sant men svagare". Models rank Meier values
-  worse than the code does, and without the tags a model called a *higher* bid
+  worse than the code does, and without the tags a model called a *higher* claim
   "lägre" in its reasoning. Keep the tags: they stop the stated reasoning from
   contradicting the move.
 - The engine coerces illegal model output back to legal moves (e.g. forces a
-  higher bid when the rules require it). Keep that safety net.
-- A "slå" bid is unseen: the player shakes their *own* cup and does not look
-  at their own dice, so the bid is not a truth-or-bluff claim. Only "påstående" and
-  "höja" bids where the player actually looked carry the sant/bluff label; any
-  bid without a look (a slå, or a forced raise where the bidder chose not to
+  higher claim when the rules require it). Keep that safety net.
+- A "slå" claim is unseen: the player shakes their *own* cup and does not look
+  at their own dice, so the claim is not a truth-or-bluff claim. Only "påstående" and
+  "höja" claims where the player actually looked carry the sant/bluff label; any
+  claim without a look (a slå, or a forced raise where the claimer chose not to
   look) is labelled "påstående utan att titta" and counted as `unseen`, never as
   `bluffs`, in the stats.
   This is deliberate: it adds a psychological dimension, so `unseen_rate`
@@ -503,7 +525,7 @@ Three rules that keep the companion doc honest:
   looks "wrong", check the ranking before assuming a bug.
 - "Deterministic" means `unpredictability == 0`, not "no LLM". `axel` is the
   LLM-free reference, but his params carry `unpredictability = 0.2`, so his
-  bids vary between runs by design. A test that compares two agents' bids must
+  claims vary between runs by design. A test that compares two agents' claims must
   pass `AgentParams(unpredictability=0.0)`; otherwise it fails ~20 % of runs.
   This bit `tests/test_legality.py::test_agent_without_llm_is_deterministic`,
   which was flaky until it built its own params instead of `AgentParams()`.
@@ -563,7 +585,7 @@ Watch the two traps when touching this:
   background thread, so closing the tab does not stop it, and the JSONL is
   appended as matches finish — a pause mid-series does not lose finished games.
   For runs that must exceed the idle window, run the CLI outside Canvas with a
-  real `ANTHROPIC_API_KEY` (optionally `nohup`).
+  real `GEMINI_API_KEY` (optionally `nohup`).
 - The analysis tab keeps loaded protocols in memory (`web.app._store`),
   so they are lost on restart. Tests clear the store to stay isolated.
 - Git remote: `https://github.com/aieuren/mejer-simulator.git` (branch `main`).
@@ -795,7 +817,7 @@ gone — replaced by four neutral-named players in `meier/agents/roster.py`:
 - The LLM owns the move (changed 2026-11-18). `StrategicAgent`
   (`meier/agents/strategic.py`) asks the model which move to make and accepts
   any legal answer. It does not pick the move for the model.
-  - `meier/legality.py` owns the rules: it enumerates the legal bids,
+  - `meier/legality.py` owns the rules: it enumerates the legal claims,
     responses and forced choices for a position, and rejects everything else.
     A player can never break the rules, whatever the model says.
   - `meier/agents/personality.py` turns `caution`/`statistics`/
@@ -807,22 +829,22 @@ gone — replaced by four neutral-named players in `meier/agents/roster.py`:
     so a broken model can never crash a match.
 - Why it changed. The old design computed the move in `BasePolicy` and left
   only the line to the LLM. Every player then played the same algorithm with
-  different constants: `berit` always bid 43 and `david` always 64 when
-  bluffing, regardless of the dice. The old `press` parameter drove a bid
+  different constants: `berit` always claim 43 and `david` always 64 when
+  bluffing, regardless of the dice. The old `press` parameter drove a claim
   choice the model never saw. The params are now material for simulating a real
   player, and judging what the players do is the user's job, not the machine's.
-- No more silent rewriting. `decide_bid` now takes `previous_bid` and
-  chooses among the legal bids directly. Before, it chose as if the table were
-  empty and the engine rewrote 47.9 % of bids (805/1680) without a trace.
+- No more silent rewriting. `decide_claim` now takes `previous_claim` and
+  chooses among the legal claims directly. Before, it chose as if the table were
+  empty and the engine rewrote 47.9 % of claims (805/1680) without a trace.
   That is now 0 %, guarded by
-  `tests/test_legality.py::test_policy_never_silently_rewrites_the_bid`.
+  `tests/test_legality.py::test_policy_never_silently_rewrites_the_claim`.
 - `slå` is not legal against Meier. `legality.response_actions` drops it
-  when no higher bid exists. A real LLM match crashed here before the fix,
-  because the player chose `slå` and the engine asked for a bid above the
+  when no higher claim exists. A real LLM match crashed here before the fix,
+  because the player chose `slå` and the engine asked for a claim above the
   highest one that exists. Guarded by
   `::test_shaking_is_not_offered_against_meier`.
 - Secretary vs reader. `OpponentTracker` (`meier/opponents.py`) is the
-  secretary: it *records* public play in numbers (bids, reveals, bluffs, calls,
+  secretary: it *records* public play in numbers (claims, reveals, bluffs, calls,
   passes) and never interprets. `OpponentReader` is the reader: the LLM decides
   alone what the numbers mean. The reader is fed only
   `tracker.evidence(player)` — never the session log — so it cannot see hidden
@@ -858,11 +880,11 @@ gone — replaced by four neutral-named players in `meier/agents/roster.py`:
 - `call_tendency` is wired into bidding, not just `bluff_tendency`.
   `call_factor` maps the opponent's `call_tendency` to a factor around 1.0
   centred on `NEUTRAL_CALL = 0.5`; it flows as `opponent_factor` into
-  `BasePolicy.decide_bid()` and on to `_p_called`, which scales the chance the
-  bid gets called. A calling opponent makes bluffing expensive, so the agent
+  `BasePolicy.decide_claim()` and on to `_p_called`, which scales the chance the
+  claim gets called. A calling opponent makes bluffing expensive, so the agent
   moves closer to the truth. Measured: 5 % call rate → factor 0.25 → bluffs in
   20/21 spots; 26 % → 1.00 → 16/21; 45 % → 1.70 → 8/21.
-  `bluff_tendency` adjusts belief about a bid (`_opponent_prior`),
+  `bluff_tendency` adjusts belief about a claim (`_opponent_prior`),
   `call_tendency` adjusts the chance of being called (`_p_called`) — different
   terms, both live.
 - The same absolute-scale trap hits `call_tendency`. Raw call rate is ~0.265 for
@@ -902,4 +924,4 @@ python3 -m meier.cli match axel berit cecilia david --count 200 \
 
 Baseline (400 matches, four players, chance 25 %): Axel 31 %, Berit 28 %,
 Cecilia 22 %, David 19 %. David is weakest despite (or because of) the highest
-`statistics`; the flat-prior baseline reads the bid level less.
+`statistics`; the flat-prior baseline reads the claim level less.

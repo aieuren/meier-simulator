@@ -3,13 +3,13 @@
 Detta är regeltexten för Meier.
 
 Originalet är [`meier-regler.pdf`](meier-regler.pdf) (en sida, hämtad
-2026-11-08). Vid tvekan gäller PDF:en.
+2026-11-24). Vid tvekan gäller PDF:en.
 
 ## Om ordet "påstående"
 
-PDF:en säger bud om det en spelare säger om tärningarna. Den här texten säger
-påstående, eftersom det ligger närmare vad handlingen faktiskt är: ett påstående
-om vad tärningarna visar, som kan vara sant eller falskt.
+Regeltexten säger påstående om det en spelare säger om tärningarna. Ordet
+beskriver vad handlingen är: ett påstående om vad tärningarna visar, som kan vara
+sant eller falskt.
 
 ---
 
@@ -62,39 +62,34 @@ alltså 65.
 En runda börjar med ett påstående och slutar när någon synar. Rundan kan inte ta
 slut på något annat sätt (se undantaget om Meier nedan).
 
-1. Första spelaren skakar två tärningar i bägaren, tittar i smyg, och säger ett
-   resultat till nästa spelare. Det kan vara det sanna resultatet, ett högre
-   eller ett lägre.
+1. Första spelaren skakar två tärningar i bägaren, tittar i smyg, och påstår vad
+   tärningarna visar: det sanna, ett högre värde eller ett lägre.
 
    Det är alltså tillåtet att påstå under det tärningarna visar. Bluffen går åt
    båda hållen.
 
-2. Nästa spelare väljer ett av tre:
+2. Nästa spelare väljer ett av tre. Ordningen nedan är den som gäller.
 
-   - Slå – skakar bägaren på nytt och säger ett högre resultat. Den som slår
-     **får lyfta på locket och titta på sina egna tärningar** innan den påstår,
-     och det är det vanliga. Den måste ändå alltid säga ett högre påstående än
-     det förra, vad tärningarna än visar.
-
-     Det som skiljer slaget från att titta i smyg vid rundans start är bara
-     ordningen: här slås tärningarna om mitt i rundan, och kravet att höja gäller
-     oavsett utfall.
-
-     Att **avstå** från att titta är ett eget val. Det hör till fintaktiken, inte
-     till grundtaktiken, och reglerna tillåter det. Se avsnittet om utan att titta
-     längre ner.
-   - Syna – lyfter locket.
-     - Visar tärningarna lägre än det sagda: föregående spelare (den som
+   - **Syna** – lyfter locket.
+     - Visar tärningarna lägre än det påstådda: föregående spelare (den som
        ansvarar för påståendet) förlorar ett liv.
      - Visar tärningarna samma eller högre: den som synade förlorar ett liv.
-   - Skicka vidare – skickar bägaren utan att slå, med samma påstående och samma
-     tärningar. Spelaren tar då över ansvaret för påståendet.
+   - **Slå** – avstår från att syna och skakar tärningarna. Spelaren väljer att
+     titta på sina tärningar eller inte, men påstår i båda fallen vad de visar.
+     Påståendet måste vara högre än det förra.
+
+     Den som slår **får alltså alltid lyfta på locket och se sina egna
+     tärningar**. Det är det vanliga. Att avstå är ett eget val, och det hör till
+     fintaktiken. Se avsnittet om utan att titta längre ner.
+   - **Skicka vidare** – skickar bägaren utan att vare sig syna eller slå, med
+     samma påstående och samma tärningar. Spelaren tar då över ansvaret för
+     påståendet.
 
      Den som skickar vidare tittar inte på tärningarna. Att lyfta på locket är
      att syna, och det är en annan handling. Spelaren vet alltså bara vad
      påståendet säger, inte vad tärningarna visar.
 
-3. Meier kostar dubbelt. Om påståendet är Meier, eller om tärningarna visar Meier
+3. Meier kostar dubbelt. Om Meier har påståtts, eller om tärningarna visar Meier
    när någon synar, förlorar man två liv i stället för ett.
 
 ## Efter en livsförlust

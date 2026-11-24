@@ -22,12 +22,12 @@ from .session import Session
 
 def _cmd_announce(args: argparse.Namespace) -> int:
     agent = make_player(args.role)
-    ann = agent.announce((args.die1, args.die2), previous_bid=args.previous_bid)
+    ann = agent.announce((args.die1, args.die2), previous_claim=args.previous_claim)
     print(f"Spelare:     {agent.name}")
     print(f"Tärningarna: {rules.read_dice(args.die1, args.die2)} ({args.die1} och {args.die2})")
-    if args.previous_bid is not None:
-        print(f"Före påstående: {rules.name(args.previous_bid)}")
-    print(f"Spelaren säger: {rules.name(ann.bid)}")
+    if args.previous_claim is not None:
+        print(f"Före påstående: {rules.name(args.previous_claim)}")
+    print(f"Spelaren säger: {rules.name(ann.claim)}")
     print(f"Sanning?     {'ja' if ann.truth else 'nej (bluff)'}")
     if ann.line:
         print(f"Replik:      “{ann.line}”")
@@ -38,12 +38,12 @@ def _cmd_announce(args: argparse.Namespace) -> int:
 
 def _cmd_decide(args: argparse.Namespace) -> int:
     agent = make_player(args.role)
-    decision = agent.decide(args.bid, lives=args.lives)
+    decision = agent.decide(args.claim, lives=args.lives)
     print(f"Spelare:   {agent.name}")
-    print(f"Motståndarens påstående: {rules.name(args.bid)}")
+    print(f"Motståndarens påstående: {rules.name(args.claim)}")
     print(f"Spelaren väljer:   {decision.action}")
-    if decision.bid is not None:
-        print(f"Nytt påstående: {rules.name(decision.bid)}")
+    if decision.claim is not None:
+        print(f"Nytt påstående: {rules.name(decision.claim)}")
     if decision.line:
         print(f"Replik:    “{decision.line}”")
     if decision.reasoning:
@@ -72,11 +72,11 @@ def _describe_step(state: dict) -> str:
     if kind == "raise":
         return (
             f"{current} slår om – bägaren har gått ett helt varv – och måste höja. "
-            f"Aktuellt påstående: {pending.get('bid_name')}."
+            f"Aktuellt påstående: {pending.get('claim_name')}."
         )
     return (
-        f"{current} ska svara på påståendet {pending.get('bid_name')} "
-        f"(sagt av {pending.get('bidder')})."
+        f"{current} ska svara på påståendet {pending.get('claim_name')} "
+        f"(sagt av {pending.get('claimer')})."
     )
 
 
@@ -85,13 +85,13 @@ def _print_entry(entry) -> None:
     if action == "syna":
         print(f"  {entry.player_name}: Synar")
     elif action == "skicka":
-        print(f"  {entry.player_name}: Skickar vidare {rules.name(entry.bid)}")
+        print(f"  {entry.player_name}: Skickar vidare {rules.name(entry.claim)}")
     elif action == "slå":
-        print(f"  {entry.player_name}: Slår {rules.name(entry.bid)}")
+        print(f"  {entry.player_name}: Slår {rules.name(entry.claim)}")
     elif action == "höja":
-        print(f"  {entry.player_name}: Höjer {rules.name(entry.bid)}")
+        print(f"  {entry.player_name}: Höjer {rules.name(entry.claim)}")
     else:
-        print(f"  {entry.player_name}: Säger {rules.name(entry.bid)}")
+        print(f"  {entry.player_name}: Säger {rules.name(entry.claim)}")
 
 
 def _cmd_session(args: argparse.Namespace) -> int:
@@ -134,14 +134,14 @@ def _cmd_session(args: argparse.Namespace) -> int:
         result = session.result
         print(
             f"\nSyn! Tärningarna visade {rules.name(result.shown)} mot påståendet "
-            f"{rules.name(result.bid)}. {result.loser} förlorar {result.lives} liv."
+            f"{rules.name(result.claim)}. {result.loser} förlorar {result.lives} liv."
         )
     print("\nLogg:")
     for e in session.log:
         if e.kind == "life":
             print(f"  R{e.round}: {e.player_name} förlorar {e.lives_lost} liv ({e.lives_left} kvar)")
         else:
-            print(f"  R{e.round}: {e.player_name} [{e.action}] {rules.name(e.bid)}")
+            print(f"  R{e.round}: {e.player_name} [{e.action}] {rules.name(e.claim)}")
     return 0
 
 
@@ -204,11 +204,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_ann.add_argument("die1", type=int, choices=range(1, 7))
     p_ann.add_argument("die2", type=int, choices=range(1, 7))
     p_ann.add_argument("--role", default="cecilia", choices=role_keys())
-    p_ann.add_argument("--previous-bid", type=int, default=None)
+    p_ann.add_argument("--previous-claim", type=int, default=None)
     p_ann.set_defaults(func=_cmd_announce)
 
     p_dec = sub.add_parser("decide", help="Spelaren möter ett påstående")
-    p_dec.add_argument("bid", type=int)
+    p_dec.add_argument("claim", type=int)
     p_dec.add_argument("--role", default="cecilia", choices=role_keys())
     p_dec.add_argument("--lives", type=int, default=3)
     p_dec.set_defaults(func=_cmd_decide)

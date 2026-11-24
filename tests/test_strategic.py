@@ -79,8 +79,8 @@ def test_every_action_in_log_is_legal():
     for entry in session.log:
         if entry.kind != "action":
             continue
-        if entry.action in {"bud", "höja", "slå"}:
-            assert entry.bid is not None
+        if entry.action in {"påstå", "höja", "slå"}:
+            assert entry.claim is not None
 
 
 def test_tracker_receives_engine_events():
@@ -111,7 +111,7 @@ def test_no_agent_passes_forever():
     session, _ = play(["axel", "berit", "cecilia", "david"])
     for entry in session.log:
         if entry.kind == "action" and entry.action == "skicka":
-            assert entry.bid != 21, "Meier skickades vidare"
+            assert entry.claim != 21, "Meier skickades vidare"
 
 
 def test_base_model_uses_no_llm_and_no_reading():
@@ -133,9 +133,9 @@ def test_reading_changes_the_prior():
     # annorlunda än en känd ärlig spelare, givet samma historik.
     tracker = OpponentTracker()
     for _ in range(20):
-        tracker.observe_bid("bluffare", unseen=False)
+        tracker.observe_claim("bluffare", unseen=False)
         tracker.reveal("bluffare", was_bluff=True)
-        tracker.observe_bid("ärlig", unseen=False)
+        tracker.observe_claim("ärlig", unseen=False)
         tracker.reveal("ärlig", was_bluff=False)
 
     reader = make("reader", AgentParams(reading=1.0), tracker)
@@ -162,12 +162,12 @@ def test_make_players_shares_one_tracker_among_readers():
     assert by_key["axel"].llm is None
 
 
-def test_reader_profile_is_used_when_answering_a_bid():
+def test_reader_profile_is_used_when_answering_a_claim():
     # En läsande agent ska bygga en motståndarprofil ur offentligt spel och
     # låta den styra synbeslutet — utan LLM via sekreterarens aritmetik.
     tracker = OpponentTracker()
     for _ in range(8):
-        tracker.observe_bid("bluffare", unseen=False)
+        tracker.observe_claim("bluffare", unseen=False)
         tracker.reveal("bluffare", was_bluff=True)
     reader = make("cecilia", ROSTER["cecilia"].params, tracker)
     decision = reader.decide(61, opponent="bluffare")
@@ -206,32 +206,32 @@ class _TalkingLLM:
 
 
 def test_line_is_built_locally_never_from_the_model():
-    llm = _TalkingLLM({"bid": 54, "line": "MITT EGET BUD", "reasoning": "motiv"})
+    llm = _TalkingLLM({"claim": 54, "line": "MITT EGET PÅSTÅENDE", "reasoning": "motiv"})
     agent = make("cecilia", ROSTER["cecilia"].params, OpponentTracker())
     agent.llm = llm
     ann = agent.announce((5, 2))
-    assert ann.bid == 54
+    assert ann.claim == 54
     assert ann.line == "Jag säger 54."
-    assert "MITT EGET BUD" not in ann.line
+    assert "MITT EGET PÅSTÅENDE" not in ann.line
 
 
 def test_no_prompt_asks_the_model_for_a_reply():
-    llm = _TalkingLLM({"bid": 54, "action": "skicka", "unseen": False, "reasoning": "motiv"})
+    llm = _TalkingLLM({"claim": 54, "action": "skicka", "unseen": False, "reasoning": "motiv"})
     agent = make("cecilia", ROSTER["cecilia"].params, OpponentTracker())
     agent.llm = llm
     agent.announce((5, 2))
     agent.decide(52)
-    agent.announce_forced((5, 2), previous_bid=52)
+    agent.announce_forced((5, 2), previous_claim=52)
     assert llm.prompts
     for prompt in llm.prompts:
         assert '"line"' not in prompt
 
 
 def test_forced_choice_line_is_local_but_reasoning_is_kept():
-    llm = _TalkingLLM({"bid": 54, "unseen": True, "reasoning": "kör på känsla"})
+    llm = _TalkingLLM({"claim": 54, "unseen": True, "reasoning": "kör på känsla"})
     agent = make("cecilia", ROSTER["cecilia"].params, OpponentTracker())
     agent.llm = llm
-    ann = agent.announce_forced((5, 2), previous_bid=52)
+    ann = agent.announce_forced((5, 2), previous_claim=52)
     assert ann.choice_line == "Jag påstår utan att titta."
     assert ann.choice_reasoning == "kör på känsla"
 
@@ -252,7 +252,7 @@ def test_player_count_is_free():
         assert rec.winner in {p["name"] for p in played}
 
 
-def test_bid_prompt_marks_each_legal_bid_as_higher_or_lower():
+def test_claim_prompt_marks_each_legal_claim_as_higher_or_lower():
     """Prompten ska säga vilka påståenden som är högre respektive lägre.
 
     Utan märkningen hände det att modellen kallade ett högre påstående för
@@ -260,7 +260,7 @@ def test_bid_prompt_marks_each_legal_bid_as_higher_or_lower():
     Då pekade draget och motiveringen åt olika håll.
     """
     agent = make("elsa", ROSTER["elsa"].params, OpponentTracker())
-    context = agent._bid_context((2, 5), 52, None, [61, 52, 51], None)
+    context = agent._claim_context((2, 5), 52, None, [61, 52, 51], None)
 
     assert "61 (högre, alltså bluff)" in context
     assert "52 (exakt dina tärningar)" in context

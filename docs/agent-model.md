@@ -413,9 +413,9 @@ Två tal hör dit:
 och 0,040 med rymdvinkeln. Talet är alltså inte en tärningsrest, och det lämnas
 fryst.
 
-Ett närbesläktat tal är andelen överbud bland **alla** synliga påståenden
+Ett närbesläktat tal är andelen påståenden över tärningarna bland **alla** synliga påståenden
 (omkring 0,52). Det är större än `DEFAULT_Q` därför att det räknar in de tvingade
-höjningarna, som är överbud för alla. Används det som nämnare får varje normal
+höjningarna, som ligger över tärningarna för alla. Används det som nämnare får varje normal
 spelare ratio över 1,0, och en läsande agent synar i onödan.
 
 Frysningen är ett krav, inte en detalj. Om `CALL_PRIOR` (eller BASE i övrigt)

@@ -13,7 +13,7 @@ from tests.test_session import ScriptedLLM
 
 def _agent(key: str) -> MeierPlayerAgent:
     role = Role(key=key, name=f"Spelare-{key}", description="test", style="spela")
-    return MeierPlayerAgent(role=role, llm=ScriptedLLM(bids=[11], actions=["syna"]))
+    return MeierPlayerAgent(role=role, llm=ScriptedLLM(claims=[11], actions=["syna"]))
 
 
 def _client(monkeypatch) -> TestClient:
@@ -43,7 +43,7 @@ def test_session_end_without_session_is_404(monkeypatch):
     assert res.status_code == 404
 
 
-def test_announce_endpoint_shakes_when_a_previous_bid_is_given(monkeypatch):
+def test_announce_endpoint_shakes_when_a_previous_claim_is_given(monkeypatch):
     """"Avancerat"-panelen är ett slag, inte ett första påstående.
 
     Ett tidigare påstående ska gå via ``announce_shake`` så att spelaren får
@@ -61,7 +61,7 @@ def test_announce_endpoint_shakes_when_a_previous_bid_is_given(monkeypatch):
             return super().announce_shake(dice, **kw)
 
     role = Role(key="k", name="K", description="test", style="spela")
-    agent = SpyAgent(role=role, llm=ScriptedLLM(bids=[11, 21], seen=True))
+    agent = SpyAgent(role=role, llm=ScriptedLLM(claims=[11, 21], seen=True))
     web_app._session = None
     monkeypatch.setattr(web_app, "_get_agent", lambda key: agent)
 
@@ -74,7 +74,7 @@ def test_announce_endpoint_shakes_when_a_previous_bid_is_given(monkeypatch):
     calls.clear()
     shaken = client.post(
         "/api/announce",
-        json={"die1": 5, "die2": 2, "role": "cecilia", "previous_bid": 44},
+        json={"die1": 5, "die2": 2, "role": "cecilia", "previous_claim": 44},
     )
     assert shaken.status_code == 200
     assert calls[0] == "announce_shake", (
@@ -87,19 +87,19 @@ def test_announce_endpoint_shakes_when_a_previous_bid_is_given(monkeypatch):
 def test_announce_endpoint_marks_the_unseen_choice(monkeypatch):
     """Väljer spelaren bort titten ska svaret säga det."""
     role = Role(key="k", name="K", description="test", style="spela")
-    agent = MeierPlayerAgent(role=role, llm=ScriptedLLM(bids=[11, 21], seen=False))
+    agent = MeierPlayerAgent(role=role, llm=ScriptedLLM(claims=[11, 21], seen=False))
     web_app._session = None
     monkeypatch.setattr(web_app, "_get_agent", lambda key: agent)
     client = TestClient(web_app.app)
 
     res = client.post(
-        "/api/announce", json={"die1": 5, "die2": 2, "role": "cecilia", "previous_bid": 44}
+        "/api/announce", json={"die1": 5, "die2": 2, "role": "cecilia", "previous_claim": 44}
     )
     assert res.status_code == 200
     body = res.json()["announcement"]
     assert body["unseen"] is True
     assert body["choice_line"] == "Jag påstår utan att titta."
-    assert rules.is_higher(body["bid"], 44)
+    assert rules.is_higher(body["claim"], 44)
 
 
 def test_announce_rejects_raising_over_meier(monkeypatch):
@@ -108,13 +108,13 @@ def test_announce_rejects_raising_over_meier(monkeypatch):
     Reglerna låter hållaren slå om och börja en ny runda i stället.
     """
     role = Role(key="k", name="K", description="test", style="spela")
-    agent = MeierPlayerAgent(role=role, llm=ScriptedLLM(bids=[11], seen=True))
+    agent = MeierPlayerAgent(role=role, llm=ScriptedLLM(claims=[11], seen=True))
     web_app._session = None
     monkeypatch.setattr(web_app, "_get_agent", lambda key: agent)
     client = TestClient(web_app.app)
 
     res = client.post(
-        "/api/announce", json={"die1": 5, "die2": 2, "role": "cecilia", "previous_bid": 21}
+        "/api/announce", json={"die1": 5, "die2": 2, "role": "cecilia", "previous_claim": 21}
     )
     assert res.status_code == 400
     assert "Meier" in res.json()["detail"]

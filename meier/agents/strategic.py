@@ -45,11 +45,13 @@ Ett varv:
 1. Spelaren med bägaren skakar, tittar i smyg och säger ett påstående: det sanna,
    ett högre (en bluff) eller ett lägre.
 2. Nästa spelare väljer ett av tre:
-   - Slå: skaka bägaren utan att titta och säga ett strikt högre påstående.
    - Syna: lyft locket. Visar tärningarna lägre än påståendet förlorar den som påstod
      ett liv. Visar de samma eller högre förlorar den som synade ett liv.
-   - Skicka vidare: skicka bägaren vidare med samma påstående. Du tar då över
-     ansvaret för påståendet.
+   - Slå: avstå från att syna och skaka tärningarna. Du får alltid lyfta på locket
+     och se dina egna tärningar, eller välja att låta bli. I båda fallen påstår du
+     vad de visar, och påståendet måste vara strikt högre än det förra.
+   - Skicka vidare: skicka bägaren vidare med samma påstående, utan att syna eller
+     slå. Du tar då över ansvaret för påståendet och ser inte tärningarna.
 3. Den som slår måste alltid säga ett strikt högre påstående, vad tärningarna än visar.
 4. Kommer bägaren ett helt varv tillbaka till den som påstod måste denne höja. Är
    påståendet Meier slår spelaren i stället om och börjar en ny runda.
@@ -132,7 +134,7 @@ class StrategicAgent(Agent):
         )
         return f"\nMOTSTÅNDAREN {opponent}\n{text}\n"
 
-    def _opponent_prior(self, bid: int, opponent: str | None) -> float | None:
+    def _opponent_prior(self, claim: int, opponent: str | None) -> float | None:
         """Påståendespecifik tro, justerad för motståndaren — eller None (populationen).
 
         Används bara av reservpolicyn. LLM:en får motståndaren i ord i stället.
@@ -142,7 +144,7 @@ class StrategicAgent(Agent):
         profile = self.opponent_profile(opponent)
         if profile is None:
             return None
-        base = CALL_PRIOR[bid]
+        base = CALL_PRIOR[claim]
         factor = self.tracker.bluff_factor(profile)
         factor = 1.0 + self.params.reading * (factor - 1.0)
         return min(0.95, base * factor)
@@ -186,7 +188,7 @@ class StrategicAgent(Agent):
         return None, reason
 
     @staticmethod
-    def _as_bid(value: object) -> int | None:
+    def _as_claim(value: object) -> int | None:
         """Tolka ett påstående ur modellens svar, som heltal eller siffror i text."""
         if isinstance(value, bool):
             return None
@@ -198,41 +200,41 @@ class StrategicAgent(Agent):
                 return int(digits)
         return None
 
-    def _parse_bid(self, data: dict, legal: list[int]) -> tuple[int | None, str]:
-        bid = self._as_bid(data.get("bid"))
-        if bid is None:
+    def _parse_claim(self, data: dict, legal: list[int]) -> tuple[int | None, str]:
+        claim = self._as_claim(data.get("claim"))
+        if claim is None:
             return None, "Du angav inget påstående."
-        if bid not in legal:
+        if claim not in legal:
             return None, (
-                f"{bid} är inte lagligt här. Lagliga påståenden: "
+                f"{claim} är inte lagligt här. Lagliga påståenden: "
                 f"{', '.join(rules.name(v) for v in legal)}."
             )
-        return bid, str(data.get("reasoning") or "").strip()
+        return claim, str(data.get("reasoning") or "").strip()
 
     # -- Beslut 1: påståendet (spelaren ser tärningarna) -------------------
     def announce(
         self,
         dice: tuple[int, int],
         *,
-        previous_bid: int | None = None,
+        previous_claim: int | None = None,
         opponent: str | None = None,
     ) -> Announcement:
         """Vilket påstående säger spelaren, givet vad tärningarna visar?"""
         shown = rules.read_dice(*dice)
-        legal = legality.legal_bids(shown=shown, previous_bid=previous_bid)
-        context = self._bid_context(dice, shown, previous_bid, legal, opponent)
-        bid, reason = self._ask(context, lambda d: self._parse_bid(d, legal))
+        legal = legality.legal_claims(shown=shown, previous_claim=previous_claim)
+        context = self._claim_context(dice, shown, previous_claim, legal, opponent)
+        claim, reason = self._ask(context, lambda d: self._parse_claim(d, legal))
 
         corrected = False
-        if bid is None:
+        if claim is None:
             # Reservpolicyn väljer bland samma lagliga påståenden, så valet är spelarens
             # eget även här. ``corrected`` betyder att LLM:en inte kunde svara.
-            decision = self.policy.decide_bid(
+            decision = self.policy.decide_claim(
                 shown,
                 opponent_factor=self._call_factor(opponent),
-                previous_bid=previous_bid,
+                previous_claim=previous_claim,
             )
-            bid, reason = decision.bid, decision.reason
+            claim, reason = decision.claim, decision.reason
             # Bara en korrigering om LLM:en faktiskt svarade fel. Utan klient
             # ar policyn spelearens eget beslut, inte en rattselse av nagon annans.
             corrected = self.llm is not None
@@ -240,20 +242,20 @@ class StrategicAgent(Agent):
         return Announcement(
             dice=(dice[0], dice[1]),
             shown=shown,
-            bid=bid,
-            truth=rules.is_true_bid(bid, shown),
-            line=self._say(bid),
+            claim=claim,
+            truth=rules.is_true_claim(claim, shown),
+            line=self._say(claim),
             reasoning=reason,
             role=self.role.key,
-            proposed=bid,
+            proposed=claim,
             corrected=corrected,
         )
 
-    def _bid_context(
+    def _claim_context(
         self,
         dice: tuple[int, int],
         shown: int,
-        previous_bid: int | None,
+        previous_claim: int | None,
         legal: list[int],
         opponent: str | None,
     ) -> str:
@@ -263,30 +265,30 @@ class StrategicAgent(Agent):
             f"Det visar {rules.name(shown)}.",
             self._opponent_note(opponent),
         ]
-        if previous_bid is None:
+        if previous_claim is None:
             lines += ["", "DET ÄR DU SOM BÖRJAR RUNDAN."]
         else:
             lines += [
                 "",
                 "SITUATIONEN",
                 f"Bägaren har gått ett helt varv tillbaka till dig och du måste höja "
-                f"över {rules.name(previous_bid)}.",
+                f"över {rules.name(previous_claim)}.",
             ]
         lines += [
             "",
             "LAGLIGA PÅSTÅENDEN",
-            self._legal_bids_listed(shown, legal),
+            self._legal_claims_listed(shown, legal),
             "",
             "Du får säga sanningen, ett högre (en bluff) eller ett lägre. Tänk på vad "
             "du tjänar på: ett påstående under dina tärningar kan ingen syna utan att "
             "förlora, ett påstående över är en bluff.",
             "",
             "Svara med JSON:",
-            '{"bid": <heltal ur listan ovan>, "reasoning": "<kort motivering>"}',
+            '{"claim": <heltal ur listan ovan>, "reasoning": "<kort motivering>"}',
         ]
         return "\n".join(lines)
 
-    def _legal_bids_listed(self, shown: int, legal: list[int]) -> str:
+    def _legal_claims_listed(self, shown: int, legal: list[int]) -> str:
         """Lista de lagliga påståendena med riktning mot tärningarna.
 
         Modellen kan Meiers ordning sämre än koden. Utan riktningen händer det att
@@ -306,7 +308,7 @@ class StrategicAgent(Agent):
 
     # -- Beslut 2: slå (spelaren ser tärningarna, om den inte väljer bort det) --
     def announce_shake(
-        self, dice: tuple[int, int], *, previous_bid: int, opponent: str | None = None
+        self, dice: tuple[int, int], *, previous_claim: int, opponent: str | None = None
     ) -> Announcement:
         """Spelaren slår: skakar bägaren på nytt och måste säga ett högre påstående.
 
@@ -315,18 +317,18 @@ class StrategicAgent(Agent):
         Avstår den från att titta går påståendet genom :meth:`announce_unseen`, som
         inte känner till tärningarna.
         """
-        choice = self.policy.decide_shake(previous_bid)
+        choice = self.policy.decide_shake(previous_claim)
         seen, reason = self._ask(
-            self._shake_context(previous_bid, opponent), self._parse_seen
+            self._shake_context(previous_claim, opponent), self._parse_seen
         )
         if seen is None:
             seen = choice.action != "unseen"
             reason = reason or choice.reason
 
         ann = (
-            self.announce(dice, previous_bid=previous_bid, opponent=opponent)
+            self.announce(dice, previous_claim=previous_claim, opponent=opponent)
             if seen
-            else self.announce_unseen(dice, previous_bid=previous_bid, opponent=opponent)
+            else self.announce_unseen(dice, previous_claim=previous_claim, opponent=opponent)
         )
         return replace(
             ann,
@@ -349,12 +351,12 @@ class StrategicAgent(Agent):
                 return False, reason
         return None, reason
 
-    def _shake_context(self, previous_bid: int, opponent: str | None) -> str:
+    def _shake_context(self, previous_claim: int, opponent: str | None) -> str:
         return "\n".join(
             [
                 "SLAG – TITTA ELLER INTE TITTA",
                 f"Du skakar bägaren på nytt och måste säga ett strikt högre påstående "
-                f"än {rules.name(previous_bid)}.",
+                f"än {rules.name(previous_claim)}.",
                 "Du får lyfta på locket och titta på tärningarna innan du påstår. "
                 "Det är det vanliga.",
                 self._opponent_note(opponent),
@@ -369,48 +371,48 @@ class StrategicAgent(Agent):
         )
 
     def announce_unseen(
-        self, dice: tuple[int, int], *, previous_bid: int, opponent: str | None = None
+        self, dice: tuple[int, int], *, previous_claim: int, opponent: str | None = None
     ) -> Announcement:
         """Fintaktikens väg: spelaren har valt bort titten och påstår högre blint."""
-        if not rules.is_valid_value(previous_bid):
-            raise ValueError(f"{previous_bid} är inte ett giltigt påstående")
-        legal = legality.unseen_bids(previous_bid=previous_bid)
+        if not rules.is_valid_value(previous_claim):
+            raise ValueError(f"{previous_claim} är inte ett giltigt påstående")
+        legal = legality.unseen_claims(previous_claim=previous_claim)
         if not legal:
             raise ValueError(
-                f"Kan inte slå: {rules.name(previous_bid)} är högst, det finns inget högre påstående"
+                f"Kan inte slå: {rules.name(previous_claim)} är högst, det finns inget högre påstående"
             )
         shown = rules.read_dice(*dice)
-        context = self._unseen_context(previous_bid, legal, opponent)
-        bid, reason = self._ask(context, lambda d: self._parse_bid(d, legal))
+        context = self._unseen_context(previous_claim, legal, opponent)
+        claim, reason = self._ask(context, lambda d: self._parse_claim(d, legal))
 
         corrected = False
-        if bid is None:
-            decision = self.policy.decide_raise(previous_bid)
-            bid = decision.bid if decision.bid in legal else legal[-1]
+        if claim is None:
+            decision = self.policy.decide_raise(previous_claim)
+            claim = decision.claim if decision.claim in legal else legal[-1]
             reason = decision.reason
             corrected = self.llm is not None
 
         return Announcement(
             dice=(dice[0], dice[1]),
             shown=shown,
-            bid=bid,
-            truth=rules.is_true_bid(bid, shown),
-            line=self._say(bid),
+            claim=claim,
+            truth=rules.is_true_claim(claim, shown),
+            line=self._say(claim),
             reasoning=reason,
             role=self.role.key,
-            proposed=bid,
+            proposed=claim,
             corrected=corrected,
             unseen=True,
         )
 
     def _unseen_context(
-        self, previous_bid: int, legal: list[int], opponent: str | None
+        self, previous_claim: int, legal: list[int], opponent: str | None
     ) -> str:
         return "\n".join(
             [
                 "SLAG UTAN ATT TITTA",
                 "Du har valt att inte lyfta på locket. Du ser inte tärningarna.",
-                f"Du måste säga ett strikt högre påstående än {rules.name(previous_bid)}.",
+                f"Du måste säga ett strikt högre påstående än {rules.name(previous_claim)}.",
                 self._opponent_note(opponent),
                 "",
                 "LAGLIGA PÅSTÅENDEN",
@@ -420,34 +422,34 @@ class StrategicAgent(Agent):
                 "påstående sätter press men synas oftare.",
                 "",
                 "Svara med JSON:",
-                '{"bid": <heltal ur listan ovan>, "reasoning": "<kort motivering>"}',
+                '{"claim": <heltal ur listan ovan>, "reasoning": "<kort motivering>"}',
             ]
         )
 
     # -- Beslut 3: titta eller påstå utan att titta vid tvingad höjning -------------
     def announce_forced(
-        self, dice: tuple[int, int], *, previous_bid: int, opponent: str | None = None
+        self, dice: tuple[int, int], *, previous_claim: int, opponent: str | None = None
     ) -> Announcement:
         """Bägaren har gått ett helt varv: titta på de nya tärningarna eller påstå utan att titta?"""
-        if not rules.is_valid_value(previous_bid):
-            raise ValueError(f"{previous_bid} är inte ett giltigt påstående")
-        choices = legality.forced_choices(previous_bid=previous_bid)
+        if not rules.is_valid_value(previous_claim):
+            raise ValueError(f"{previous_claim} är inte ett giltigt påstående")
+        choices = legality.forced_choices(previous_claim=previous_claim)
         if not choices:
             # Påståendet är Meier. Motorn slår om och börjar en ny runda i stället.
             raise ValueError(
-                f"Kan inte höja: {rules.name(previous_bid)} är högst, det finns inget högre påstående"
+                f"Kan inte höja: {rules.name(previous_claim)} är högst, det finns inget högre påstående"
             )
-        context = self._forced_context(previous_bid, choices, opponent)
+        context = self._forced_context(previous_claim, choices, opponent)
         unseen, reason = self._ask(context, self._parse_forced)
 
         if unseen is None:
-            choice = self.policy.decide_forced(previous_bid)
+            choice = self.policy.decide_forced(previous_claim)
             unseen, reason = choice.action == "unseen", choice.reason
 
         if unseen:
-            ann = self.announce_unseen(dice, previous_bid=previous_bid, opponent=opponent)
+            ann = self.announce_unseen(dice, previous_claim=previous_claim, opponent=opponent)
         else:
-            ann = self.announce(dice, previous_bid=previous_bid, opponent=opponent)
+            ann = self.announce(dice, previous_claim=previous_claim, opponent=opponent)
         return replace(
             ann,
             choice_line="Jag påstår utan att titta." if unseen else "Jag tittar på tärningarna.",
@@ -469,13 +471,13 @@ class StrategicAgent(Agent):
         return None, 'Du måste svara med "unseen": true eller false.'
 
     def _forced_context(
-        self, previous_bid: int, choices: list[str], opponent: str | None
+        self, previous_claim: int, choices: list[str], opponent: str | None
     ) -> str:
         return "\n".join(
             [
                 "TITTA ELLER INTE TITTA",
                 f"Bägaren har gått ett helt varv och är tillbaka hos dig. Du måste höja "
-                f"över {rules.name(previous_bid)}.",
+                f"över {rules.name(previous_claim)}.",
                 "Tärningarna har slagits om och ligger under locket.",
                 self._opponent_note(opponent),
                 "",
@@ -490,18 +492,18 @@ class StrategicAgent(Agent):
 
     # -- Beslut 4: syna, skicka vidare eller slå --------------------------
     def decide(
-        self, bid: int, *, lives: int = 3, opponent: str | None = None
+        self, claim: int, *, lives: int = 3, opponent: str | None = None
     ) -> ActionDecision:
         """Svara på ett påstående. Spelaren ser inte sina egna tärningar här."""
-        if not rules.is_valid_value(bid):
-            raise ValueError(f"{bid} är inte ett giltigt påstående")
-        choices = legality.response_actions(bid=bid)
-        context = self._response_context(bid, lives, choices, opponent)
+        if not rules.is_valid_value(claim):
+            raise ValueError(f"{claim} är inte ett giltigt påstående")
+        choices = legality.response_actions(claim=claim)
+        context = self._response_context(claim, lives, choices, opponent)
         action, reason = self._ask(context, lambda d: self._parse_response(d, choices))
 
         if action is None:
             decision = self.policy.decide_response(
-                bid, lives=lives, opponent_q=self._opponent_prior(bid, opponent)
+                claim, lives=lives, opponent_q=self._opponent_prior(claim, opponent)
             )
             action, reason = decision.action, decision.reason
             if action not in choices:
@@ -520,23 +522,23 @@ class StrategicAgent(Agent):
 
         return ActionDecision(
             action=action,
-            bid=None,
-            line=self._say_action(action, bid),
+            claim=None,
+            line=self._say_action(action, claim),
             reasoning=reason,
             role=self.role.key,
         )
 
-    def _say_action(self, action: str, bid: int) -> str:
+    def _say_action(self, action: str, claim: int) -> str:
         """Repliken som hör till svaret på ett påstående — inte till ett eget påstående.
 
         Byggs ur draget, av samma skäl som :meth:`_say`.
         """
         fallbacks = {
-            "syna": f"Jag synar {rules.name(bid)}.",
-            "skicka": f"Jag skickar vidare {rules.name(bid)}.",
-            "slå": f"Jag slår och påstår högre än {rules.name(bid)}.",
+            "syna": f"Jag synar {rules.name(claim)}.",
+            "skicka": f"Jag skickar vidare {rules.name(claim)}.",
+            "slå": f"Jag slår och påstår högre än {rules.name(claim)}.",
         }
-        return fallbacks.get(action, f"Jag säger {rules.name(bid)}.")
+        return fallbacks.get(action, f"Jag säger {rules.name(claim)}.")
 
     @staticmethod
     def _parse_response(data: dict, choices: list[str]) -> tuple[str | None, str]:
@@ -556,12 +558,12 @@ class StrategicAgent(Agent):
         return action, str(data.get("reasoning") or "").strip()
 
     def _response_context(
-        self, bid: int, lives: int, choices: list[str], opponent: str | None
+        self, claim: int, lives: int, choices: list[str], opponent: str | None
     ) -> str:
         return "\n".join(
             [
                 "SITUATIONEN",
-                f"Bägaren är hos {opponent or 'motståndaren'}, som säger {rules.name(bid)}.",
+                f"Bägaren är hos {opponent or 'motståndaren'}, som säger {rules.name(claim)}.",
                 f"Du har {lives} liv kvar.",
                 self._opponent_note(opponent),
                 "",
@@ -578,7 +580,7 @@ class StrategicAgent(Agent):
 
     # -- Repliken ----------------------------------------------------------
     @staticmethod
-    def _say(bid: int) -> str:
+    def _say(claim: int) -> str:
         """Repliken som hör till ett påstående.
 
         Den byggs ur draget, inte ur ett eget modellanrop. Repliken är kosmetisk
@@ -586,4 +588,4 @@ class StrategicAgent(Agent):
         bara kostnad utan inverkan på spelet. Det som styr hur spelaren *spelar*
         är motiveringen och påståendet, och de kommer från beslutsanropet.
         """
-        return f"Jag säger {rules.name(bid)}."
+        return f"Jag säger {rules.name(claim)}."

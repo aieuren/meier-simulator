@@ -10,32 +10,32 @@ from meier.agents.player import MeierPlayerAgent
 class ScriptedLLM:
     """LLM som svarar enligt ett manus, så att en match blir deterministisk."""
 
-    def __init__(self, bids=None, actions=None):
-        self.bids = list(bids or [])
+    def __init__(self, claims=None, actions=None):
+        self.claims = list(claims or [])
         self.actions = list(actions or [])
-        self._bid_i = 0
+        self._claim_i = 0
         self._act_i = 0
 
-    def _next_bid(self, default):
-        if self._bid_i < len(self.bids):
-            v = self.bids[self._bid_i]
-            self._bid_i += 1
+    def _next_claim(self, default):
+        if self._claim_i < len(self.claims):
+            v = self.claims[self._claim_i]
+            self._claim_i += 1
             return v
         return default
 
     def complete(self, system, user, *, json_mode=False):
         if "MÅSTE säga" in user or "utan att titta" in user:
-            return '{"bid": %s, "line": "höjer", "reasoning": "t"}' % self._next_bid(52)
+            return '{"claim": %s, "line": "höjer", "reasoning": "t"}' % self._next_claim(52)
         if "DITT VAL" in user:
             act = self.actions[self._act_i] if self._act_i < len(self.actions) else "syna"
             self._act_i += 1
             if act == "slå":
                 return (
-                    '{"action": "slå", "bid": %s, "line": "slår", "reasoning": "t"}'
-                    % self._next_bid(66)
+                    '{"action": "slå", "claim": %s, "line": "slår", "reasoning": "t"}'
+                    % self._next_claim(66)
                 )
             return '{"action": "%s", "line": "ok", "reasoning": "t"}' % act
-        return '{"bid": %s, "line": "säger", "reasoning": "t"}' % self._next_bid(52)
+        return '{"claim": %s, "line": "säger", "reasoning": "t"}' % self._next_claim(52)
 
 
 def make_agents(role_keys):
@@ -43,7 +43,7 @@ def make_agents(role_keys):
     agents = []
     for key in role_keys:
         role = Role(key=key, name=f"Spelare-{key}", description="test", style="spela")
-        agents.append(MeierPlayerAgent(role=role, llm=ScriptedLLM(bids=[31], actions=["syna"])))
+        agents.append(MeierPlayerAgent(role=role, llm=ScriptedLLM(claims=[31], actions=["syna"])))
     return agents
 
 
@@ -78,7 +78,7 @@ def test_events_carry_analysis_fields(monkeypatch):
     assert call["caller_loses"] in (True, False)
     assert call["actor_lives"] is not None
     assert call["active_players"] is not None
-    assert call["accepted_bid"] is not None
+    assert call["accepted_claim"] is not None
 
 
 def test_summarize_aggregates_roles(monkeypatch):
@@ -124,3 +124,60 @@ def test_run_matches_parallel_workers(monkeypatch):
     # variera eftersom de spelas samtidigt.
     assert len(recs) == 4
     assert sorted(r.game for r in recs) == [1, 2, 3, 4]
+
+
+# -- Gamla loggar (skrivna före namnbytet bid -> claim) ----------------------
+
+
+def _gammal_post() -> dict:
+    """En post i det gamla formatet: bid, bud och bids."""
+    return {
+        "players": [{"index": 0, "role": "axel", "name": "A"}],
+        "starter": 0,
+        "winner": "A",
+        "winner_role": "axel",
+        "rounds": 1,
+        "events": [
+            {
+                "kind": "action",
+                "action": "bud",
+                "bid": 52,
+                "bid_name": "52",
+                "accepted_bid": None,
+                "previous_bid": None,
+            }
+        ],
+        "player_stats": {
+            "A": {"bids": 3, "blinds": 1, "bluffs": 1, "truths": 2, "decisions": 2,
+                  "raises": 0, "passes": 1, "calls": 1, "calls_won": 1,
+                  "calls_lost": 0, "lives_lost": 0, "eliminated": False},
+        },
+    }
+
+
+def test_gammal_logg_lases_som_ny(tmp_path):
+    """En logg med bid/bud ska gå att läsa utan att filen skrivs om."""
+    path = tmp_path / "gammal.jsonl"
+    path.write_text(json.dumps(_gammal_post(), ensure_ascii=False) + "\n", encoding="utf-8")
+
+    post = match.read_jsonl(path)[0]
+
+    event = post["events"][0]
+    assert event["action"] == "påstå"
+    assert event["claim"] == 52
+    assert "bid" not in event and "bid_name" not in event
+    stat = post["player_stats"]["A"]
+    assert stat["claims"] == 3
+    assert stat["unseen"] == 1
+    assert "bids" not in stat
+
+
+def test_gammal_logg_kan_sammanfattas(tmp_path):
+    """Summeringen ska räkna gamla loggar som nya, inte tappa dem."""
+    path = tmp_path / "gammal.jsonl"
+    path.write_text(json.dumps(_gammal_post(), ensure_ascii=False) + "\n", encoding="utf-8")
+
+    stats = match.summarize(match.read_jsonl(path))
+
+    assert stats["games"] == 1
+    assert stats["roles"]["axel"]["claims"] == 3

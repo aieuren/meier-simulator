@@ -20,11 +20,12 @@ from pathlib import Path
 from typing import Any
 
 from .agents.roster import make_players
+from .legacy import upgrade_record
 from .llm import LLMClient
 from .session import LogEntry, Session
 
 #: Åtgärder som är spelarens eget påstående (spelaren säger ett värde).
-BID_ACTIONS = ("bud", "slå", "höja")
+CLAIM_ACTIONS = ("påstå", "slå", "höja")
 #: Åtgärder där spelaren svarar på någon annans påstående.
 DECISION_ACTIONS = ("slå", "skicka", "syna")
 
@@ -77,7 +78,7 @@ def _player_stats(log: list[LogEntry], names: list[str]) -> dict[str, dict[str, 
     """Per-spelare-statistik för en enskild match, räknad ur loggen."""
     stats: dict[str, dict[str, Any]] = {
         name: {
-            "bids": 0,          # egna påståenden (påstående/slå/höja)
+            "claims": 0,          # egna påståenden (påstående/slå/höja)
             "unseen": 0,        # egna påståenden efter ett slag utan att titta (såg inte tärningarna)
             "bluffs": 0,        # egna påståenden där spelaren tittat och inte sa sanningen
             "truths": 0,        # egna påståenden där spelaren tittat och sa sanningen
@@ -104,8 +105,8 @@ def _player_stats(log: list[LogEntry], names: list[str]) -> dict[str, dict[str, 
             continue
         if entry.kind != "action":
             continue
-        if entry.action in BID_ACTIONS:
-            s["bids"] += 1
+        if entry.action in CLAIM_ACTIONS:
+            s["claims"] += 1
             # Den som valt bort titten gjorde inget medvetet löfte – räkna inte som bluff.
             if entry.unseen:
                 s["unseen"] += 1
@@ -299,13 +300,17 @@ def write_jsonl(records: Iterable[GameRecord], path: str | Path) -> int:
 
 
 def read_jsonl(path: str | Path) -> list[dict[str, Any]]:
-    """Läs tillbaka en JSONL-fil med matchprotokoll."""
+    """Läs tillbaka en JSONL-fil med matchprotokoll.
+
+    Protokoll skrivna före namnbytet (``bid``/``bud``) översätts vid inläsning,
+    så att äldre loggar går att analysera med nuvarande kod.
+    """
     records: list[dict[str, Any]] = []
     with open(path, encoding="utf-8") as fh:
         for line in fh:
             line = line.strip()
             if line:
-                records.append(json.loads(line))
+                records.append(upgrade_record(json.loads(line)))
     return records
 
 
@@ -349,7 +354,7 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
                     "wins": 0,
                     "eliminated": 0,
                     "lives_lost": 0,
-                    "bids": 0,
+                    "claims": 0,
                     "unseen": 0,
                     "bluffs": 0,
                     "truths": 0,
@@ -370,7 +375,7 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
             bucket["eliminated"] += 1 if s["eliminated"] else 0
             bucket["lives_lost"] += s["lives_lost"]
             for key in (
-                "bids",
+                "claims",
                 "unseen",
                 "bluffs",
                 "truths",
@@ -395,8 +400,8 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
         b["win_rate"] = _rate(b["wins"], b["games"])
         b["elimination_rate"] = _rate(b["eliminated"], b["games"])
         b["avg_lives_lost"] = round(b["lives_lost"] / games, 3)
-        b["bluff_rate"] = _rate(b["bluffs"], b["bids"])
-        b["unseen_rate"] = _rate(b["unseen"], b["bids"])
+        b["bluff_rate"] = _rate(b["bluffs"], b["claims"])
+        b["unseen_rate"] = _rate(b["unseen"], b["claims"])
         b["raise_rate"] = _rate(b["raises"], b["decisions"])
         b["pass_rate"] = _rate(b["passes"], b["decisions"])
         b["call_rate"] = _rate(b["calls"], b["decisions"])

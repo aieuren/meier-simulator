@@ -56,13 +56,13 @@ class AnnounceRequest(BaseModel):
     die1: int = Field(..., ge=1, le=6, description="Första tärningen")
     die2: int = Field(..., ge=1, le=6, description="Andra tärningen")
     role: str = Field("cecilia", description="Agentens roll")
-    previous_bid: int | None = Field(
+    previous_claim: int | None = Field(
         None, description="Tidigare påstående om spelaren slår efter någon annan"
     )
 
 
 class DecideRequest(BaseModel):
-    bid: int = Field(..., description="Motståndarens påstående")
+    claim: int = Field(..., description="Motståndarens påstående")
     role: str = Field("cecilia", description="Agentens roll")
     lives: int = Field(3, ge=0, le=3)
 
@@ -123,15 +123,15 @@ def announce(req: AnnounceRequest) -> dict:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    if req.previous_bid is not None and not rules.is_valid_value(req.previous_bid):
-        raise HTTPException(status_code=400, detail=f"Ogiltigt tidigare påstående: {req.previous_bid}")
+    if req.previous_claim is not None and not rules.is_valid_value(req.previous_claim):
+        raise HTTPException(status_code=400, detail=f"Ogiltigt tidigare påstående: {req.previous_claim}")
 
     agent = _get_agent(req.role)
     try:
-        if req.previous_bid is None:
+        if req.previous_claim is None:
             # Rundans första påstående: spelaren har tittat i smyg.
             ann = agent.announce((req.die1, req.die2))
-        elif rules.is_meier(req.previous_bid):
+        elif rules.is_meier(req.previous_claim):
             # Meier går inte att höja. Reglerna låter i stället hållaren slå om
             # och börja en ny runda, så det finns inget slag att svara på här.
             raise HTTPException(
@@ -145,7 +145,7 @@ def announce(req: AnnounceRequest) -> dict:
             # Ett slag efter ett tidigare påstående. Spelaren får lyfta på locket
             # och avgör själv om den vill det.
             ann = agent.announce_shake(
-                (req.die1, req.die2), previous_bid=req.previous_bid
+                (req.die1, req.die2), previous_claim=req.previous_claim
             )
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=f"LLM-fel: {exc}") from exc
@@ -155,7 +155,7 @@ def announce(req: AnnounceRequest) -> dict:
     return {
         "shown": shown,
         "shown_name": rules.name(shown),
-        "previous_bid": req.previous_bid,
+        "previous_claim": req.previous_claim,
         "announcement": ann.to_dict(),
     }
 
@@ -165,12 +165,12 @@ def decide(req: DecideRequest) -> dict:
     """Givet en motståndares påstående: slår, synar eller skickar spelaren vidare?"""
     if req.role not in ROSTER:
         raise HTTPException(status_code=400, detail=f"Okänd roll: {req.role}")
-    if not rules.is_valid_value(req.bid):
-        raise HTTPException(status_code=400, detail=f"Ogiltigt påstående: {req.bid}")
+    if not rules.is_valid_value(req.claim):
+        raise HTTPException(status_code=400, detail=f"Ogiltigt påstående: {req.claim}")
 
     agent = _get_agent(req.role)
     try:
-        decision = agent.decide(req.bid, lives=req.lives)
+        decision = agent.decide(req.claim, lives=req.lives)
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=f"LLM-fel: {exc}") from exc
 

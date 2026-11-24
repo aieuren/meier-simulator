@@ -14,6 +14,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+from .legacy import upgrade_record
 from .llm import LLMClient, LLMConfig, LLMError, parse_json_object
 from .match import summarize
 
@@ -49,7 +50,7 @@ def parse_jsonl_text(text: str) -> tuple[list[dict[str, Any]], int]:
         except json.JSONDecodeError:
             skipped += 1
             continue
-        rec = normalize_record(obj)
+        rec = normalize_record(upgrade_record(obj))
         if rec is None:
             skipped += 1
             continue
@@ -66,9 +67,9 @@ def build_digest(records: list[dict[str, Any]]) -> dict[str, Any]:
     summary = summarize(records) if records else {"games": 0, "roles": {}}
 
     actions: Counter = Counter()
-    bids: Counter = Counter()
+    claims: Counter = Counter()
     outcomes: Counter = Counter()
-    unseen_bids = 0
+    unseen_claims = 0
     total_events = 0
     calls = {"caller_wins": 0, "caller_loses": 0}
     series: list[dict[str, Any]] = []
@@ -82,12 +83,12 @@ def build_digest(records: list[dict[str, Any]]) -> dict[str, Any]:
             action = e.get("action")
             if action:
                 actions[str(action)] += 1
-            if action in ("bud", "slå", "höja") and e.get("bid_name"):
-                bids[str(e["bid_name"])] += 1
+            if action in ("påstå", "slå", "höja") and e.get("claim_name"):
+                claims[str(e["claim_name"])] += 1
             if e.get("shown_name"):
                 outcomes[str(e["shown_name"])] += 1
             if e.get("unseen"):
-                unseen_bids += 1
+                unseen_claims += 1
             if action == "syna":
                 calls["caller_loses" if e.get("caller_loses") else "caller_wins"] += 1
 
@@ -108,9 +109,9 @@ def build_digest(records: list[dict[str, Any]]) -> dict[str, Any]:
         "roles": summary.get("roles", {}),
         "call_outcomes": calls,
         "actions": _top(actions),
-        "bids": _top(bids),
+        "claims": _top(claims),
         "outcomes": _top(outcomes),
-        "unseen_bids": unseen_bids,
+        "unseen_claims": unseen_claims,
         "events_total": total_events,
         "games_series": series[:_MAX_SERIES],
         "games_series_truncated": len(series) > _MAX_SERIES,
@@ -125,7 +126,7 @@ def render_digest_text(digest: dict[str, Any]) -> str:
     lines.append(
         f"Startspelaren vinner: {digest.get('starter_win_rate', 0)} av matcherna"
     )
-    lines.append(f"Påståenden utan att titta totalt: {digest.get('unseen_bids', 0)}")
+    lines.append(f"Påståenden utan att titta totalt: {digest.get('unseen_claims', 0)}")
 
     lines.append("")
     lines.append("PER ROLL")
@@ -133,7 +134,7 @@ def render_digest_text(digest: dict[str, Any]) -> str:
     for role, b in roles.items():
         lines.append(
             "- {name} ({role}): {games} matcher, {wins} vinster "
-            "(vinst% {win_rate}), påståenden {bids}, bluff {bluffs} (bluff% {bluff_rate}), "
+            "(vinst% {win_rate}), påståenden {claims}, bluff {bluffs} (bluff% {bluff_rate}), "
             "utan att titta {unseen} (andel {unseen_rate}), höjningar {raises}, "
             "skicka {passes}, synar {calls} (syn% {call_rate}), "
             "syn lyckas {calls_won}/{calls} ({call_success_rate}), "
@@ -149,7 +150,7 @@ def render_digest_text(digest: dict[str, Any]) -> str:
         f"synaren förlorade {co.get('caller_loses', 0)}"
     )
 
-    for label, key in (("ÅTGÄRDER", "actions"), ("PÅSTÅENDEN (vanligast)", "bids"),
+    for label, key in (("ÅTGÄRDER", "actions"), ("PÅSTÅENDEN (vanligast)", "claims"),
                        ("TÄRNINGSUTFALL (vanligast)", "outcomes")):
         dist = digest.get(key, {})
         if dist:

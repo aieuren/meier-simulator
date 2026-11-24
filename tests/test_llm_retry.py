@@ -92,12 +92,12 @@ def test_complete_retries_real_timeout_then_succeeds(monkeypatch):
         if calls["n"] == 1:
             raise httpx.ReadTimeout("timed out")
         return _FakeResponse(
-            {"choices": [{"message": {"content": '{"bid": 52}'}}], "usage": {"total_tokens": 3}}
+            {"choices": [{"message": {"content": '{"claim": 52}'}}], "usage": {"total_tokens": 3}}
         )
 
     monkeypatch.setattr("meier.llm.httpx.post", fake_post)
     client = _client(max_retries=3)
-    assert client.complete("system", "user") == '{"bid": 52}'
+    assert client.complete("system", "user") == '{"claim": 52}'
     assert calls["n"] == 2
 
 

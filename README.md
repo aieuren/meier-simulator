@@ -45,9 +45,9 @@ roller kan spela hela spel mot varandra.
 
 - Två tärningar läses som ett tal med den högsta tärningen först: 2 och 5 blir 52.
 - 21 kallas Meier och är högst. Sedan faller ordningen ner till 31 (lägst).
-- Spelaren skakar, tittar i smyg och säger ett resultat: sant, högre eller lägre.
-- Nästa spelare kan Slå (säga ett högre påstående), Syna (lyfta locket) eller
-  Skicka vidare (samma påstående).
+- Spelaren skakar, tittar i smyg och påstår vad tärningarna visar: sant, högre eller lägre.
+- Nästa spelare kan Syna (lyfta locket), Slå (säga ett högre påstående; den som
+  slår får alltid titta på sina egna tärningar) eller Skicka vidare (samma påstående).
 - Vid syn: visar tärningarna lägre än påståendet förlorar den som påstår ett liv. Visar de
   samma eller högre förlorar den som synade ett liv.
 - Meier kostar dubbelt – om påståendet är Meier, eller om tärningarna visar Meier
@@ -230,7 +230,7 @@ I webbappen finns sektionen "Spelarna möter varandra":
 
 Loggen byggs nedåt: äldst överst, nyast nederst. Varje runda börjar med en
 rad för tärningsutfallet (indata) med tärningssymboler. Därefter följer en rad
-per svar – bara siffran som sägs, eller Synar / Skickar vidare / Slår
+per svar – bara siffran som sägs, eller Synar / Slår / Skickar vidare
 / Höjer. Inga repliker visas. Vid en syn visas resultatet och en egen rad om
 vem som förlorade hur många liv. Direkt efter den raden visas en
 livsställning med hur många liv varje spelare har kvar (och vilka som är
@@ -339,7 +339,7 @@ Tre saker är värda att veta:
 |---|---|---|
 | GET | `/api/roles` | Roller och poängordning |
 | POST | `/api/announce` | Givet tärningsutfall: spelarens svar |
-| POST | `/api/decide` | Givet ett påstående: Slå, Syna eller Skicka vidare |
+| POST | `/api/decide` | Givet ett påstående: Syna, Slå eller Skicka vidare |
 | GET | `/api/health` | Status och vald LLM-leverantör |
 | POST | `/api/session/new` | Ny session: slumpad ordning, första slaget |
 | GET | `/api/session` | Hela sessionens tillstånd och logg |
@@ -385,11 +385,11 @@ saker avgör hur länge en körning får hålla på:
   klart. Ladda ner filen och fortsätt därifrån.
 
 Behöver du en körning som garanterat får ta mer än en timme, kör du den utanför
-Agent Canvas – koden är portabel. Sätt `ANTHROPIC_API_KEY` och kör kommandoraden
+Agent Canvas – koden är portabel. Sätt `GEMINI_API_KEY` och kör kommandoraden
 i en egen terminal (eller med `nohup`):
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...
+export GEMINI_API_KEY=...
 python -m meier.cli match --count 60 --workers 4 \
   --out matcher.jsonl
 ```

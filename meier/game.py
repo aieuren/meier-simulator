@@ -40,7 +40,7 @@ class Turn:
     player_index: int
     dice: tuple[int, int]
     shown: int
-    bid: int
+    claim: int
     line: str
     reasoning: str
     truth: bool
@@ -103,19 +103,19 @@ class Game:
         pos0 = active_idx.index(starter)
         order = active_idx[pos0:] + active_idx[:pos0]
 
-        bidder = order[0]
+        claimer = order[0]
         holder = order[0]  # ansvarig för påståendet (byter vid skicka vidare)
         dice = self.roll()
         shown = rules.read_dice(*dice)
         # Den som sitter näst efter den som påstod är den som först får svara.
         nxt = order[1 % len(order)]
-        ann = self.players[bidder].agent.announce(
+        ann = self.players[claimer].agent.announce(
             dice, opponent=self.players[nxt].name
         )
-        bid = ann.bid
+        claim = ann.claim
         self._record(
-            f"Runda {self.rounds}: {self.players[bidder].name} slår och säger "
-            f"{rules.name(bid)} ({ann.line}) [visar {rules.name(shown)}]"
+            f"Runda {self.rounds}: {self.players[claimer].name} slår och säger "
+            f"{rules.name(claim)} ({ann.line}) [visar {rules.name(shown)}]"
         )
 
         pos = 1
@@ -126,10 +126,10 @@ class Game:
             if turns > max_turns:
                 # Skyddsnät: ingen ville syna. Tvinga fram en syn så rundan tar slut.
                 idx = order[pos % len(order)]
-                if idx == bidder:
+                if idx == claimer:
                     idx = order[(pos + 1) % len(order)]
                 self._record(f"  {self.players[idx].name} tvingas syna (rundan tog för lång tid).")
-                result = rules.resolve_call(bid, shown)
+                result = rules.resolve_call(claim, shown)
                 loser = holder if not result.caller_loses else idx
                 self.players[loser].lose_life(result.lives)
                 self._record(f"  Syn! {result.describe()}")
@@ -140,41 +140,41 @@ class Game:
                 return self._previous_active(loser)
 
             idx = order[pos % len(order)]
-            if idx == bidder:
+            if idx == claimer:
                 # Bägaren har gått ett helt varv tillbaka till den som påstod.
-                if rules.is_meier(bid):
+                if rules.is_meier(claim):
                     self._record(
-                        f"  Bägaren tillbaka hos {self.players[bidder].name} med Meier "
+                        f"  Bägaren tillbaka hos {self.players[claimer].name} med Meier "
                         "– slår om och börjar ny runda."
                     )
-                    return bidder
+                    return claimer
                 # Tärningarna slås om; den som påstod väljer att titta eller påstå utan att titta.
                 dice = self.roll()
                 shown = rules.read_dice(*dice)
-                responder = order[(order.index(bidder) + 1) % len(order)]
-                forced = self.players[bidder].agent.announce_forced(
+                responder = order[(order.index(claimer) + 1) % len(order)]
+                forced = self.players[claimer].agent.announce_forced(
                     dice,
-                    previous_bid=bid,
+                    previous_claim=claim,
                     opponent=self.players[responder].name,
                 )
-                bid = forced.bid
-                holder = bidder  # den som påstod ansvarar nu för det nya påståendet
+                claim = forced.claim
+                holder = claimer  # den som påstod ansvarar nu för det nya påståendet
                 unseen_note = " (utan att titta)" if forced.unseen else ""
                 why = f" [{forced.choice_reasoning}]" if forced.choice_reasoning else ""
                 self._record(
-                    f"  Bägaren tillbaka hos {self.players[bidder].name}, som slår om "
-                    f"({rules.name(shown)}) och måste höja till {rules.name(bid)}{unseen_note} "
+                    f"  Bägaren tillbaka hos {self.players[claimer].name}, som slår om "
+                    f"({rules.name(shown)}) och måste höja till {rules.name(claim)}{unseen_note} "
                     f"({forced.line}).{why}"
                 )
                 pos += 1
                 continue
 
             player = self.players[idx]
-            decision = player.agent.decide(bid, lives=player.lives)
+            decision = player.agent.decide(claim, lives=player.lives)
             self._record(f"  {player.name} väljer: {decision.action} ({decision.line})")
 
             if decision.action == "syna":
-                result = rules.resolve_call(bid, shown)
+                result = rules.resolve_call(claim, shown)
                 loser = holder if not result.caller_loses else idx
                 self.players[loser].lose_life(result.lives)
                 self._record(
@@ -193,16 +193,16 @@ class Game:
                 shown = rules.read_dice(*dice)
                 responder = order[(order.index(idx) + 1) % len(order)]
                 ann = player.agent.announce_shake(
-                    dice, previous_bid=bid, opponent=self.players[responder].name
+                    dice, previous_claim=claim, opponent=self.players[responder].name
                 )
                 unseen_note = " (utan att titta)" if ann.unseen else ""
                 why = f" [{ann.choice_reasoning}]" if ann.choice_reasoning else ""
                 self._record(
                     f"  {player.name} slår om ({rules.name(shown)}) och säger "
-                    f"{rules.name(ann.bid)}{unseen_note} ({ann.line}).{why}"
+                    f"{rules.name(ann.claim)}{unseen_note} ({ann.line}).{why}"
                 )
-                bid = ann.bid
-                bidder = idx
+                claim = ann.claim
+                claimer = idx
                 holder = idx
             elif decision.action == "skicka":
                 # Spelaren tar över ansvaret för påståendet.

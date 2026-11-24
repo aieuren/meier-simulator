@@ -55,9 +55,9 @@ def at_least_probability(value: int) -> float:
     return sum(p for v, p in OUTCOME_P.items() if rules.compare(v, value) >= 0)
 
 
-def lives_lost(bid: int, shown: int) -> int:
+def lives_lost(claim: int, shown: int) -> int:
     """Antal liv som förloras vid en syn. Meier kostar dubbelt, på båda sidor."""
-    return 2 if (rules.is_meier(bid) or rules.is_meier(shown)) else 1
+    return 2 if (rules.is_meier(claim) or rules.is_meier(shown)) else 1
 
 
 def _strength(value: int) -> float:
@@ -72,7 +72,7 @@ def _strength(value: int) -> float:
 
 @dataclass(frozen=True)
 class CallOdds:
-    """Vad en syn på påståendet ``bid`` är värd, och när den går jämnt upp.
+    """Vad en syn på påståendet ``claim`` är värd, och när den går jämnt upp.
 
     ``l_win``  – förväntade liv som *hållaren* förlorar, givet att synaren vinner
                  (tärningarna visar lägre än påståendet).
@@ -81,7 +81,7 @@ class CallOdds:
     ``q_star`` – minsta bluff-sannolikhet där synen ger positivt livsöverskott.
     """
 
-    bid: int
+    claim: int
     p_win: float  # P(tärningarna visar lägre än påståendet) — synaren vinner
     l_win: float
     l_lose: float
@@ -102,14 +102,14 @@ class CallOdds:
         return self.ev_call(q) > 0.0
 
 
-def _call_odds(bid: int) -> CallOdds:
-    lo = [v for v in rules.RANKING if rules.compare(v, bid) < 0]   # synaren vinner
-    hi = [v for v in rules.RANKING if rules.compare(v, bid) >= 0]  # synaren förlorar
+def _call_odds(claim: int) -> CallOdds:
+    lo = [v for v in rules.RANKING if rules.compare(v, claim) < 0]   # synaren vinner
+    hi = [v for v in rules.RANKING if rules.compare(v, claim) >= 0]  # synaren förlorar
     p_lo = sum(OUTCOME_P[v] for v in lo)
     p_hi = sum(OUTCOME_P[v] for v in hi)
-    l_win = sum(lives_lost(bid, v) * OUTCOME_P[v] for v in lo) / p_lo if p_lo else 0.0
-    l_lose = sum(lives_lost(bid, v) * OUTCOME_P[v] for v in hi) / p_hi if p_hi else 0.0
-    return CallOdds(bid=bid, p_win=p_lo, l_win=l_win, l_lose=l_lose)
+    l_win = sum(lives_lost(claim, v) * OUTCOME_P[v] for v in lo) / p_lo if p_lo else 0.0
+    l_lose = sum(lives_lost(claim, v) * OUTCOME_P[v] for v in hi) / p_hi if p_hi else 0.0
+    return CallOdds(claim=claim, p_win=p_lo, l_win=l_win, l_lose=l_lose)
 
 
 #: CallOdds för varje giltigt påstående. Beräknas en gång.
@@ -159,17 +159,17 @@ class AgentParams:
 class Decision:
     """Ett färdigt beslut från policyn.
 
-    ``action`` är en av ``"bud"``, ``"slå"``, ``"syna"``, ``"skicka"`` eller
-    ``"titta"``/``"unseen"`` (vid tvingad höjning). ``bid`` är satt för påstående och slå.
+    ``action`` är en av ``"påstå"``, ``"slå"``, ``"syna"``, ``"skicka"`` eller
+    ``"titta"``/``"unseen"`` (vid tvingad höjning). ``claim`` är satt för påstående och slå.
     ``reason`` är en kort maskinell motivering (LLM:en får formulera en rikare).
     """
 
     action: str
-    bid: int | None = None
+    claim: int | None = None
     reason: str = ""
 
     def to_dict(self) -> dict:
-        return {"action": self.action, "bid": self.bid, "reason": self.reason}
+        return {"action": self.action, "claim": self.claim, "reason": self.reason}
 
 
 #: Den typiska bluff-frekvensen i populationen, mätt på **avslöjade** påstående
@@ -177,9 +177,10 @@ class Decision:
 #: benägenhet mäts relativt populationen, och som förhandstro innan en spelare
 #: avslöjats.
 #:
-#: Notera att detta **inte** är samma tal som andelen överbud bland alla synliga
-#: påståenden (~0,52). Skillnaden är de tvingade höjningarna: de är mekaniska
-#: överbud för alla och räknas därför bort ur profilen. Använder man 0,52 som
+#: Notera att detta **inte** är samma tal som andelen påståenden över tärningarna
+#: bland alla synliga påståenden (~0,52). Skillnaden är de tvingade
+#: höjningarna: de ligger mekaniskt över tärningarna för alla och räknas därför
+#: bort ur profilen. Använder man 0,52 som
 #: nämnare får varje normal spelare ratio > 1,0 och en läsande agent synar i
 #: onödan.
 #:
@@ -195,7 +196,7 @@ DEFAULT_Q = 0.715
 #: räcker inte: sannolikheten att en syn vinner varierar kraftigt med påståendet,
 #: därför att motståndare påstår över sina tärningar när de är svaga.
 #:
-#: Tabellen är **inte** den råa sannolikheten ``P(shown < bid)``. Den är medvetet
+#: Tabellen är **inte** den råa sannolikheten ``P(shown < claim)``. Den är medvetet
 #: *mer försiktig* än så, och det av två skäl som hänger ihop:
 #:
 #: 1. **Livsförlusten är asymmetrisk.** Att syna ett lågt påstående som 33 vinner ofta
@@ -273,7 +274,7 @@ class BasePolicy:
     rng: random.Random = field(default_factory=random.Random)
 
     # -- Trons beroende av påståendenivån ----------------------------------
-    def belief(self, bid: int, opponent_q: float | None = None) -> float:
+    def belief(self, claim: int, opponent_q: float | None = None) -> float:
         """Tron på att en syn vinner, vägd enligt ``statistics``.
 
         ``statistics = 1`` ger fullt ut den påståendespecifika tabellen
@@ -281,7 +282,7 @@ class BasePolicy:
         ger en enda platt tro: agenten struntar i vilket påstående som står och
         tror samma sak varje gång. Däremellan blandas de två linjärt.
         """
-        specific = CALL_PRIOR[bid] if opponent_q is None else opponent_q
+        specific = CALL_PRIOR[claim] if opponent_q is None else opponent_q
         weight = self.params.statistics
         return weight * specific + (1.0 - weight) * FLAT_Q
 
@@ -304,12 +305,12 @@ class BasePolicy:
 
     # -- Beslut 3: syna eller skicka ------------------------------------
     def decide_call(
-        self, bid: int, *, lives: int = 3, opponent_q: float | None = None
+        self, claim: int, *, lives: int = 3, opponent_q: float | None = None
     ) -> Decision:
-        """Ska agenten syna påståendet ``bid``? Agenten ser inte sina tärningar här.
+        """Ska agenten syna påståendet ``claim``? Agenten ser inte sina tärningar här.
 
         ``opponent_q`` är en motståndarspecifik bluffskattning (för läsande
-        agenter). Utan den används den **påståendespecifika** tron ``CALL_PRIOR[bid]``,
+        agenter). Utan den används den **påståendespecifika** tron ``CALL_PRIOR[claim]``,
         blandad med den platta tron enligt ``statistics``.
 
         Synen avgörs av det förväntade livsöverskottet, med en liten
@@ -319,8 +320,8 @@ class BasePolicy:
         Den här metoden ser bara två val. Spelaren har tre — se
         :meth:`decide_response`, som även väger in att slå.
         """
-        odds = CALL_ODDS[bid]
-        q = self.belief(bid, opponent_q)
+        odds = CALL_ODDS[claim]
+        q = self.belief(claim, opponent_q)
         ev = odds.ev_call(q)
         # En syn är bara värd att ta om livsöverskottet är klart positivt. En syn
         # som ligger nära break-even är ett lotteri om livet, och i Meier är det
@@ -339,7 +340,7 @@ class BasePolicy:
 
     # -- Beslut 3b: alla tre svar på ett påstående ------------------------------
     def decide_response(
-        self, bid: int, *, lives: int = 3, opponent_q: float | None = None
+        self, claim: int, *, lives: int = 3, opponent_q: float | None = None
     ) -> Decision:
         """Välj mellan att syna, skicka vidare och slå.
 
@@ -362,56 +363,56 @@ class BasePolicy:
         break-even inte blir ett lotteri om livet. ``unpredictability`` lägger
         ett litet brus på värdena, så nästan lika bra drag ibland byts ut.
         """
-        odds = CALL_ODDS[bid]
-        q = self.belief(bid, opponent_q)
+        odds = CALL_ODDS[claim]
+        q = self.belief(claim, opponent_q)
 
         call_ev = odds.ev_call(q)
         inertia = self.inertia()
         noise = self.jitter()
 
-        hold_ev = self._hold_value(bid)
+        hold_ev = self._hold_value(claim)
 
         options: list[tuple[str, float, str]] = [
             ("syna", call_ev + inertia + noise, f"EV={call_ev:+.3f} liv (tröskel −{inertia:.3f})"),
             ("skicka", hold_ev - noise, f"hållarvärde={hold_ev:+.3f} liv"),
         ]
 
-        shake = self.decide_raise(bid)
-        if shake.action == "slå" and shake.bid is not None:
-            shake_ev = self._hold_value(shake.bid)
+        shake = self.decide_raise(claim)
+        if shake.action == "slå" and shake.claim is not None:
+            shake_ev = self._hold_value(shake.claim)
             options.append(
-                ("slå", shake_ev + noise, f"slå till {rules.name(shake.bid)}: {shake_ev:+.3f} liv")
+                ("slå", shake_ev + noise, f"slå till {rules.name(shake.claim)}: {shake_ev:+.3f} liv")
             )
 
         action, _, why = max(options, key=lambda opt: opt[1])
-        return Decision(action, bid=None, reason=why)
+        return Decision(action, claim=None, reason=why)
 
-    def _hold_value(self, bid: int) -> float:
-        """Mitt förväntade livsöverskott av att bära påståendet ``bid``.
+    def _hold_value(self, claim: int) -> float:
+        """Mitt förväntade livsöverskott av att bära påståendet ``claim``.
 
         Påståendet synas med sannolikheten ``p_called``. Blir det synat vinner jag
         om tärningarna visar lägre än påståendet — då förlorar synaren liv. Annars
         förlorar jag. Blir det inte synat händer ingenting i den här rundan.
         """
-        odds = CALL_ODDS[bid]
-        p_called = self._p_called(bid)
+        odds = CALL_ODDS[claim]
+        p_called = self._p_called(claim)
         win = (1.0 - odds.p_win) * odds.l_lose
         lose = odds.p_win * odds.l_win
         return p_called * (win - lose)
 
     # -- Beslut 2: slå (ser tärningarna, om spelaren inte väljer bort det) ----
-    def decide_raise(self, bid: int) -> Decision:
-        """Vilket påstående ska agenten säga när den slår utan att titta, över ``bid``?
+    def decide_raise(self, claim: int) -> Decision:
+        """Vilket påstående ska agenten säga när den slår utan att titta, över ``claim``?
 
         Detta är **fintaktikens** väg: spelaren har valt bort titten och vet därför
         inte vad tärningarna visar. Den minsta lagliga höjningen är då säkrast
         (minst chans att tärningarna visar lägre). En oförutsägbar agent hoppar
         ibland högre ändå, just för att den inte ska gå att läsa.
 
-        Grundtaktiken går i stället via :meth:`decide_bid`, som får de sedda
+        Grundtaktiken går i stället via :meth:`decide_claim`, som får de sedda
         tärningarna. Se :meth:`decide_shake`.
         """
-        higher = rules.higher_options(bid)
+        higher = rules.higher_options(claim)
         if not higher:
             return Decision("syna", reason="Inget högre påstående finns; enda svar är att syna.")
         # higher[0] är högst (Meier), higher[-1] är minsta höjning.
@@ -419,10 +420,10 @@ class BasePolicy:
         if self.params.unpredictability > 0.0:
             if self.rng.random() < self.params.unpredictability:
                 steps = self.rng.randint(1, len(higher) - 1) if len(higher) > 1 else 0
-        new_bid = higher[-(steps + 1)]
-        return Decision("slå", bid=new_bid, reason=f"Slår till {rules.name(new_bid)}.")
+        new_claim = higher[-(steps + 1)]
+        return Decision("slå", claim=new_claim, reason=f"Slår till {rules.name(new_claim)}.")
 
-    def decide_shake(self, bid: int) -> Decision:
+    def decide_shake(self, claim: int) -> Decision:
         """Väljer spelaren att titta på de nya tärningarna när den slår?
 
         Att titta är det normala: reglerna låter spelaren lyfta på locket på sitt
@@ -437,12 +438,12 @@ class BasePolicy:
         return Decision("titta", reason="Tittar på tärningarna.")
 
     # -- Beslut 1: första påståendet (ser tärningarna) -----------------------
-    def decide_bid(
+    def decide_claim(
         self,
         shown: int,
         *,
         opponent_factor: float = 1.0,
-        previous_bid: int | None = None,
+        previous_claim: int | None = None,
     ) -> Decision:
         """Vilket påstående ska agenten säga när den sett tärningarna visa ``shown``?
 
@@ -456,7 +457,7 @@ class BasePolicy:
         är den fasta ``BLUFF_GAIN``: bluffen är ett nödvändigt ont i Meier, inte en
         personlighetsegenskap.
 
-        ``previous_bid`` är påståendet som ligger när spelaren måste höja. Utan det
+        ``previous_claim`` är påståendet som ligger när spelaren måste höja. Utan det
         valde agenten påståenden som om bordet var tomt, och motorn fick sedan tyst
         skriva om påståendet till minsta lagliga höjning. Här väljer agenten i stället
         bland de lagliga påståendena direkt, så att påståendet den säger är dess eget.
@@ -467,12 +468,12 @@ class BasePolicy:
         på påståendet, skild från agentens egen ``caution``, som styr hur gärna
         den synar.
         """
-        legal = legality.legal_bids(shown=shown, previous_bid=previous_bid)
+        legal = legality.legal_claims(shown=shown, previous_claim=previous_claim)
         if not legal:
-            raise ValueError(f"Inget lagligt påstående över {rules.name(previous_bid)}")
+            raise ValueError(f"Inget lagligt påstående över {rules.name(previous_claim)}")
 
         if rules.is_meier(shown):
-            return Decision("bud", bid=shown, reason="Meier — högsta möjliga, påstår det.")
+            return Decision("påstå", claim=shown, reason="Meier — högsta möjliga, påstår det.")
 
         # Grundpåståendet är det högsta lagliga påstående som inte är en bluff, alltså
         # ``shown`` om det är lagligt, annars minsta lagliga höjning.
@@ -506,20 +507,20 @@ class BasePolicy:
 
         if best_bluff is not None:
             return Decision(
-                "bud",
-                bid=best_bluff,
+                "påstå",
+                claim=best_bluff,
                 reason=(
                     f"Visar {rules.name(shown)}; bluffar {rules.name(best_bluff)} "
                     f"(vinst {best_gain:+.2f} liv)."
                 ),
             )
         return Decision(
-            "bud",
-            bid=safe,
+            "påstå",
+            claim=safe,
             reason=f"Visar {rules.name(shown)}; påstår {rules.name(safe)}.",
         )
 
-    def _p_called(self, bid: int, opponent_factor: float = 1.0) -> float:
+    def _p_called(self, claim: int, opponent_factor: float = 1.0) -> float:
         """Uppskattad sannolikhet att ett påstående blir synat.
 
         Fryst heuristik, kalibrerad mot empirin: högre påståenden synas oftare eftersom
@@ -532,18 +533,18 @@ class BasePolicy:
         synbenägen motståndare räknar med att bli synad oftare — och bluffar
         därför mindre.
         """
-        base = min(1.0, CALL_FLOOR + CALL_SLOPE * _strength(bid))
+        base = min(1.0, CALL_FLOOR + CALL_SLOPE * _strength(claim))
         return min(1.0, base * opponent_factor)
 
     # -- Beslut 4: tvingad höjning (titta eller inte titta) ------------------
-    def decide_forced(self, bid: int) -> Decision:
+    def decide_forced(self, claim: int) -> Decision:
         """Titta på de nya tärningarna eller påstå utan att titta? Fattas utan att titta.
 
         Att titta är tryggare: då kan spelaren påstå något tärningarna faktiskt
         bär. Att påstå utan att titta döljer informationen för bordet. En försiktig spelare
         väljer det trygga, en oförutsägbar väljer ibland det som inte går att läsa.
         """
-        if not rules.higher_options(bid):
+        if not rules.higher_options(claim):
             return Decision("syna", reason="Meier är högst; kan inte höja.")
         if self.params.unpredictability > 0.0:
             if self.rng.random() < self.params.unpredictability * 0.5:

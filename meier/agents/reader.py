@@ -67,7 +67,7 @@ def _summarise(player: str, ev: dict, *, table_reveals: int, strength: float) ->
     """Gör sekreterarens siffror till en läsbar sammanställning för modellen."""
     lines = [
         f"Motståndare: {player}",
-        f"Synliga (frivilliga) påståenden: {ev['visible_bids']}",
+        f"Synliga (frivilliga) påståenden: {ev['visible_claims']}",
         f"Avslöjade påståenden (efter syn): {ev['revealed']}",
         f"Därav lögner: {ev['revealed_bluffs']}",
         f"Bluff-frekvens bland avslöjade: {_fmt_rate(ev['bluff_rate'])}",

@@ -1,7 +1,7 @@
 """Tester för den deterministiska policy-kärnan (BASE).
 
 Policyn är spelets "source of truth" för värdering: den avgör vad en agent
-bjuder, hur den höjer och när den synar. Testerna låser de egenskaper som
+påstår, hur den höjer och när den synar. Testerna låser de egenskaper som
 motorn och analysen bygger på, särskilt de som höll på att gå förlorade:
 
 - påståendet är alltid lagligt och strikt högre vid höjning,
@@ -31,15 +31,15 @@ def base():
 
 # -- Påstående (beslut 1) --------------------------------------------------
 
-def test_bid_is_always_a_valid_value(base):
+def test_claim_is_always_a_valid_value(base):
     for shown in rules.RANKING:
-        decision = base.decide_bid(shown)
-        assert rules.is_valid_value(decision.bid)
+        decision = base.decide_claim(shown)
+        assert rules.is_valid_value(decision.claim)
 
 
-def test_meier_shown_is_bid_as_meier(base):
-    decision = base.decide_bid(rules.MEIER)
-    assert decision.bid == rules.MEIER
+def test_meier_shown_is_claim_as_meier(base):
+    decision = base.decide_claim(rules.MEIER)
+    assert decision.claim == rules.MEIER
 
 
 def test_bluffing_is_not_a_parameter():
@@ -72,25 +72,25 @@ def test_bluffing_is_not_a_parameter():
                 )
                 counts.add(
                     sum(
-                        rules.compare(p.decide_bid(s).bid, s) > 0
+                        rules.compare(p.decide_claim(s).claim, s) > 0
                         for s in rules.RANKING
                     )
                 )
     assert len(counts) == 1, f"bluffantalet varierade med profilerna: {counts}"
 
 
-def test_true_bid_is_compared_with_its_own_value(base):
+def test_true_claim_is_compared_with_its_own_value(base):
     """Ett sant påstående är inte värt noll.
 
-    Buggen: ``decide_bid`` satte det säkra påståendet till ``shown`` men gav det
+    Buggen: ``decide_claim`` satte det säkra påståendet till ``shown`` men gav det
     aldrig ett värde. Bluffloopen jämförde mot noll, så en bluff som var sämre än
     sanningen ändå vann. Här krävs att sanningen väljs när den är bättre.
     """
     # 52: sant påstående vinner 1 liv när det synas, vilket slår varje bluff.
-    assert base.decide_bid(52).bid == 52
+    assert base.decide_claim(52).claim == 52
     # Hela spannet av höga utfall ska stanna på sanningen.
     for shown in (51, 52, 53, 54, 61, 62, 63, 64, 65, 66):
-        assert base.decide_bid(shown).bid == shown, f"bluffade på {rules.name(shown)}"
+        assert base.decide_claim(shown).claim == shown, f"bluffade på {rules.name(shown)}"
 
 
 def test_bluffing_is_limited_to_weak_dice(base):
@@ -101,24 +101,24 @@ def test_bluffing_is_limited_to_weak_dice(base):
     låser att fixen inte bara bytte håll.
     """
     bluffar = {
-        shown for shown in rules.RANKING if rules.compare(base.decide_bid(shown).bid, shown) > 0
+        shown for shown in rules.RANKING if rules.compare(base.decide_claim(shown).claim, shown) > 0
     }
     assert bluffar <= {31, 32, 41, 42, 43}, f"bluffade på {sorted(bluffar)}"
 
 
-def test_never_bids_below_shown_when_it_could_bid_truth(base):
-    # Att bjuda under det man ser är aldrig värt något.
+def test_never_claims_below_shown_when_it_could_claim_truth(base):
+    # Att påstå under det man ser är aldrig värt något.
     for shown in rules.RANKING:
-        assert rules.compare(base.decide_bid(shown).bid, shown) >= 0
+        assert rules.compare(base.decide_claim(shown).claim, shown) >= 0
 
 
 # -- Höjning (beslut 2) ----------------------------------------------------
 
 def test_raise_is_strictly_higher(base):
-    for bid in rules.RANKING[:-1]:  # 31 är lägst och har alltid högre alternativ
-        decision = base.decide_raise(bid)
+    for claim in rules.RANKING[:-1]:  # 31 är lägst och har alltid högre alternativ
+        decision = base.decide_raise(claim)
         if decision.action == "slå":
-            assert rules.is_higher(decision.bid, bid)
+            assert rules.is_higher(decision.claim, claim)
 
 
 def test_raise_at_meier_has_no_option_but_call(base):
@@ -137,12 +137,12 @@ def test_meier_call_ev_never_forbids_calling(base):
     assert decision.action == "syna"
 
 
-def test_call_never_invents_a_bid(base):
-    for bid in rules.RANKING:
-        assert base.decide_call(bid).action in {"syna", "skicka"}
+def test_call_never_invents_a_claim(base):
+    for claim in rules.RANKING:
+        assert base.decide_call(claim).action in {"syna", "skicka"}
 
 
-def test_low_bids_are_rarely_called(base):
+def test_low_claims_are_rarely_called(base):
     # Empirin: påståenden ≤ 54 synas nästan aldrig (0/871 i de gamla loggarna).
     low = [b for b in rules.RANKING if rules.compare(b, 54) < 0]
     called = sum(base.decide_call(b).action == "syna" for b in low)
@@ -151,9 +151,9 @@ def test_low_bids_are_rarely_called(base):
 
 def test_opponent_prior_can_shift_the_call(base):
     # En högre tro på att synen vinner gör att fler påståenden synas.
-    bid = 61
-    normal = base.decide_call(bid)
-    greedy = base.decide_call(bid, opponent_q=0.9)
+    claim = 61
+    normal = base.decide_call(claim)
+    greedy = base.decide_call(claim, opponent_q=0.9)
     assert normal.action == "skicka"
     assert greedy.action == "syna"
 
@@ -170,7 +170,7 @@ def test_response_offers_all_three_actions():
             policy = BasePolicy(
                 AgentParams(caution=caution, statistics=statistics, reading=0.0)
             )
-            seen |= {policy.decide_response(bid).action for bid in rules.RANKING}
+            seen |= {policy.decide_response(claim).action for claim in rules.RANKING}
     assert seen == {"syna", "skicka", "slå"}
 
 
@@ -187,31 +187,31 @@ def test_response_meier_is_not_forced_to_call():
     # Om hållarvärdet vore högt ska valet falla på "skicka" — det bevisar att
     # tvånget är borta och att bara EV-kurvan styr.
     class GenerousHold(BasePolicy):
-        def _hold_value(self, bid: int) -> float:
+        def _hold_value(self, claim: int) -> float:
             return 1.0
 
     assert GenerousHold(AgentParams()).decide_response(rules.MEIER).action == "skicka"
     assert BasePolicy(AgentParams()).decide_response(rules.MEIER).action == "syna"
 
 
-def test_response_never_invents_a_bid(base):
-    for bid in rules.RANKING:
-        decision = base.decide_response(bid)
+def test_response_never_invents_a_claim(base):
+    for claim in rules.RANKING:
+        decision = base.decide_response(claim)
         assert decision.action in {"syna", "skicka", "slå"}
-        assert decision.bid is None
+        assert decision.claim is None
 
 
 def test_response_picks_the_best_available_option():
     # Slå får bara väljas när det faktiskt är bäst av de tre. Bruset stängs av
     # här: testet mäter värderingen, inte variationen.
     base = BasePolicy(AgentParams(unpredictability=0.0))
-    for bid in rules.RANKING:
-        decision = base.decide_response(bid)
-        hold = base._hold_value(bid)
+    for claim in rules.RANKING:
+        decision = base.decide_response(claim)
+        hold = base._hold_value(claim)
         if decision.action == "slå":
-            raise_bid = base.decide_raise(bid)
-            assert raise_bid.action == "slå"
-            assert base._hold_value(raise_bid.bid) >= hold
+            raise_claim = base.decide_raise(claim)
+            assert raise_claim.action == "slå"
+            assert base._hold_value(raise_claim.claim) >= hold
 
 
 # -- Tvingad höjning (beslut 4) -------------------------------------------
@@ -219,10 +219,10 @@ def test_response_picks_the_best_available_option():
 def test_forced_choice_is_titta_or_unseen(base):
     # Vid Meier finns inget högre påstående; då återstår bara att syna (motorn slår
     # annars om och startar en ny runda). För alla andra påståenden är valet titta eller inte titta.
-    for bid in rules.RANKING:
-        if rules.is_meier(bid):
+    for claim in rules.RANKING:
+        if rules.is_meier(claim):
             continue
-        assert base.decide_forced(bid).action in {"titta", "unseen"}
+        assert base.decide_forced(claim).action in {"titta", "unseen"}
 
 
 def test_forced_choice_follows_unpredictability():
@@ -238,18 +238,18 @@ def test_forced_choice_follows_unpredictability():
 
 # -- Den påståendespecifika tron -------------------------------------------
 
-def test_call_prior_covers_every_bid_level():
+def test_call_prior_covers_every_claim_level():
     assert set(CALL_PRIOR) == set(rules.RANKING)
     assert all(0.0 <= p <= 1.0 for p in CALL_PRIOR.values())
 
 
-def test_meier_is_the_hardest_bid_to_call_profitably():
+def test_meier_is_the_hardest_claim_to_call_profitably():
     # Meier är högst men svårast att syna: P(vinst) ska vara lägst av alla höga påståenden.
     assert CALL_PRIOR[rules.MEIER] < CALL_PRIOR[11]
 
 
 def test_call_odds_break_even_is_sane():
-    for bid, odds in CALL_ODDS.items():
+    for claim, odds in CALL_ODDS.items():
         assert 0.0 <= odds.q_star <= 1.0
 
 
@@ -308,33 +308,33 @@ def test_unseen_raise_is_minimum_without_unpredictability():
     """
     opts = rules.higher_options(31)
     p = BasePolicy(AgentParams(unpredictability=0.0))
-    assert p.decide_raise(31).bid == opts[-1]
+    assert p.decide_raise(31).claim == opts[-1]
 
 
 def test_unpredictability_makes_unseen_raises_vary():
     """En oförutsägbar agent ska inte alltid välja samma höjning."""
     opts = rules.higher_options(31)
-    bids = set()
+    claims = set()
     for _ in range(40):
         p = BasePolicy(AgentParams(unpredictability=0.8))
-        bids.add(p.decide_raise(31).bid)
-    assert len(bids) > 1, "höjningen ska variera mellan anrop"
-    assert bids <= set(opts), "alla höjningar ska vara lagliga"
+        claims.add(p.decide_raise(31).claim)
+    assert len(claims) > 1, "höjningen ska variera mellan anrop"
+    assert claims <= set(opts), "alla höjningar ska vara lagliga"
 
 
-def test_seen_bid_bluff_is_always_exactly_one_step():
+def test_seen_claim_bluff_is_always_exactly_one_step():
     """Bluff över *sedda* tärningar är alltid exakt ett steg, oavsett profil."""
     for statistics in (0.0, 0.5, 1.0):
         p = BasePolicy(AgentParams(statistics=statistics, unpredictability=0.0))
         for shown in rules.RANKING:
-            d = p.decide_bid(shown)
-            if d.bid is None or d.bid == shown:
+            d = p.decide_claim(shown)
+            if d.claim is None or d.claim == shown:
                 continue
             opts = rules.higher_options(shown)
-            if d.bid not in opts:
+            if d.claim not in opts:
                 continue
-            steps = len(opts) - opts.index(d.bid)
+            steps = len(opts) - opts.index(d.claim)
             assert steps == 1, (
-                f"statistics={statistics} visar {rules.name(shown)} bjöd {rules.name(d.bid)} "
+                f"statistics={statistics} visar {rules.name(shown)} bjöd {rules.name(d.claim)} "
                 f"({steps} steg) — bluffen ska vara exakt ett steg"
             )

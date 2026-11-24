@@ -358,12 +358,12 @@ def test_om_meier_bluffs_are_always_the_smallest_raise():
         agent = make_player(key)
         for value in rules.RANKING:
             hi, lo = divmod(value, 10)
-            bid = agent.announce((hi, lo)).bid
-            if bid == value:
+            claim = agent.announce((hi, lo)).claim
+            if claim == value:
                 continue
             smallest = rules.higher_options(value)[-1]
-            assert bid == smallest, (
-                f"{agent.name} bjöd {rules.name(bid)} på {rules.name(value)}, "
+            assert claim == smallest, (
+                f"{agent.name} bjöd {rules.name(claim)} på {rules.name(value)}, "
                 f"men minsta höjning är {rules.name(smallest)}"
             )
 
@@ -471,13 +471,21 @@ def test_regel_pdf_sager_samma_som_regeltexten():
 
     for regel in (
         "21 kallas Meier och är högst",
-        "det sanna, ett högre eller ett lägre",
-        "Den som slår måste alltid säga ett högre bud",
+        "det sanna, ett högre värde eller ett lägre",
+        "Den som slår måste alltså alltid påstå ett högre värde",
         "går bägaren till föregående spelare",
         "Meier kostar dubbelt",
         "Kommer bägaren ett helt varv tillbaka",
     ):
         assert regel in flat, f"PDF:en saknar regeln: {regel}"
+
+    # PDF:en säger påstående, inte bud. Ordvalet är bestämt från 2026-11-24.
+    assert "bud" not in flat.lower().replace("budget", "")
+    # Ordningen i PDF:en är Syna, Slå, Skicka vidare – den ordningen gäller.
+    syna = flat.index("Syna: lyfter locket")
+    sla = flat.index("Slå: avstår från att syna")
+    skicka = flat.index("Skicka vidare: skickar bägaren")
+    assert syna < sla < skicka, "PDF:ens ordning mellan syna, slå och skicka har ändrats"
 
     # PDF:en skriver Meier. Felstavningen får inte smyga in i regeltexten.
     assert "Mejer" not in flat
@@ -504,7 +512,7 @@ def test_tolkningarna_ar_fa_och_utan_kodnamn():
     assert 2 <= len(punkter) <= 6, (
         f"bryggan har {len(punkter)} punkter; håll den kort"
     )
-    for namn in ("DIE_ELONGATION", "rules.", ".py", "`bid`", "BasePolicy"):
+    for namn in ("DIE_ELONGATION", "rules.", ".py", "`claim`", "BasePolicy"):
         assert namn not in avsnitt, f"bryggan läcker implementationsdetaljen {namn}"
 
 
@@ -525,7 +533,7 @@ def test_skicka_vidare_ar_utan_titt_i_regeltext_och_prompt():
 def test_om_meier_does_not_claim_raises_are_always_one_step():
     """Dokumentet får inte påstå att *alla* höjningar är ett steg.
 
-    ``decide_bid`` (sedda tärningar) höjer exakt ett steg, men ``decide_raise``
+    ``decide_claim`` (sedda tärningar) höjer exakt ett steg, men ``decide_raise``
     (utan att titta) skalar med ``unpredictability`` och kan hoppa ända till Meier. Ett
     påstående om att höjningen "alltid" är ett steg beskriver bara det första
     beslutet.
@@ -617,27 +625,27 @@ def test_axel_section_tables_match_the_policy():
 
     # Öppningspåståendet: tabellen säger att 51+ är sant och 43- bluffar ett steg.
     for shown in rules.RANKING:
-        bid = axel.decide_bid(shown).bid
+        claim = axel.decide_claim(shown).claim
         if rules.compare(shown, 51) >= 0:
-            assert bid == shown, f"tabellen påstår sanning på {rules.name(shown)}, koden säger {rules.name(bid)}"
+            assert claim == shown, f"tabellen påstår sanning på {rules.name(shown)}, koden säger {rules.name(claim)}"
         else:
-            assert rules.is_higher(bid, shown), f"tabellen påstår bluff på {rules.name(shown)}"
-            assert bid == rules.next_higher(shown), (
-                f"tabellen påstår ett steg över {rules.name(shown)}, koden säger {rules.name(bid)}"
+            assert rules.is_higher(claim, shown), f"tabellen påstår bluff på {rules.name(shown)}"
+            assert claim == rules.next_higher(shown), (
+                f"tabellen påstår ett steg över {rules.name(shown)}, koden säger {rules.name(claim)}"
             )
 
     # Svaren: tabellen delar in påståendena i syna / skicka / slå.
-    for bid in (21, 11, 22, 33, 44, 55, 66, 65, 64):
-        assert axel.decide_response(bid).action == "syna", f"koden synar inte {rules.name(bid)}"
-    for bid in (63, 62, 61, 54, 53, 52, 51, 43, 42):
-        assert axel.decide_response(bid).action == "skicka", f"koden skickar inte {rules.name(bid)}"
-    for bid in (41, 32, 31):
-        assert axel.decide_response(bid).action == "slå", f"koden slår inte på {rules.name(bid)}"
+    for claim in (21, 11, 22, 33, 44, 55, 66, 65, 64):
+        assert axel.decide_response(claim).action == "syna", f"koden synar inte {rules.name(claim)}"
+    for claim in (63, 62, 61, 54, 53, 52, 51, 43, 42):
+        assert axel.decide_response(claim).action == "skicka", f"koden skickar inte {rules.name(claim)}"
+    for claim in (41, 32, 31):
+        assert axel.decide_response(claim).action == "slå", f"koden slår inte på {rules.name(claim)}"
 
     # Slag utan att titta: alltid minsta lagliga höjning.
-    for bid in (31, 32, 41, 42, 43, 51, 52, 53, 54, 61, 62, 63, 64, 65, 66):
-        assert axel.decide_raise(bid).bid == rules.next_higher(bid), (
-            f"koden höjer inte minimalt över {rules.name(bid)}"
+    for claim in (31, 32, 41, 42, 43, 51, 52, 53, 54, 61, 62, 63, 64, 65, 66):
+        assert axel.decide_raise(claim).claim == rules.next_higher(claim), (
+            f"koden höjer inte minimalt över {rules.name(claim)}"
         )
 
 
@@ -691,7 +699,7 @@ def test_docs_say_the_shaker_may_always_look():
             assert forbud not in flat, f"{path.name} förbjuder titten: {forbud!r}"
 
     regler = _flat(REGLER.read_text(encoding="utf-8"))
-    assert "får lyfta på locket och titta på sina egna tärningar" in regler
+    assert "får alltså alltid lyfta på locket och se sina egna tärningar" in regler
     assert "eget val" in regler
 
     # Prompten för själva slaget ska erbjuda titten.
@@ -712,3 +720,32 @@ def test_unseen_prompt_says_the_choice_is_already_made():
     unseen = MeierPlayerAgent._unseen_announce_context(None, 44, [51, 52, 53])
     assert "har valt att inte lyfta på locket" in unseen
     assert "Du har redan valt bort titten" in unseen
+
+
+def test_ordet_bud_finns_inte_i_dokumentationen():
+    """Spelet säger påstående. Det gamla ordet "bud" ska bort ur all prosa.
+
+    "bjuda", "erbjuda", "inbjuda" och "förbjuda" är andra ord och rörs inte.
+    """
+    rot = Path(__file__).resolve().parent.parent
+    falska = re.compile(r"\b(bjud\w*|erbjud\w*|inbjud\w*|förbjud\w*|utbjud\w*)\b", re.I)
+    kvar = []
+    for path in sorted(rot.glob("*.md")) + sorted(rot.glob("docs/**/*.md")):
+        text = path.read_text(encoding="utf-8")
+        # Historiska kodnamn i backticks är litterala och får stå kvar.
+        text = re.sub(r"`[^`\n]*`", " ", text)
+        text = falska.sub(" ", text)
+        for match in re.finditer(r"\b(bud|budet|buden|buds|över bud)\b", text, re.I):
+            rad = text.count("\n", 0, match.start()) + 1
+            kvar.append(f"{path.relative_to(rot)}:{rad}: {match.group(0)}")
+    assert not kvar, "ordet 'bud' finns kvar:\n" + "\n".join(kvar)
+
+
+def test_koden_sager_pastaende_inte_bud():
+    """Handlingsetiketten ska heta "påstå" i både motor, analys och UI."""
+    rot = Path(__file__).resolve().parent.parent
+    for rel in ("meier/session.py", "meier/match.py", "meier/policy.py", "meier/analysis.py"):
+        text = (rot / rel).read_text(encoding="utf-8")
+        assert '"bud"' not in text, f"{rel} använder fortfarande handlingsetiketten 'bud'"
+    app_js = (rot / "meier/web/static/app.js").read_text(encoding="utf-8")
+    assert 'e.action === "påstå"' in app_js

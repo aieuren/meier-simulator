@@ -44,13 +44,13 @@ async function boot() {
     const o1 = document.createElement("option");
     o1.value = v.value;
     o1.textContent = v.name;
-    $("previousBid").appendChild(o1);
+    $("previousClaim").appendChild(o1);
   }
   for (const v of data.ranking) {
     const o = document.createElement("option");
     o.value = v.value;
     o.textContent = v.name;
-    $("oppBid").appendChild(o);
+    $("oppClaim").appendChild(o);
   }
 
   // Poängordning
@@ -174,8 +174,8 @@ async function doAnnounce() {
     die2: +$("die2").value,
     role: state.role,
   };
-  const prev = $("previousBid").value;
-  if (prev) body.previous_bid = +prev;
+  const prev = $("previousClaim").value;
+  if (prev) body.previous_claim = +prev;
 
   try {
     const res = await fetch("/api/announce", {
@@ -204,7 +204,7 @@ function renderAnnounce(data) {
 
   const facts = $("facts");
   facts.innerHTML = "";
-  if (data.previous_bid) {
+  if (data.previous_claim) {
     v.className = "verdict " + (a.unseen ? "lie" : "truth");
     v.textContent = a.unseen
       ? "Slag utan att titta"
@@ -212,12 +212,12 @@ function renderAnnounce(data) {
   }
 
   const rows = [["Tärningarna visar", data.shown_name]];
-  if (data.previous_bid) {
+  if (data.previous_claim) {
     rows.push(["Spelaren valde", a.unseen ? "att inte titta" : "att titta"]);
   }
-  rows.push(["Spelaren säger", a.bid_name]);
+  rows.push(["Spelaren säger", a.claim_name]);
   if (!a.unseen) rows.push(["Lögn?", a.lie ? "Ja" : "Nej"]);
-  if (data.previous_bid) rows.push(["Tidigare påstående", data.previous_bid]);
+  if (data.previous_claim) rows.push(["Tidigare påstående", data.previous_claim]);
   rows.forEach(([k, val]) => {
     const dt = document.createElement("dt");
     dt.textContent = k;
@@ -242,12 +242,12 @@ async function doDecide() {
     const res = await fetch("/api/decide", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ bid: +$("oppBid").value, role: state.role, lives: 3 }),
+      body: JSON.stringify({ claim: +$("oppClaim").value, role: state.role, lives: 3 }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || "Fel");
     let text = `Spelaren väljer: ${data.action.toUpperCase()}`;
-    if (data.bid_name) text += ` → ${data.bid_name}`;
+    if (data.claim_name) text += ` → ${data.claim_name}`;
     if (data.line) text += `  “${data.line}”`;
     out.textContent = text;
     out.className = "verdict";
@@ -472,13 +472,13 @@ function isPair(value) {
 // Kort förklaring till varför synen föll ut som den gjorde.
 function explainCall(result) {
   const shown = result.shown;
-  const bid = result.bid;
+  const claim = result.claim;
   const shownName = result.shown_name;
-  const bidName = result.bid_name;
-  if (shown === bid) {
+  const bidName = result.claim_name;
+  if (shown === claim) {
     return `Tärningarna visade exakt ${bidName} – alltså förlorar den som synade.`;
   }
-  if (rankIndex(shown) < rankIndex(bid)) {
+  if (rankIndex(shown) < rankIndex(claim)) {
     const why = shown === 21 ? "Meier är högst" : isPair(shown) ? `${shownName} är ett par` : `${shownName} är högre`;
     return `${why} och slår påståendet ${bidName} – alltså förlorar den som synade.`;
   }
@@ -489,10 +489,10 @@ function explainCall(result) {
 function callResultBlock(result) {
   const box = document.createElement("div");
   box.className = "log-row is-call-result";
-  const holder = result.holder || result.bidder;
+  const holder = result.holder || result.claimer;
   const holderLine =
-    holder !== result.bidder
-      ? `<div>Ansvaret för påståendet hade gått vidare från ${result.bidder} till ${holder}.</div>`
+    holder !== result.claimer
+      ? `<div>Ansvaret för påståendet hade gått vidare från ${result.claimer} till ${holder}.</div>`
       : "";
   const why = result.reasoning
     ? `<div class="call-why">Motivering: ${escapeHtml(result.reasoning)}</div>`
@@ -500,7 +500,7 @@ function callResultBlock(result) {
   box.innerHTML = `
     <div class="call-title">Syn!</div>
     <div>Tärningarna visade <strong>${result.shown_name}</strong> mot påståendet
-      <strong>${result.bid_name}</strong>.</div>
+      <strong>${result.claim_name}</strong>.</div>
     <div>${result.caller} synade ${holder}.</div>
     ${holderLine}
     <div class="call-why">${explainCall(result)}</div>
@@ -628,30 +628,30 @@ function renderLog(entries, result) {
 
     let main;
     if (e.action === "syna") {
-      main = `<span class="log-action">Synar</span> <span class="log-prev">påståendet ${textOr(e.accepted_bid_name, "?")}</span>`;
+      main = `<span class="log-action">Synar</span> <span class="log-prev">påståendet ${textOr(e.accepted_claim_name, "?")}</span>`;
     } else if (e.action === "skicka") {
-      main = `<span class="log-action">Skickar vidare</span> <strong>${textOr(e.accepted_bid_name, "?")}</strong>`;
+      main = `<span class="log-action">Skickar vidare</span> <strong>${textOr(e.accepted_claim_name, "?")}</strong>`;
     } else if (e.action === "slå") {
       main =
-        `<span class="log-action">Höjer till</span> <strong>${textOr(e.bid_name, "?")}</strong>` +
-        `<span class="log-prev">(över ${textOr(e.accepted_bid_name, "?")})</span>`;
+        `<span class="log-action">Höjer till</span> <strong>${textOr(e.claim_name, "?")}</strong>` +
+        `<span class="log-prev">(över ${textOr(e.accepted_claim_name, "?")})</span>`;
     } else if (e.action === "höja") {
       const reroll = e.dice
         ? ` <span class="log-prev">(slog om: ${textOr(e.shown_name, "?")})</span>`
         : "";
       main =
-        `<span class="log-action">Måste höja till</span> <strong>${textOr(e.bid_name, "?")}</strong>` +
-        `<span class="log-prev">(över ${textOr(e.previous_bid_name, "?")})</span>` +
+        `<span class="log-action">Måste höja till</span> <strong>${textOr(e.claim_name, "?")}</strong>` +
+        `<span class="log-prev">(över ${textOr(e.previous_claim_name, "?")})</span>` +
         reroll;
     } else {
-      main = `<span class="log-action">Säger</span> <strong>${textOr(e.bid_name, "?")}</strong>`;
+      main = `<span class="log-action">Säger</span> <strong>${textOr(e.claim_name, "?")}</strong>`;
     }
     // "sant/bluff" gäller bara påståenden där spelaren tittat. Har spelaren valt
     // bort titten går det inte att döma påståendet mot tärningarna.
     const showsTruth =
-      (e.action === "bud" || e.action === "höja") && !e.unseen;
+      (e.action === "påstå" || e.action === "höja") && !e.unseen;
     const truthTag = showsTruth
-      ? `<span class="log-bid ${e.lie ? "lie" : "truth"}">${e.lie ? "bluff" : "sant"}</span>`
+      ? `<span class="log-claim ${e.lie ? "lie" : "truth"}">${e.lie ? "bluff" : "sant"}</span>`
       : "";
     const unseenTag = e.unseen
       ? `<span class="log-unseen">påstod utan att titta – spelaren valde bort titten</span>`
@@ -692,7 +692,7 @@ function matchRow(rec) {
       return (
         `<div class="match-stat-line">` +
         `<span class="ms-name">${p.name}</span>` +
-        `<span class="ms-cell">påståenden ${s.bids || 0}</span>` +
+        `<span class="ms-cell">påståenden ${s.claims || 0}</span>` +
         `<span class="ms-cell">bluff ${s.bluffs || 0}</span>` +
         `<span class="ms-cell">unseen ${s.unseen || 0}</span>` +
         `<span class="ms-cell">syn ${s.calls || 0}</span>` +
