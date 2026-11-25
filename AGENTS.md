@@ -883,6 +883,21 @@ separate log repo after every finished match.
   series still land in the clone and stay committed locally. A failed push does
   not lose data, but the remote never receives it. Fix: create the log repo and
   put a fresh Contents: write PAT in `logs.token`.
+  Verified end to end 2026-11-25: a full match ran, committed locally, and
+  reported "Push misslyckades … Serien finns kvar lokalt: <path>"; the series
+  then appeared in `/api/analysis/logs`.
+- A series can sit at `done: 0` for 15+ minutes with no error and a 0-byte file.
+  Nothing is wrong with the code: the record is written only when a match
+  *finishes*, and a match is ~100 LLM calls. `MEIER_MAX_RPM` (default 15) is a
+  shared limiter across all worker threads, so 5 parallel matches queue on the
+  same budget. Worse, a 503 burst makes every decision burn its retries. Check
+  progress with a direct client call before blaming the app:
+  `LLMClient(LLMConfig.from_env()).complete("Kort.","Hej.")`. If that raises
+  503, wait — a run started during a burst will look hung.
+- There is no stop endpoint. To abort a running series, kill the uvicorn PID
+  (`ps aux | grep "uvicorn meier"`), then remove the partial file from the
+  clone and `git reset --hard` there. A partial series is still a valid JSONL
+  up to the last complete match.
 - `_current_match_file` (module global) holds the file for the latest series;
   `/api/matches/download|summary` read it.
 - Gotcha: `git -c key=value` must be passed as two argv items before the
