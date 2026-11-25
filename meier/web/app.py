@@ -26,6 +26,7 @@ from ..session import Session
 from .. import analysis, logrepo
 
 STATIC_DIR = Path(__file__).parent / "static"
+RULES_PDF = Path(__file__).resolve().parents[2] / "docs" / "regler" / "meier-regler.pdf"
 
 app = FastAPI(title="Meier-agenten", version="2.0.0")
 
@@ -87,6 +88,16 @@ def index() -> FileResponse:
     return FileResponse(
         STATIC_DIR / "index.html",
         headers={"Cache-Control": "no-store, must-revalidate"},
+    )
+
+
+@app.get("/regler.pdf")
+def rules_pdf() -> FileResponse:
+    """Reglerna som PDF, så de går att läsa utan att lämna appen."""
+    return FileResponse(
+        RULES_PDF,
+        media_type="application/pdf",
+        filename="meier-regler.pdf",
     )
 
 
@@ -357,6 +368,8 @@ class _MatchJob:
         self.check_in = check_in
         self.done = 0
         self.records: list[GameRecord] = []
+        #: Matcher som inte kunde spelas klart. Serien fortsätter ändå.
+        self.failures: list[dict] = []
         self.error: str | None = None
         self.push_status: str | None = None
         self.file: Path = _FALLBACK_MATCH_FILE
@@ -396,15 +409,17 @@ class _MatchJob:
                     lives=self.lives,
                     workers=self.workers,
                 ):
+                    data = rec.to_dict()
                     with self.lock:
-                        self.records.append(rec)
+                        if data.get("failed"):
+                            self.failures.append(data)
+                        else:
+                            self.records.append(rec)
                         self.done += 1
-                    fh.write(json.dumps(rec.to_dict(), ensure_ascii=False) + "\n")
+                    fh.write(json.dumps(data, ensure_ascii=False) + "\n")
                     fh.flush()
-                    if repo is not None:
+                    if repo is not None and not data.get("failed"):
                         self._check_in(repo, rec)
-        except LLMError as exc:
-            self.error = f"LLM-fel: {exc}"
         except Exception as exc:  # pragma: no cover - skyddsnät
             self.error = f"Oväntat fel: {exc}"
         finally:
@@ -421,7 +436,8 @@ class _MatchJob:
     def status(self) -> dict:
         with self.lock:
             snapshot = [rec.to_dict() for rec in self.records]
-        summary = summarize(snapshot) if snapshot else None
+            failures = list(self.failures)
+        summary = summarize(snapshot + failures) if snapshot or failures else None
         return {
             "running": self.running,
             "done": self.done,
@@ -429,7 +445,8 @@ class _MatchJob:
             "error": self.error,
             "push_status": self.push_status,
             "file": self.file.name,
-            "games": self.done,
+            "games": len(snapshot),
+            "failures": failures,
             "records": snapshot,
             "summary": summary,
             "download_url": "/api/matches/download",

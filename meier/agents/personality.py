@@ -83,12 +83,19 @@ def describe(params: AgentParams) -> str:
 
 
 def describe_opponent(
-    *, kind: str, call_tendency: float, bluff_tendency: float, confidence: float
+    *,
+    kind: str,
+    call_tendency: float,
+    bluff_tendency: float,
+    confidence: float,
+    predictability: float | None = None,
 ) -> str:
     """Beskriv en motståndare som spelaren har läst, i ord.
 
     ``confidence`` styr hur säkert påståendet får låta. En bild byggd på en enda
-    syn ska inte låta som en sanning.
+    syn ska inte låta som en sanning. ``predictability`` får vara ``None`` när
+    ingen har bedömt den — då sägs det rakt ut i stället för att en gissning
+    kläs i ord.
     """
     if confidence < 0.25:
         hedge = "Du har knappt sett något av henne än."
@@ -96,8 +103,16 @@ def describe_opponent(
         hedge = "Du har sett en del av henne."
     else:
         hedge = "Du har sett henne spela ett tag nu."
+    if predictability is None:
+        readable = "Hur lätt hon är att läsa har du ingen uppfattning om."
+    elif predictability < 0.35:
+        readable = "Hon är svår att läsa — hennes drag säger dig lite."
+    elif predictability < 0.65:
+        readable = "Hon går delvis att läsa."
+    else:
+        readable = "Hon är lätt att läsa — hennes mönster upprepar sig."
     return (
         f"{hedge} Hon verkar vara av typen \"{kind}\", med "
         f"{_level(call_tendency)} benägenhet att syna och "
-        f"{_level(bluff_tendency)} benägenhet att bluffa."
+        f"{_level(bluff_tendency)} benägenhet att bluffa. {readable}"
     )

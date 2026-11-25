@@ -10,6 +10,7 @@
 <header>
   <h1>Meier <span>– AI-spelaren</span></h1>
   <p class="tagline">AI-assistenter som spelar tärningsspelet Meier.</p>
+  <p class="ruler-lank"><a href="/regler.pdf" target="_blank" rel="noopener">Reglerna som PDF</a></p>
 </header>
 
 <nav class="tabs" role="tablist" aria-label="Flikar">
@@ -54,15 +55,16 @@
       <h2>2. Agentens roll</h2>
       <div id="roleList" class="roles"></div>
 
-      <details class="advanced">
-        <summary>Avancerat: slår efter ett tidigare påstående</summary>
-        <p class="hint">Om spelaren slår efter någon annan måste påståendet vara strikt högre.</p>
-        <label class="inline">Tidigare påstående
-          <select id="previousClaim">
-            <option value="">– inget –</option>
-          </select>
-        </label>
-      </details>
+      <h2>3. Tidigare påstående</h2>
+      <p class="hint">
+        Står bordet redan på ett påstående måste spelarens bud vara strikt högre.
+        Välj <em>Start på runda</em> när spelaren börjar rundan själv.
+      </p>
+      <label class="inline">Bordet står på
+        <select id="previousClaim">
+          <option value="" selected>Start på runda</option>
+        </select>
+      </label>
 
       <button id="announceBtn" class="primary">Se spelarens svar</button>
     </section>
@@ -107,15 +109,6 @@
 
       <div id="orderNote" class="order-note" hidden></div>
 
-      <div id="viewsBox" class="views-box" hidden>
-        <h3 class="log-title">Motståndarbilder</h3>
-        <p class="hint">
-          Vad varje agent har kommit fram till om de andra, ur offentligt spel.
-          Bilden växer fram och kan ändras när matchen fortsätter.
-        </p>
-        <div id="viewsList" class="views-list"></div>
-      </div>
-
       <div id="sessionStatus" class="session-status" hidden>
         <div class="session-note" id="sessionNote"></div>
       </div>
@@ -123,6 +116,15 @@
       <h3 class="log-title">Logg</h3>
       <div id="log" class="log">
         <p class="hint">Ingen logg än. Starta en session.</p>
+      </div>
+
+      <div id="viewsBox" class="views-box" hidden>
+        <h3 class="log-title">Motståndarbilder</h3>
+        <p class="hint">
+          Vad varje agent har kommit fram till om de andra, ur offentligt spel.
+          Bilden växer fram och kan ändras när matchen fortsätter.
+        </p>
+        <div id="viewsList" class="views-list"></div>
       </div>
 
       <div id="pendingCtl" class="pending-ctl" hidden>

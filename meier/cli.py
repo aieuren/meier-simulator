@@ -24,7 +24,7 @@ from .agents.roster import (
 )
 from .llm import LLMClient
 from .game import Game
-from .match import read_jsonl, run_matches, summarize, write_jsonl
+from .match import read_jsonl, run_matches, summarize
 from .session import Session
 
 
@@ -175,20 +175,32 @@ def _cmd_match(args: argparse.Namespace) -> int:
     def progress(done: int, total: int) -> None:
         print(f"  match {done}/{total}", flush=True)
 
-    records = list(
-        run_matches(
+    # Skriv varje match så snart den är klar. Avbryts körningen mitt i serien
+    # finns de färdiga matcherna kvar på disk i stället för att gå förlorade.
+    records: list[dict] = []
+    with open(out, "w", encoding="utf-8") as fh:
+        for rec in run_matches(
             roles,
             args.count,
             lives=args.lives,
             workers=args.workers,
             with_llm=not args.no_llm,
             progress=progress if args.verbose else None,
-        )
-    )
-    n = write_jsonl(records, out)
-    print(f"\nSpelade {n} matcher. Protokoll: {out}")
+        ):
+            data = rec.to_dict()
+            records.append(data)
+            fh.write(json.dumps(data, ensure_ascii=False) + "\n")
+            fh.flush()
+            if data.get("failed"):
+                print(f"  match {data['game']} kunde inte spelas: {data['error']}", flush=True)
 
-    stats = summarize([r.to_dict() for r in records])
+    n = len(records)
+    failed = sum(1 for r in records if r.get("failed"))
+    print(f"\nSpelade {n - failed} matcher av {n} försökta. Protokoll: {out}")
+    if failed:
+        print(f"  {failed} match(er) föll bort och räknas inte i statistiken.")
+
+    stats = summarize(records)
     print(f"\nVinnare per roll (av {stats['games']} matcher):")
     for role, b in stats["roles"].items():
         print(

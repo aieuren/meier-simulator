@@ -145,3 +145,38 @@ def test_llm_failure_aborts_the_match_with_502(monkeypatch):
     assert res.status_code == 502
     assert "LLM-fel" in res.json()["detail"]
     assert "modellen svarade inte" in res.json()["detail"]
+
+
+def test_rules_pdf_is_served():
+    """Regellänken i headern ska fungera, inte peka på en fil som saknas."""
+    client = TestClient(web_app.app)
+    res = client.get("/regler.pdf")
+
+    assert res.status_code == 200
+    assert res.headers["content-type"] == "application/pdf"
+    assert res.content[:5] == b"%PDF-"
+
+
+def test_index_links_to_the_rules_pdf():
+    client = TestClient(web_app.app)
+    html = client.get("/").text
+
+    assert 'href="/regler.pdf"' in html
+
+
+def test_previous_claim_offers_start_of_round_as_default():
+    """Flik 2 ska ha ett val för rundans början, inte en tom "inget"-post."""
+    client = TestClient(web_app.app)
+    html = client.get("/").text
+
+    assert "Start på runda" in html
+    assert 'value="" selected' in html
+    assert "Avancerat: slår efter ett tidigare påstående" not in html
+
+
+def test_opponent_views_come_after_the_log():
+    """Motståndarbilderna ska stå efter loggen, så loggen läses först."""
+    client = TestClient(web_app.app)
+    html = client.get("/").text
+
+    assert html.index('id="log"') < html.index('id="viewsBox"')

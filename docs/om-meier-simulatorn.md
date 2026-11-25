@@ -145,7 +145,7 @@ Tre begrepp:
 | Begrepp | Vad det är |
 |---|---|
 | **Egen profil** | Spelarens egna fyra parametrar. Känd för spelaren själv. |
-| **Motståndarprofil** | Spelarens gissning om en annan spelares benägenhet att syna och att bluffa. Byggd enbart på offentligt beteende. |
+| **Motståndarprofil** | Spelarens gissning om en annan spelares benägenhet att syna och att bluffa, och hur förutsägbar hen är. Byggd enbart på offentligt beteende. |
 | **Motståndartyp** | Kort etikett som sammanfattar motståndarprofilen, till exempel "bluffbenägen". |
 
 Spelaren känner aldrig en motståndares verkliga parametrar. Den gissar, och
@@ -277,11 +277,53 @@ hur ofta motståndaren bluffat, hur ofta hen synat, hur ofta hen höjt.
 
 Läsaren är språkmodellen. Den tolkar siffrorna och sätter en
 motståndarprofil: en gissning om hur ofta motståndaren synar och hur ofta hen
-bluffar, plus en kort motståndartyp som "bluffbenägen", "försiktig" eller
-"oförutsägbar", och ett mått på hur säker gissningen är.
+bluffar, hur förutsägbar hen är, plus en kort motståndartyp som
+"bluffbenägen", "försiktig" eller "oförutsägbar", och ett mått på hur säker
+gissningen är.
 
 En sak är viktig här: modellen får aldrig se dolda tärningar. Den får bara det
 som varit offentligt. Annars skulle läsförmågan vara fusk.
+
+### Förutsägbarhet är en egen storhet
+
+Förutsägbarhet är inte samma sak som bluffbenägenhet. En ärlig spelare kan vara
+lättläst, och en lögnare kan vara omöjlig att förutse. Därför står
+förutsägbarheten som ett eget fält i profilen.
+
+Den påverkar besluten. En läsning väger inte lika tungt mot alla motståndare:
+en spelare som byter spel hela tiden går inte att läsa, hur skicklig läsaren än
+är. Vikten räknas som
+
+```
+vikt = läsförmåga × (0,5 + förutsägbarhet)
+```
+
+Så fungerar skalan:
+
+- En motståndare på 0,5 lämnar läsförmågan orörd. Då gäller bara spelarens egen
+  skicklighet.
+- En lättläst motståndare (nära 1,0) gör att läsningen får väga upp till 1,5
+  gånger så mycket.
+- En svårläst motståndare (nära 0,0) halverar läsningens vikt.
+
+Vikten klipps till högst 1,0, så en läsning kan aldrig bli starkare än ett
+säkert besked.
+
+### Ett värde som saknas sägs saknas
+
+Förutsägbarheten kan vara **inte bedömd**. Då står fältet som `null`, och
+beskrivningen säger rakt ut att förutsägbarheten inte är bedömd. Det är inte
+samma sak som 0,5.
+
+Skillnaden spelar roll. Ett påhittat 0,5 skulle läsas som "ganska förutsägbar",
+alltså som en iakttagelse ingen gjort. Nu syns det i stället att värdet
+saknas, och då ändras inte läsningens vikt alls.
+
+Sekreteraren har ett eget, grovt mått på förutsägbarhet: hur jämnt spelaren
+fördelar sina svar mellan *slå*, *skicka* och *syna*. En som alltid synar går
+att läsa. En som väljer jämnt mellan alla tre gör det inte. Måttet mäts mot en
+uppmätt bordnormal, så en helt vanlig spelare hamnar kring 0,5 i stället för i
+botten. Är underlaget för tunt — färre än fyra svar — blir värdet `null`.
 
 ### Spelaren litar inte fullt på sin egen läsförmåga
 
@@ -468,7 +510,8 @@ matchen. Och han ljuger aldrig för nöjes skull, bara när regeln tvingar honom
 - Enskild spelare – skriv in två tärningar och se vad en spelare svarar.
 - Spelarna möter varandra – spelarna spelar mot varandra, ett steg i taget eller
   hela matchen. Loggen visar varje påstående, varje syn och vem som förlorade liv.
-- Matchserie – kör många matcher och få statistik.
+- Matchserie – kör många matcher och få statistik. Sammanfattningen visar
+  bortfall och vilka modeller som faktiskt svarade.
 - Analys – välj bland loggarna och ställ frågor om materialet. Svaren kommer
   från en språkmodell och kan innehålla diagram.
 
@@ -494,6 +537,34 @@ spelet.
 En viktig varning: enstaka matcher säger nästan ingenting. Meier har hög
 slump i sig, och flera spelare med liv som tar slut gör att en enskild match kan
 vända på en enda syn. Kör hellre flera hundra matcher än tio.
+
+### Bortfall räknas och redovisas
+
+En match kan falla bort. Ett LLM-anrop kan ge upp efter sina omförsök, eller
+svara med något som inte går att tolka. Då blir det ingen match.
+
+Ett bortfall stannar inte serien. Nästa match spelas som vanligt. Bortfallet
+redovisas i stället separat, med orsak, så att du ser hur stor andel som föll
+bort och varför.
+
+Det spelar roll för tolkningen. Om en modell är överbelastad och en tiondel av
+matcherna faller bort, då är det de *spelade* matcherna du jämför — inte de
+tänkta. Utan bortfallsraden skulle serien se hel ut.
+
+Kontrollera därför alltid bortfallsandelen innan du litar på en liten skillnad
+mellan två roller. Faller mycket bort är underlaget tunnare än det ser ut.
+
+### Vilka modeller som svarade
+
+Serien kan tystna byta modell. Om den valda modellen är överbelastad prövas en
+reservmodell, och då svarar en annan modell än den du valde.
+
+Därför räknas varje lyckat svar per modell, och sammanfattningen visar raden
+*"Modeller som svarade"*. Står det bara en modell där fick hela serien svar
+från den du valde. Står det två är serien blandad, och då gäller slutsatserna
+blandningen — inte den modell du trodde du körde.
+
+Det är samma sak som med bortfall: en blandad serie ska synas, inte döljas.
 
 ---
 

@@ -176,3 +176,43 @@ def test_axel_is_the_llm_free_base_model():
 def test_get_profile_unknown_raises():
     with pytest.raises(ValueError):
         get_profile("finns-inte")
+
+
+def test_prompt_explains_that_pairs_beat_singles():
+    """Modellen läste ordningen som talordning och trodde 66 låg strax under Meier.
+
+    En platt lista räcker inte. Prompten måste säga att par slår singlar och
+    hur många påståenden som ligger över 66.
+    """
+    from meier import rules
+
+    prompt = make_agent({"claim": 11}).system_prompt()
+
+    assert "Par slår singlar" in prompt
+    assert "55 högre än 66" in prompt
+    assert "44 högre än 65" in prompt
+
+    # Sex påståenden ligger över 66, inte bara Meier.
+    over_66 = [rules.name(v) for v in rules.higher_options(66)]
+    assert over_66 == ["21 – Meier", "11", "22", "33", "44", "55"]
+    assert "sex påståenden" in prompt.lower()
+
+    # Och 31 är lägst, så det finns alltid något att höja till.
+    assert rules.next_higher(31) is not None
+
+
+def test_prompt_does_not_claim_low_claims_are_hard_to_raise_over():
+    """Ett lågt påstående är lätt att slå över, inte svårt.
+
+    31 ger 94 % chans till ett sant högre slag, 11 bara 6 %. Riktningen är
+    lätt att vända fel i prosan, så den låses här.
+    """
+    from meier import rules
+
+    prompt = make_agent({"claim": 11}).system_prompt()
+    assert "svårare för nästa spelare att slå över" not in prompt
+
+    rolls = [rules.read_dice(a, b) for a in range(1, 7) for b in range(1, 7)]
+    low = sum(1 for r in rolls if rules.is_higher(r, 31))
+    high = sum(1 for r in rolls if rules.is_higher(r, 11))
+    assert low > high, "ett lågt påstående ska vara lättare att slå över"

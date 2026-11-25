@@ -80,6 +80,48 @@ def test_parallel_workers_series(monkeypatch):
     assert sorted(r["game"] for r in data["records"]) == [1, 2, 3]
 
 
+def test_a_failing_match_does_not_stop_the_web_series(monkeypatch):
+    """En kraschad match i webbappen ska bara kosta den matchen.
+
+    Förut dog hela serien: ett LLM-fel satte ``error`` och ``running`` till
+    False, och de matcher som redan spelats syntes aldrig i sammanfattningen.
+    """
+    from meier.llm import LLMError
+
+    def flaky_agents(role_keys):
+        agents = make_agents(role_keys)
+        counter = {"n": 0}
+        for a in agents:
+            original = a.llm.complete
+
+            def complete(system, user, *, json_mode=False, _o=original):
+                counter["n"] += 1
+                if counter["n"] == 3:
+                    raise LLMError("överbelastad (503)")
+                return _o(system, user, json_mode=json_mode)
+
+            a.llm.complete = complete
+        return agents
+
+    monkeypatch.setattr(match, "_new_agents", flaky_agents)
+    client = TestClient(web_app.app)
+    client.post("/api/matches/run", json={"count": 2})
+    data = _wait_done(client)
+
+    # Serien gick vidare och matcherna efter felet spelades.
+    assert data["done"] == 2
+    assert data["games"] + len(data["failures"]) == 2
+    assert data["failures"], "bortfallet ska rapporteras, inte tystas"
+    for f in data["failures"]:
+        assert f["failed"] is True
+        assert f["error"] and f["kind"]
+    # Sammanfattningen räknar bara de spelade matcherna men redovisar bortfallet.
+    summary = data["summary"]
+    assert summary["attempted"] == 2
+    assert summary["games"] == 2 - summary["failed"]["count"]
+    assert summary["failed"]["count"] == len(data["failures"])
+
+
 def test_second_series_while_running_conflicts(monkeypatch):
     # Långsam agent så att den första serien hinner vara igång.
     def slow_agents(role_keys):

@@ -738,6 +738,20 @@ function renderMatchSummary(summary) {
     })
     .join("");
   const tok = summary.tokens;
+  const modelLine =
+    tok && tok.models && Object.keys(tok.models).length
+      ? `<p class="hint">Modeller som svarade: ${Object.entries(tok.models)
+          .map(([m, n]) => `${m} (${n})`)
+          .join(", ")}.</p>`
+      : "";
+  const fail = summary.failed;
+  const failLine =
+    fail && fail.count
+      ? `<p class="hint warn">${fail.count} av ${summary.attempted} matcher föll bort
+         och räknas inte i statistiken (${Object.entries(fail.reasons)
+           .map(([k, n]) => `${k}: ${n}`)
+           .join(", ")}).</p>`
+      : "";
   const tokenLine = tok
     ? `<p class="hint">
          LLM-förbrukning: i snitt ${Math.round(tok.per_game.total_tokens).toLocaleString("sv-SE")} tokens
@@ -752,7 +766,9 @@ function renderMatchSummary(summary) {
       ${summary.games} matcher, i snitt ${summary.avg_rounds} rundor per match.
       Startspelaren vinner ${pct(summary.starter_win_rate)} av matcherna.
     </p>
+    ${failLine}
     ${tokenLine}
+    ${modelLine}
     <table class="stat-table">
       <thead>
         <tr>

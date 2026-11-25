@@ -238,17 +238,50 @@ def _match_usage(agents: list) -> dict[str, Any]:
     total = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
     calls = 0
     by_role: dict[str, dict[str, int]] = {}
+    models: dict[str, int] = {}
     for agent in agents:
         client = getattr(agent, "llm", None)
         usage = getattr(client, "total_usage", None) or {}
         calls += getattr(client, "calls", 0)
         for key in total:
             total[key] += int(usage.get(key, 0))
+        for model, n in (getattr(client, "model_calls", None) or {}).items():
+            models[model] = models.get(model, 0) + n
         by_role[agent.role.key] = {
             "calls": getattr(client, "calls", 0),
             **{k: int(usage.get(k, 0)) for k in total},
         }
-    return {"total": total, "calls": calls, "by_role": by_role}
+    return {"total": total, "calls": calls, "by_role": by_role, "models": models}
+
+
+@dataclass
+class FailedMatch:
+    """En match som inte kunde spelas klart.
+
+    Den sparas i stället för att kastas vidare, så att resten av serien kan
+    fortsätta. ``error`` är felet i klartext; ``kind`` skiljer på ett LLM-fel
+    (modellen svarade inte) och ett oväntat fel (en bugg).
+    """
+
+    game: int
+    error: str
+    kind: str = "llm"
+    started_at: float = field(default_factory=time.time)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "game": self.game,
+            "failed": True,
+            "kind": self.kind,
+            "error": self.error,
+            "started_at": self.started_at,
+        }
+
+
+def _is_llm_error(exc: BaseException) -> bool:
+    from .llm import LLMError
+
+    return isinstance(exc, LLMError)
 
 
 def run_matches(
@@ -259,39 +292,55 @@ def run_matches(
     workers: int = 1,
     with_llm: bool = True,
     progress: "callable[[int, int], None] | None" = None,
-) -> Iterator[GameRecord]:
+) -> Iterator[GameRecord | FailedMatch]:
     """Spela ``count`` matcher och ge protokollen efter hand.
 
     Med ``workers`` > 1 spelas flera matcher samtidigt i trådar. Varje match har
     sina egna agenter och sin egen LLM-klient, så trådarna delar ingen status.
     Protokollen ges i den ordning matcherna blir klara.
 
+    En match som kastar ett fel avbryter **inte** serien. Den lämnas i stället
+    som en :class:`FailedMatch`, så att de matcher som redan spelats och de som
+    återstår behåller sitt värde.
+
     ``with_llm=False`` stänger av LLM-anropen helt (bara mekaniska repliker).
     Draget ägs ändå av policyn, så resultatet blir detsamma — men en serie går
     från minuter till millisekunder. Det är läget för utvärdering.
     """
+
+    def _play(i: int) -> GameRecord | FailedMatch:
+        try:
+            return play_match(role_keys, game=i + 1, lives=lives, with_llm=with_llm)
+        except Exception as exc:  # noqa: BLE001 - en match får aldrig fälla serien
+            return FailedMatch(
+                game=i + 1,
+                error=f"{type(exc).__name__}: {exc}",
+                kind="llm" if _is_llm_error(exc) else "oväntat",
+            )
+
     if workers <= 1:
         for i in range(count):
             if progress is not None:
                 progress(i + 1, count)
-            yield play_match(role_keys, game=i + 1, lives=lives, with_llm=with_llm)
+            yield _play(i)
         return
 
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    def _one(i: int) -> GameRecord:
-        return play_match(role_keys, game=i + 1, lives=lives, with_llm=with_llm)
-
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = {pool.submit(_one, i): i for i in range(count)}
+        futures = {pool.submit(_play, i): i for i in range(count)}
         for finished, fut in enumerate(as_completed(futures), start=1):
             if progress is not None:
                 progress(finished, count)
             yield fut.result()
 
 
-def write_jsonl(records: Iterable[GameRecord], path: str | Path) -> int:
-    """Skriv protokollen som en JSON-rad per match. Returnerar antalet rader."""
+def write_jsonl(records: Iterable[GameRecord | FailedMatch], path: str | Path) -> int:
+    """Skriv protokollen som en JSON-rad per match. Returnerar antalet rader.
+
+    Bortfall skrivs också, med ``failed: true``, så att en seriefil alltid
+    återspeglar hur många matcher som faktiskt försöktes.
+    """
     n = 0
     with open(path, "w", encoding="utf-8") as fh:
         for rec in records:
@@ -319,23 +368,40 @@ def _rate(part: int, whole: int) -> float:
     return round(part / whole, 4) if whole else 0.0
 
 
+def _failed_reasons(failed: list[dict[str, Any]]) -> dict[str, int]:
+    """Räkna bortfallen per orsak, så ett återkommande fel syns i sammanfattningen."""
+    reasons: dict[str, int] = {}
+    for rec in failed:
+        key = rec.get("kind") or "okänt"
+        reasons[key] = reasons.get(key, 0) + 1
+    return reasons
+
+
 def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
     """Aggregera en serie matcher till statistik per roll och totalt.
 
     Fokus ligger på mått som kan belysa strategier: vinstfrekvens, hur ofta man
     bluffar, hur aggressivt man höjer, hur ofta man synar och hur ofta synen
     lyckas.
+
+    Bortfall (``failed: true``) räknas **inte** som spelade matcher. De
+    rapporteras separat, eftersom de inte är slumpmässiga: en modell som svarar
+    503 faller bort oftare just när den pressas, och då skulle en tyst
+    bortskrivning försköna statistiken.
     """
+    played = [rec for rec in records if not rec.get("failed")]
+    failed = [rec for rec in records if rec.get("failed")]
     per_role: dict[str, dict[str, Any]] = {}
-    total_games = len(records)
+    total_games = len(played)
     total_rounds = 0
     winner_counts: dict[str, int] = {}
     starter_wins = 0
     call_outcomes = {"caller_wins": 0, "caller_loses": 0}
     token_totals = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
     token_calls = 0
+    model_calls: dict[str, int] = {}
 
-    for rec in records:
+    for rec in played:
         total_rounds += rec.get("rounds", 0)
         winner_counts[rec["winner_role"]] = winner_counts.get(rec["winner_role"], 0) + 1
         if rec.get("starter") == rec.get("winner"):
@@ -345,6 +411,8 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
         for key in token_totals:
             token_totals[key] += int((usage.get("total") or {}).get(key, 0))
         token_calls += int(usage.get("calls", 0))
+        for model, n in (usage.get("models") or {}).items():
+            model_calls[model] = model_calls.get(model, 0) + int(n)
 
         for p in rec["players"]:
             bucket = per_role.setdefault(
@@ -410,6 +478,13 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
 
     return {
         "games": total_games,
+        "attempted": len(records),
+        "failed": {
+            "count": len(failed),
+            "rate": _rate(len(failed), len(records)),
+            "games": [rec.get("game") for rec in failed],
+            "reasons": _failed_reasons(failed),
+        },
         "avg_rounds": round(total_rounds / total_games, 3) if total_games else 0.0,
         "winner_counts": winner_counts,
         "starter_win_rate": _rate(starter_wins, total_games),
@@ -423,5 +498,8 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
                 for key, value in token_totals.items()
             },
             "calls_per_game": round(token_calls / total_games, 1) if total_games else 0.0,
+            # Vilka modeller som faktiskt svarade. Reservmodellerna kan göra en
+            # serie blandad, och då ska det gå att se utan att gräva i loggen.
+            "models": model_calls,
         },
     }

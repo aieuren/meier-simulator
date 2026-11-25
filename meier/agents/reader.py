@@ -34,7 +34,9 @@ from ..opponents import (
 #: Kort regeltext så modellen kan tolka siffrorna rätt.
 _RULES = (
     "Meier spelas med två tärningar. Tärningarna läses med högsta först (2 och 5 "
-    "blir 52). 21 kallas Meier och är högst, 31 lägst. Vid en syn: visar "
+    "blir 52). 21 kallas Meier och är högst, 31 lägst. Ordningen är inte "
+    "talordning: par slår singlar, så 11, 22, 33, 44, 55 och 66 ligger alla över "
+    "65, och 55 är alltså högre än 66. Vid en syn: visar "
     "tärningarna lägre än påståendet förlorar den som påstod ett liv, annars synaren. "
     "Meier kostar dubbelt. Att 'skicka vidare' betyder att man ger upp påståendet."
 )
@@ -49,7 +51,9 @@ _SYSTEM = (
     "Bedöm på en skala 0–1:\n"
     "  estimated_call: hur ofta motståndaren synar, jämfört med bordet.\n"
     "  estimated_bluff: hur ofta motståndaren bluffar, jämfört med bordet.\n"
-    "  estimated_predictability: hur förutsägbar motståndaren är.\n"
+    "  estimated_predictability: hur förutsägbar motståndaren är — alltså hur "
+    "väl hennes drag går att förutsäga ur det du sett. Sätt null om underlaget "
+    "inte räcker för att säga något; gissa hellre inget än fel.\n"
     "  confidence: hur säker du är, givet hur mycket data som finns. Lite data "
     "ger låg confidence.\n"
     "  type: en kort etikett på svenska, t.ex. 'bluffbenägen', 'försiktig', "
@@ -65,6 +69,12 @@ def _fmt_rate(value: Any) -> str:
 
 def _summarise(player: str, ev: dict, *, table_reveals: int, strength: float) -> str:
     """Gör sekreterarens siffror till en läsbar sammanställning för modellen."""
+    variety = ev.get("decision_variety")
+    variety_text = (
+        "för tunt underlag"
+        if variety is None
+        else f"{variety:.2f} (0 = alltid samma val, 1 = jämnt fördelat)"
+    )
     lines = [
         f"Motståndare: {player}",
         f"Synliga (frivilliga) påståenden: {ev['visible_claims']}",
@@ -76,6 +86,7 @@ def _summarise(player: str, ev: dict, *, table_reveals: int, strength: float) ->
         f"  slog högre: {ev['raises']}",
         f"  synade: {ev['calls']} (frekvens {_fmt_rate(ev['call_rate'])})",
         f"  synen gick hem: {ev['calls_won']}",
+        f"Variation i svaren: {variety_text}",
         "",
         f"JÄMFÖRELSE: en vanlig Meier-spelare synar ungefär "
         f"{POPULATION_CALL_RATE:.0%} av gångerna och bluffar ofta (runt 70 % av de "
@@ -157,10 +168,13 @@ class OpponentReader:
         # hur tvärsäker modellen än är. Bordets facit är ett hårdare mått än
         # modellens självförtroende, och det växer när fler synar avslöjas.
         asked = _clamp01(data.get("confidence", 0.0))
+        estimated = data.get("estimated_predictability")
         return OpponentProfile(
             call_tendency=_clamp01(data.get("estimated_call", 0.5)),
             bluff_tendency=_clamp01(data.get("estimated_bluff", 0.5)),
-            predictability=_clamp01(data.get("estimated_predictability", 0.5)),
+            # Saknar modellen åsikt om förutsägbarheten lämnas fältet tomt.
+            # Ett påhittat 0,5 skulle läsas som "ganska förutsägbar".
+            predictability=None if estimated is None else _clamp01(estimated),
             kind=str(data.get("type") or "okänd")[:32],
             confidence=min(asked, strength),
             source="llm",

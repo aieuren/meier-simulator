@@ -265,3 +265,56 @@ def test_claim_prompt_marks_each_legal_claim_as_higher_or_lower():
     assert "61 (högre, alltså bluff)" in context
     assert "52 (exakt dina tärningar)" in context
     assert "51 (lägre, alltså sant men svagare)" in context
+
+
+def test_rules_text_says_pairs_beat_singles():
+    """Modellen trodde att bara Meier låg över 66 och tittade därför i onödan.
+
+    En platt rangordning utan förklaring läses som talordning. Reglerna måste
+    säga att par slår singlar och att sex påståenden ligger över 66.
+    """
+    from meier import rules
+    from meier.agents.strategic import _RULES
+
+    text = _RULES.format(rang=", ".join(rules.name(v) for v in rules.RANKING))
+
+    assert "Ordningen är inte talordning" in text
+    assert "Par slår singlar" in text
+    assert "55 högre än 66" in text
+    assert "44 högre än 65" in text
+    assert "66 är bara sjua" in text
+    assert "31 är lägst" in text
+    assert [rules.name(v) for v in rules.higher_options(66)] == [
+        "21 – Meier", "11", "22", "33", "44", "55"
+    ]
+
+
+def test_shake_context_lists_the_legal_raises():
+    """Den som slår ska inte tro att den måste ha Meier för att få säga något.
+
+    Över 66 finns sex lagliga påståenden. Prompten ska räkna upp dem, så att
+    valet att titta handlar om information och inte om laglighet.
+    """
+    agent = make("david", ROSTER["david"].params, OpponentTracker())
+    context = agent._shake_context(66, opponent=None)
+
+    assert "6 lagliga påståenden" in context
+    for name in ("55", "44", "33", "22", "11", "21 – Meier"):
+        assert name in context
+    assert "inte ett krav" in context
+
+
+def test_unseen_context_says_low_claims_are_easy_to_raise_over():
+    """Ett lågt påstående är lätt att slå över. 31 ger 94 %, 11 bara 6 %."""
+    from meier import rules
+
+    agent = make("david", ROSTER["david"].params, OpponentTracker())
+    context = agent._unseen_context(31, [41, 32], opponent=None)
+
+    assert "lätt för nästa spelare att slå över" in context
+    assert "svårare för nästa spelare att slå över" not in context
+
+    rolls = [rules.read_dice(a, b) for a in range(1, 7) for b in range(1, 7)]
+    assert sum(1 for r in rolls if rules.is_higher(r, 31)) > sum(
+        1 for r in rolls if rules.is_higher(r, 11)
+    )

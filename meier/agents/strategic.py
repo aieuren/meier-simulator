@@ -53,6 +53,15 @@ Två tärningar läses som ett tal med den högsta tärningen först: 2 och 5 bl
 21 kallas Meier och är högst. Sedan faller ordningen:
 {rang}.
 
+Ordningen är inte talordning. Läs den som en stege, högst först, och jämför
+bara läge i stegen. Tre saker följer av den och är lätta att ta fel på:
+
+- Par slår singlar. 11, 22, 33, 44, 55 och 66 ligger alla över 65, som är det
+  högsta singelparet. Alltså är 55 högre än 66, och 44 högre än 65.
+- 66 är bara sjua i ordningen. Sex påståenden ligger över det: 55, 44, 33, 22,
+  11 och 21. Att bordet står på 66 betyder alltså inte att bara Meier återstår.
+- 31 är lägst av alla. Det finns alltid ett högre påstående än 31.
+
 Ett varv:
 1. Spelaren med bägaren skakar, tittar i smyg och säger ett påstående: det sanna,
    ett högre (en bluff) eller ett lägre.
@@ -144,7 +153,14 @@ class StrategicAgent(Agent):
             call_tendency=profile.call_tendency,
             bluff_tendency=profile.bluff_tendency,
             confidence=profile.confidence,
+            predictability=profile.predictability,
         )
+        # En spelare som läser noga får också veta hur mycket bilden bör väga.
+        # Utan den raden behandlar modellen en tunn gissning som ett faktum.
+        if self.params.reading < 0.35:
+            text += " Du litar mest på ditt eget spel och tar hennes vanor med en nypa salt."
+        elif self.params.reading >= 0.6:
+            text += " Du är van att läsa motståndare och låter hennes vanor styra dina val."
         return f"\nMOTSTÅNDAREN {opponent}\n{text}\n"
 
     def _opponent_prior(self, claim: int, opponent: str | None) -> float | None:
@@ -160,7 +176,12 @@ class StrategicAgent(Agent):
             return None
         base = CALL_PRIOR[claim]
         factor = self.tracker.bluff_factor(profile)
-        factor = 1.0 + self.params.reading * (factor - 1.0)
+        # Hur mycket bilden får styra beror både på hur duktig spelaren är på
+        # att läsa (``reading``) och på hur läsbar motståndaren bedöms vara
+        # (``predictability``). Mot en oläsbar motståndare hjälper ingen
+        # skicklighet, och då lutar spelaren mot bordets genomsnitt i stället.
+        trust = self.tracker.read_trust(profile, self.params.reading)
+        factor = 1.0 + trust * (factor - 1.0)
         return min(0.95, base * factor)
 
     # -- LLM-anropet -------------------------------------------------------
@@ -380,6 +401,7 @@ class StrategicAgent(Agent):
         return None, reason
 
     def _shake_context(self, previous_claim: int, opponent: str | None) -> str:
+        higher = legality.unseen_claims(previous_claim=previous_claim)
         return "\n".join(
             [
                 "SLAG – TITTA ELLER INTE TITTA",
@@ -388,6 +410,11 @@ class StrategicAgent(Agent):
                 "Du får lyfta på locket och titta på tärningarna innan du påstår. "
                 "Det är det vanliga.",
                 self._opponent_note(opponent),
+                "",
+                f"Det finns {len(higher)} lagliga påståenden över {rules.name(previous_claim)}: "
+                f"{', '.join(rules.name(v) for v in higher)}. Du behöver alltså inte Meier, "
+                "och du behöver inte dina egna tärningar, för att kunna säga något lagligt. "
+                "Att titta är ett val om information, inte ett krav.",
                 "",
                 "Att titta ger dig något att luta påståendet mot. Att avstå döljer "
                 "informationen för bordet, men du vet då inte vad du säger. En syn går "
@@ -447,8 +474,9 @@ class StrategicAgent(Agent):
                 "LAGLIGA PÅSTÅENDEN",
                 ", ".join(rules.name(v) for v in legal),
                 "",
-                "Ett lågt påstående är svårare för nästa spelare att slå över. Ett högt "
-                "påstående sätter press men synas oftare.",
+                "Ett lågt påstående är lätt för nästa spelare att slå över, men svårt "
+                "att få synat. Ett högt påstående sätter press och är svårare att slå "
+                "över, men synas oftare.",
                 "",
                 "Svara med JSON:",
                 '{"claim": <heltal ur listan ovan>, "reasoning": "<kort motivering>"}',

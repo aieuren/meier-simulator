@@ -247,6 +247,10 @@ class LLMClient:
     #: Antal anrop som gjorts.
     calls: int = field(default=0, init=False)
 
+    #: Antal svar per modell. Reservmodellerna gör att en serie annars tyst kan
+    #: innehålla svar från flera modeller, och då bör det gå att se i efterhand.
+    model_calls: dict[str, int] = field(default_factory=dict, init=False)
+
     #: Modellen som senast svarade. Går först i kön vid nästa anrop.
     _active_model: str = field(default="", init=False, repr=False)
 
@@ -276,6 +280,7 @@ class LLMClient:
                 errors.append(f"{model}: {exc}")
                 continue
             self._active_model = model
+            self.model_calls[model] = self.model_calls.get(model, 0) + 1
             return text
         raise LLMError("Kunde inte nå LLM: " + "; ".join(errors))
 

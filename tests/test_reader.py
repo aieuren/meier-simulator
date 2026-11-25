@@ -329,6 +329,141 @@ def test_read_bluff_tendency_reaches_the_response():
     assert svar(utan, 63) == svar(ärlig, 63), "läsning påverkade trots reading=0.0"
 
 
+def test_predictability_scales_how_much_reading_is_trusted():
+    """Hur mycket en läsning får styra beror på hur läsbar motståndaren är.
+
+    ``reading`` är spelarens skicklighet. ``predictability`` är motståndarens
+    läsbarhet. De verkar tillsammans: en skicklig läsare har ingen nytta av sin
+    skicklighet mot en motståndare som byter spel hela tiden.
+    """
+    from meier.opponents import OpponentProfile, OpponentTracker
+
+    tracker = OpponentTracker()
+
+    def trust(reading: float, predictability: float | None) -> float:
+        p = OpponentProfile(predictability=predictability, source="llm")
+        return tracker.read_trust(p, reading)
+
+    # En oläsbar motståndare ger lägre förtroende än en lättläst, vid samma skicklighet.
+    assert trust(0.8, 0.1) < trust(0.8, 0.5) < trust(0.8, 0.9)
+    # Utan skicklighet hjälper ingen läsbarhet.
+    assert trust(0.0, 0.9) == 0.0
+    # 0,5 är mittpunkten och ger exakt skickligheten tillbaka.
+    assert trust(0.7, 0.5) == 0.7
+    # En omätt förutsägbarhet ska inte ändra något alls.
+    assert trust(0.7, None) == 0.7
+
+
+def test_an_unmeasured_predictability_leaves_the_old_behaviour_alone():
+    """Regression: ``None`` får inte tyst ändra hur mycket läsningen väger."""
+    from meier.opponents import OpponentProfile, OpponentTracker
+    from meier.policy import CALL_PRIOR
+
+    tracker = OpponentTracker()
+    profile = OpponentProfile(bluff_tendency=0.9, predictability=None, confidence=0.8, source="llm")
+    factor = tracker.bluff_factor(profile)
+
+    for reading in (0.2, 0.5, 0.9):
+        ny = CALL_PRIOR[52] * (1.0 + tracker.read_trust(profile, reading) * (factor - 1.0))
+        gammal = CALL_PRIOR[52] * (1.0 + reading * (factor - 1.0))
+        assert abs(ny - gammal) < 1e-12
+
+
+def test_a_readable_opponent_moves_the_belief_more_than_an_unreadable_one():
+    """Förutsägbarheten ska synas i ett faktiskt beslut, inte bara i en formel."""
+    from meier.agents.strategic import StrategicAgent
+    from meier.agents.base import Role
+    from meier.opponents import OpponentProfile, OpponentTracker
+    from meier.policy import AgentParams
+
+    class FixedReader:
+        """Läsare som alltid ger samma profil, så bara predictability varierar."""
+
+        def __init__(self, predictability):
+            self.predictability = predictability
+
+        def profile(self, tracker, player):
+            return OpponentProfile(
+                bluff_tendency=0.95,
+                predictability=self.predictability,
+                confidence=1.0,
+                kind="bluffbenägen",
+                source="llm",
+            )
+
+    tracker = OpponentTracker()
+    role = Role(key="t", name="Test", description="", style="")
+    params = AgentParams(caution=0.5, statistics=0.5, unpredictability=0.0, reading=0.9)
+
+    def prior_for(predictability):
+        agent = StrategicAgent(role, params, tracker=tracker, reader=FixedReader(predictability))
+        return agent._opponent_prior(52, "X")
+
+    oläsbar = prior_for(0.0)
+    läsbar = prior_for(1.0)
+    assert läsbar > oläsbar, "en lättläst bluffare ska höja tron mer än en oläsbar"
+
+
+def test_decision_variety_separates_a_machine_from_a_varied_player():
+    """Ett spel som alltid gör samma sak ska mätas som mer förutsägbart."""
+    from meier.opponents import VARIETY_MIN_DECISIONS, OpponentTracker
+
+    enkelspårig = OpponentTracker()
+    for _ in range(VARIETY_MIN_DECISIONS):
+        enkelspårig.observe_decision("A", "syna")
+
+    varierad = OpponentTracker()
+    for action in ("syna", "slå", "skicka", "syna"):
+        varierad.observe_decision("B", action)
+
+    assert enkelspårig.decision_variety("A") == 0.0
+    # En som alltid gör samma sak ska hamna i toppen av skalan.
+    assert enkelspårig.predictability_from_variety("A") == 1.0
+    assert varierad.decision_variety("B") > enkelspårig.decision_variety("A")
+    assert varierad.predictability_from_variety("B") < 1.0
+    # För tunt underlag ger inget värde, inte en gissning.
+    tunt = OpponentTracker()
+    tunt.observe_decision("C", "syna")
+    assert tunt.decision_variety("C") is None
+    assert tunt.predictability_from_variety("C") is None
+
+
+def test_variety_is_centred_on_the_table_normal():
+    """En helt vanlig spelare ska hamna nära mitten, inte på "svår att läsa".
+
+    Första versionen använde ``1 - variety``. Eftersom entropin nästan alltid
+    ligger på 0,8–1,0 blev varje normal spelare "svår att läsa" — måttet blev en
+    konstant som dämpade all läsning lika mycket. Nu centreras det mot
+    ``POPULATION_VARIETY``, och då ska en typisk spelare landa kring 0,5.
+    """
+    from meier.opponents import POPULATION_VARIETY, OpponentTracker
+
+    def tracker_with(variety_level: str) -> OpponentTracker:
+        t = OpponentTracker()
+        if variety_level == "normal":
+            # Ungefär bordets vanliga fördelning: mycket "slå", en del "syna".
+            for _ in range(10):
+                t.observe_decision("X", "slå")
+            for _ in range(4):
+                t.observe_decision("X", "syna")
+        elif variety_level == "jämn":
+            for a in ("slå", "skicka", "syna") * 6:
+                t.observe_decision("X", a)
+        return t
+
+    normal = tracker_with("normal").predictability_from_variety("X")
+    jämn = tracker_with("jämn").predictability_from_variety("X")
+
+    assert normal is not None and jämn is not None
+    # Normalspelaren ligger i mittbandet, inte i botten.
+    assert 0.25 <= normal <= 0.75, f"normalspelare hamnade på {normal:.2f}"
+    # En som sprider sina val jämnt är svårare att läsa än en med ett tydligt mönster.
+    assert jämn < normal
+    assert 0.0 <= jämn <= 1.0 and 0.0 <= normal <= 1.0
+    # Konstanten ska vara den uppmätta, inte en gissning.
+    assert 0.7 <= POPULATION_VARIETY <= 0.95
+
+
 def test_summary_gives_the_model_a_reference_point():
     """Modellen ska veta vad en *vanlig* synfrekvens är, inte läsa den som noll."""
     from meier.opponents import POPULATION_CALL_RATE
@@ -361,6 +496,44 @@ def test_profile_describe_says_when_there_is_no_picture():
     from meier.opponents import OpponentProfile
 
     assert "Ingen bild" in OpponentProfile().describe()
+
+
+def test_an_unmeasured_predictability_is_not_reported_as_a_trait():
+    """Ett värde som ingen satt ska sägas vara omätt, inte påstås vara "medel".
+
+    ``predictability`` var tidigare 0,5 som standard. Det hamnade i bandet
+    "ganska förutsägbar", så en profil utan någon bedömning alls läste som en
+    iakttagelse. Nu är standardvärdet ``None`` och texten säger det rakt ut.
+    """
+    from meier.opponents import OpponentProfile
+
+    p = OpponentProfile(
+        call_tendency=0.3,
+        bluff_tendency=0.5,
+        kind="okänd",
+        confidence=0.15,
+        source="statistik",
+    )
+    assert p.predictability is None
+    text = p.describe()
+    assert "ej bedömd" in text
+    assert "ganska förutsägbar" not in text
+    assert p.to_dict()["predictability"] is None
+
+
+def test_a_measured_predictability_still_reads_as_a_trait():
+    from meier.opponents import OpponentProfile
+
+    p = OpponentProfile(
+        kind="försiktig",
+        call_tendency=0.7,
+        bluff_tendency=0.2,
+        predictability=0.8,
+        confidence=0.7,
+        source="llm",
+    )
+    assert "mycket förutsägbar" in p.describe()
+    assert p.to_dict()["predictability"] == 0.8
 
 
 def test_session_views_show_agents_picture_of_the_others():

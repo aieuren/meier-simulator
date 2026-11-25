@@ -98,6 +98,41 @@ def test_summarize_aggregates_roles(monkeypatch):
     assert sum(stats["winner_counts"].values()) == 4
 
 
+def test_summarize_adds_up_the_models_that_answered():
+    """Sammanställningen ska visa modellerna även när loggen lästs från disk."""
+    base = {
+        "players": [
+            {
+                "role": "a",
+                "name": "A",
+                "index": 0,
+                "lives_lost": 0,
+                "claims": 0,
+                "visible_claims": 0,
+                "bluffs": 0,
+                "unseen_claims": 0,
+                "decisions": 0,
+                "passes": 0,
+                "raises": 0,
+                "calls": 0,
+                "calls_won": 0,
+            }
+        ],
+        "events": [],
+        "player_stats": {},
+        "winner_role": "a",
+        "winner_name": "A",
+        "starter": "A",
+        "rounds": 3,
+    }
+    recs = [
+        {**base, "game": 1, "usage": {"models": {"gemini-x": 4}}},
+        {**base, "game": 2, "usage": {"models": {"gemini-x": 2, "reserv-y": 3}}},
+    ]
+    stats = match.summarize(recs)
+    assert stats["tokens"]["models"] == {"gemini-x": 6, "reserv-y": 3}
+
+
 def test_jsonl_roundtrip(tmp_path, monkeypatch):
     monkeypatch.setattr(match, "_new_agents", make_agents)
     records = [match.play_match(["a", "b"], game=g) for g in range(3)]
@@ -124,6 +159,84 @@ def test_run_matches_parallel_workers(monkeypatch):
     # variera eftersom de spelas samtidigt.
     assert len(recs) == 4
     assert sorted(r.game for r in recs) == [1, 2, 3, 4]
+
+
+# -- En kraschad match får inte fälla serien ---------------------------------
+
+
+def test_a_failing_match_does_not_stop_the_series(monkeypatch):
+    """Ett LLM-fel i match 2 ska bara kosta match 2, inte hela serien.
+
+    Utan detta förlorade en enda 503:a alla matcher som redan spelats, eftersom
+    CLI:t samlade hela serien i minnet innan den skrevs till disk.
+    """
+    from meier.llm import LLMError
+
+    calls: list[int] = []
+
+    def flaky(role_keys, *, game=1, lives=3, with_llm=True):
+        calls.append(game)
+        if game == 2:
+            raise LLMError("Modellen är överbelastad (503)")
+        return match.GameRecord(
+            game=game,
+            provider="test",
+            model="test",
+            players=[],
+            order=[],
+            starter="",
+            winner="",
+            winner_role="",
+            rounds=0,
+            lives={},
+            elimination_order=[],
+            events=[],
+            player_stats={},
+        )
+
+    monkeypatch.setattr(match, "play_match", flaky)
+    recs = list(match.run_matches(["a", "b"], 3))
+
+    assert calls == [1, 2, 3], "alla matcher ska försökas"
+    assert len(recs) == 3
+    failed = [r for r in recs if isinstance(r, match.FailedMatch)]
+    assert len(failed) == 1
+    assert failed[0].game == 2
+    assert failed[0].kind == "llm"
+    assert "503" in failed[0].error
+
+
+def test_failed_matches_are_written_and_excluded_from_the_summary(tmp_path, monkeypatch):
+    """Bortfallet ska synas i filen men inte räknas som en spelad match."""
+    from meier.llm import LLMError
+
+    def flaky(role_keys, *, game=1, lives=3, with_llm=True):
+        raise LLMError("överbelastad")
+
+    monkeypatch.setattr(match, "play_match", flaky)
+    recs = list(match.run_matches(["a", "b"], 2))
+
+    path = tmp_path / "serie.jsonl"
+    assert match.write_jsonl(recs, path) == 2
+    back = match.read_jsonl(path)
+    assert all(r.get("failed") for r in back)
+
+    stats = match.summarize(back)
+    assert stats["games"] == 0, "inget spelades"
+    assert stats["attempted"] == 2
+    assert stats["failed"]["count"] == 2
+    assert stats["failed"]["games"] == [1, 2]
+    assert stats["failed"]["reasons"] == {"llm": 2}
+
+
+def test_an_unexpected_error_is_not_mistaken_for_an_llm_error(monkeypatch):
+    def broken(role_keys, *, game=1, lives=3, with_llm=True):
+        raise ZeroDivisionError("bugg")
+
+    monkeypatch.setattr(match, "play_match", broken)
+    recs = list(match.run_matches(["a", "b"], 1))
+    assert recs[0].kind == "oväntat"
+    assert "ZeroDivisionError" in recs[0].error
 
 
 # -- Gamla loggar (skrivna före namnbytet bid -> claim) ----------------------

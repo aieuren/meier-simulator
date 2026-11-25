@@ -16,6 +16,7 @@ En bluff kan alltså bara räknas **efter** att rundan avslöjats genom en syn.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 from .policy import DEFAULT_Q
@@ -40,6 +41,10 @@ NEUTRAL_BLUFF = 0.5
 #: Neutral synbenägenhet i :meth:`OpponentTracker.call_factor`.
 NEUTRAL_CALL = 0.5
 
+#: Minsta antal svar innan :meth:`OpponentTracker.decision_variety` säger något.
+#: Med färre blir entropin ren slump och skulle se ut som en bedömning.
+VARIETY_MIN_DECISIONS = 4
+
 #: Typisk synfrekvens vid bordet, uppmätt över 500 matcher utan LLM (alla fyra
 #: rollerna låg på 26–27 %). Används av :meth:`OpponentTracker.call_ratio` för att
 #: skala en spelares synfrekvens **relativt** populationen — inte som ett absolut
@@ -50,6 +55,15 @@ NEUTRAL_CALL = 0.5
 #: form spelar liten roll (25,6 % med areamodellen mot 26,3 % med rymdvinkeln),
 #: men mät om talet när spelets svar ändras, inte när ``FACE_WEIGHTS`` gör det.
 POPULATION_CALL_RATE = 0.265
+
+#: Typisk variation i svaren vid bordet, uppmätt över 60 matcher utan LLM
+#: (median 0,82, medel 0,76 på den normerade entropin). Används av
+#: :meth:`OpponentTracker.predictability_from_variety` som **mittpunkt**:
+#: en spelare på den här nivån ska bedömas som varken lätt eller svår att läsa.
+#: Utan mittpunkten hamnade varje normal spelare på "svår att läsa", eftersom
+#: entropin nästan alltid ligger högt — då vore måttet en konstant, inte en
+#: iakttagelse. Mät om talet när spelets svarsval ändras.
+POPULATION_VARIETY = 0.82
 
 #: Hur många synar (facit) bordet behöver innan underlaget räknas som starkt.
 #: Används av :meth:`OpponentTracker.evidence_strength`, som dämpar LLM:ens
@@ -66,7 +80,10 @@ class OpponentProfile:
 
     ``call_tendency``  – hur ofta motståndaren synar, relativt bordet.
     ``bluff_tendency`` – hur ofta motståndaren bluffar, relativt bordet.
-    ``predictability`` – hur förutsägbar motståndaren är.
+    ``predictability`` – hur förutsägbar motståndaren är, eller ``None`` när
+                         ingen har bedömt det. ``None`` betyder **inte** "medel":
+                         det betyder att värdet saknas, och då ska beskrivningen
+                         säga det i stället för att hitta på en egenskap.
     ``kind``           – kort etikett, t.ex. "bluffbenägen" eller "försiktig".
     ``confidence``     – hur säker uppskattningen är.
     ``source``         – varifrån profilen kommer: ``"llm"``, ``"statistik"``
@@ -76,20 +93,28 @@ class OpponentProfile:
 
     call_tendency: float = NEUTRAL_CALL
     bluff_tendency: float = NEUTRAL_BLUFF
-    predictability: float = 0.5
+    predictability: float | None = None
     kind: str = "okänd"
     confidence: float = 0.0
     source: str = "population"
 
     def __post_init__(self) -> None:
-        for name in ("call_tendency", "bluff_tendency", "predictability", "confidence"):
+        for name in ("call_tendency", "bluff_tendency", "confidence"):
             object.__setattr__(self, name, _clamp01(getattr(self, name)))
+        if self.predictability is not None:
+            object.__setattr__(
+                self, "predictability", _clamp01(self.predictability)
+            )
 
     def to_dict(self) -> dict:
         return {
             "call_tendency": round(self.call_tendency, 3),
             "bluff_tendency": round(self.bluff_tendency, 3),
-            "predictability": round(self.predictability, 3),
+            "predictability": (
+                None
+                if self.predictability is None
+                else round(self.predictability, 3)
+            ),
             "kind": self.kind,
             "confidence": round(self.confidence, 3),
             "source": self.source,
@@ -101,17 +126,26 @@ class OpponentProfile:
         Tanken är att en människa ska kunna läsa vad agenten *tror* om en
         motståndare utan att tolka råa tal. Siffrorna står kvar i parentesen så
         att beskrivningen går att kontrollera.
+
+        Ett värde som inte är satt skrivs som **inte bedömd** i stället för som
+        ett neutralt tal. Annars ser en gissning på 0,5 ut som en iakttagelse.
         """
         if self.source == "population":
             return (
                 "Ingen bild än — spelaren har inte sett tillräckligt av den här "
                 "motståndaren."
             )
+        if self.predictability is None:
+            predict_words = "vars förutsägbarhet inte är bedömd"
+            predict_numbers = "förutsägbarhet ej bedömd"
+        else:
+            predict_words = _predict_words(self.predictability)
+            predict_numbers = f"förutsägbarhet {pct(self.predictability)}"
         return (
             f"{self.kind.capitalize()}: {_bluff_words(self.bluff_tendency)}, "
-            f"{_call_words(self.call_tendency)} och {_predict_words(self.predictability)} "
+            f"{_call_words(self.call_tendency)} och {predict_words} "
             f"(bluff {pct(self.bluff_tendency)}, syn {pct(self.call_tendency)}, "
-            f"förutsägbarhet {pct(self.predictability)}; "
+            f"{predict_numbers}; "
             f"{_confidence_words(self.confidence)})."
         )
 
@@ -466,6 +500,7 @@ class OpponentTracker:
                 "bluff_rate": None,
                 "pass_rate": None,
                 "call_rate": None,
+                "decision_variety": None,
             }
         revealed = bucket.revealed + bucket.revealed_unseen
         bluffs = bucket.revealed_bluffs + bucket.revealed_unseen_bluffs
@@ -481,6 +516,7 @@ class OpponentTracker:
             "bluff_rate": (bluffs / revealed) if revealed else None,
             "pass_rate": (bucket.passes / bucket.decisions) if bucket.decisions else None,
             "call_rate": (bucket.calls / bucket.decisions) if bucket.decisions else None,
+            "decision_variety": self.decision_variety(player),
         }
 
     def has_evidence(self, player: str) -> bool:
@@ -526,11 +562,88 @@ class OpponentTracker:
         return OpponentProfile(
             call_tendency=call_tendency,
             bluff_tendency=bluff_tendency,
-            predictability=0.5,
+            # Sekreteraren har inget direkt mått på förutsägbarhet, men den kan
+            # se hur jämnt spelaren fördelar sina svar. Det är en grov men ärlig
+            # proxy: en som alltid synar går att läsa, en som varierar gör det inte.
+            # Är underlaget för tunt blir värdet None — inte en gissning.
+            predictability=self.predictability_from_variety(player),
             kind="okänd",
             confidence=confidence,
             source="statistik",
         )
+
+    def read_trust(self, profile: OpponentProfile, reading: float) -> float:
+        """Hur mycket en läsning får styra, 0–1.
+
+        ``reading`` säger hur duktig spelaren är på att läsa motståndare.
+        ``predictability`` säger hur läsbar **den här** motståndaren är. De två
+        verkar tillsammans: en skicklig läsare har ingen nytta av sin skicklighet
+        mot en motståndare som byter spel hela tiden, och en oläsbar motståndare
+        ger en svag läsare nästan ingenting.
+
+        Skalan är centrerad så att ``predictability = 0,5`` ger exakt samma
+        vikt som ``reading`` ensamt. Det gör att en **omätt** förutsägbarhet
+        (``None``) inte ändrar något: då är ``scale`` 1,0 och beteendet är det
+        gamla. Ett uppmätt värde drar däremot läsningen uppåt eller nedåt.
+        """
+        if profile.predictability is None:
+            scale = 1.0
+        else:
+            scale = 0.5 + profile.predictability
+        return min(1.0, max(0.0, reading * scale))
+
+    def decision_variety(self, player: str) -> float | None:
+        """Hur jämnt en spelares svar fördelar sig över de tre valen, 0–1.
+
+        Det är ett **observerbart mått på förutsägbarhet**: en spelare som nästan
+        alltid gör samma sak (alltid synar, alltid skickar) går att förutsäga, en
+        som väljer jämnt mellan alla tre gör det inte.
+
+        Värdet är den normerade entropin över ``slå``, ``skicka`` och ``syna``.
+        0 betyder att spelaren alltid gjort samma val, 1 att valen är helt jämnt
+        fördelade. ``None`` när underlaget är för tunt (färre än
+        ``VARIETY_MIN_DECISIONS`` svar), för då säger måttet ingenting.
+
+        Detta är en grov proxy, inte en egentlig mätning av spelarens slump: den
+        fångar *variationen i val*, inte om variationen är klok. Den räcker för
+        att skilja en maskin från en svårläst motståndare.
+        """
+        bucket = self.stats.get(player)
+        if bucket is None or bucket.decisions < VARIETY_MIN_DECISIONS:
+            return None
+        counts = [bucket.raises, bucket.passes, bucket.calls]
+        total = sum(counts)
+        if total <= 0:
+            return None
+        entropy = 0.0
+        for c in counts:
+            if c:
+                p = c / total
+                entropy -= p * math.log(p)
+        return min(1.0, entropy / math.log(len(counts)))
+
+    def predictability_from_variety(self, player: str) -> float | None:
+        """Förutsägbarhet ur :meth:`decision_variety`, centrerad mot bordets normal.
+
+        ``variety`` mäts mot ``POPULATION_VARIETY``: en spelare som varierar som
+        folk mest får **0,5**, en som alltid gör samma sak får **1,0** och en som
+        varierar mer än normalt får ned mot **0,0**. Skalan är den samma som
+        LLM:ens ``estimated_predictability``, så de två kan jämföras.
+
+        ``None`` när underlaget är för tunt.
+        """
+        variety = self.decision_variety(player)
+        if variety is None:
+            return None
+        # Tvåsidig skala kring bordets normal: den som varierar som folk mest får
+        # 0,5, den som alltid gör samma sak 1,0 och den som varierar mer än
+        # normalt går mot 0,0. Normalvariationen ligger nära taket, så de två
+        # sidorna har olika långt att gå och delas var för sig.
+        if variety <= POPULATION_VARIETY:
+            span = max(1e-9, POPULATION_VARIETY)
+            return _clamp01(0.5 + 0.5 * (POPULATION_VARIETY - variety) / span)
+        span = max(1e-9, 1.0 - POPULATION_VARIETY)
+        return _clamp01(0.5 - 0.5 * (variety - POPULATION_VARIETY) / span)
 
     def bluff_factor(self, profile: OpponentProfile) -> float:
         """Översätt en motståndarprofils ``bluff_tendency`` till en **relativ** faktor.

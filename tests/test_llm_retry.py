@@ -163,6 +163,39 @@ def test_the_model_that_answered_is_tried_first_next_time(monkeypatch):
     assert models == ["reserv"], models
 
 
+def test_the_client_counts_answers_per_model(monkeypatch):
+    """En serie med reservmodeller ska gå att granska i efterhand.
+
+    Reservmodellerna byter tyst ut modellen vid 503. Utan räkning per modell ser
+    en blandad serie ut som en enhetlig, och slutsatser dras om fel modell.
+    """
+    models: list[str] = []
+
+    def fake_post(url, json=None, **kwargs):
+        models.append(json["model"])
+        if json["model"] == "primär":
+            raise _overloaded()
+        return _FakeResponse(
+            {"choices": [{"message": {"content": "svar"}}], "usage": {"total_tokens": 1}}
+        )
+
+    monkeypatch.setattr("meier.llm.httpx.post", fake_post)
+    cfg = LLMConfig(
+        provider="gemini",
+        model="primär",
+        fallback_models=("reserv",),
+        max_retries=1,
+        retry_backoff=0.0,
+    )
+    client = LLMClient(cfg)
+    client.complete("system", "user")
+    client.complete("system", "user")
+
+    # Bara den modell som faktiskt svarade räknas — inte den som prövades först.
+    assert client.model_calls == {"reserv": 2}
+    assert client.calls == 2
+
+
 def test_all_models_overloaded_raises_with_each_reason(monkeypatch):
     def fake_post(url, **kwargs):
         raise _overloaded()
