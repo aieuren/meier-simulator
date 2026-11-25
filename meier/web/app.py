@@ -576,7 +576,9 @@ class _MatchJob:
 
     def status(self) -> dict:
         with self.lock:
-            snapshot = [rec.to_dict() for rec in self.records]
+            # Matcherna spelas parallellt och blir klara i olika ordning.
+            # Visa dem i matchnummer, så att listan blir läsbar.
+            snapshot = [rec.to_dict() for rec in sorted(self.records, key=lambda r: r.game)]
             failures = list(self.failures)
             live = sorted(self.live.values(), key=lambda m: m["game"])
             started_at = self.started_at
@@ -646,6 +648,10 @@ def _status_from_file() -> dict:
     failures: list[dict] = []
     for rec in read_jsonl(path):
         (failures if rec.get("failed") else records).append(rec)
+    # Filen skrivs i den ordning matcherna blev klara. Läsaren vill se dem i
+    # matchnummer, precis som den levande listan.
+    records.sort(key=lambda r: r.get("game") or 0)
+    failures.sort(key=lambda r: r.get("game") or 0)
     # Antalet matcher i serien står i pekfilen. Faller tillbaka på antalet
     # rader om pekfilen saknas, t.ex. för en serie spelad före den infördes.
     info = _last_series_info()

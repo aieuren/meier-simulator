@@ -15,6 +15,10 @@
 
 * { box-sizing: border-box; }
 
+/* Paneler som göms med hidden-attributet ska vara borta. Utan den här regeln
+   vinner en display-regel på samma element, och en tom rubrik blir kvar. */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
@@ -71,8 +75,6 @@ h1 span { color: var(--muted); font-weight: 500; }
 }
 
 .tab-panel { display: grid; gap: 1.1rem; }
-/* display:grid ovan åsidosätter annars [hidden] och dolda paneler syns. */
-.tab-panel[hidden] { display: none; }
 
 .placeholder {
   border: 1px dashed var(--line);

@@ -6,6 +6,7 @@ kontrollerar sedan status, protokoll och nedladdning.
 
 from __future__ import annotations
 
+import json
 import subprocess
 import tempfile
 import time
@@ -508,3 +509,39 @@ def test_series_file_name_is_a_bare_timestamp(monkeypatch, tmp_path):
     # ÅÅÅÅ-MM-DD-TTMMSS
     assert len(name) == len("2026-11-25-202542.jsonl")
     assert name[4] == "-" and name[7] == "-" and name[10] == "-"
+
+
+def test_records_are_listed_in_match_order(monkeypatch, tmp_path):
+    """Matcherna spelas parallellt men ska listas i matchnummer."""
+    client = _client(monkeypatch)
+    monkeypatch.setenv("MEIER_LOCAL_LOG_DIR", str(tmp_path / "serier"))
+
+    client.post("/api/matches/run", json={"count": 4, "workers": 4})
+    data = _wait_done(client)
+
+    games = [rec["game"] for rec in data["records"]]
+    assert games == sorted(games) == [1, 2, 3, 4]
+
+
+def test_restored_records_are_sorted(monkeypatch, tmp_path):
+    """Efter omstart ska filens matcher listas i matchnummer, inte i skrivordning."""
+    log_dir = tmp_path / "serier"
+    client = _client(monkeypatch)
+    monkeypatch.setenv("MEIER_LOCAL_LOG_DIR", str(log_dir))
+
+    client.post("/api/matches/run", json={"count": 3, "workers": 3})
+    done = _wait_done(client)
+    path = log_dir / done["file"]
+    assert path.is_file()
+
+    # Skriv om filen i "fel" ordning, som en parallell serie kan hamna på disk.
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+    with path.open("w", encoding="utf-8") as fh:
+        for rec in reversed(rows):
+            fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+
+    monkeypatch.setattr(web_app, "_match_job", None)
+    monkeypatch.setattr(web_app, "_restored", False)
+
+    data = client.get("/api/matches/status").json()
+    assert [r["game"] for r in data["records"]] == [1, 2, 3]

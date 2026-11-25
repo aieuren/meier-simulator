@@ -924,12 +924,17 @@ let _renderedGames = -1;
 let _renderedSummaryKey = "";
 
 function renderMatchList(data) {
-  const games = (data.records || []).length;
+  const records = data.records || [];
+  const games = records.length;
   if (games === _renderedGames) return;
   _renderedGames = games;
   const list = $("matchList");
   list.innerHTML = "";
-  (data.records || []).forEach((rec) => list.appendChild(matchRow(rec)));
+  // Matcherna spelas parallellt och blir klara i olika ordning. Visa dem i
+  // matchnummer, inte i den ordning de råkade bli färdiga.
+  [...records]
+    .sort((a, b) => (a.game || 0) - (b.game || 0))
+    .forEach((rec) => list.appendChild(matchRow(rec)));
 }
 
 function summaryKey(summary) {

@@ -74,9 +74,10 @@ lower claim). Multiple agents with distinct roles can also play full games.
   protocol), and *Analys* (ask questions about loaded protocols).
   `/api/roles` returns each role's `style` too, so the
   first tab can show the full character text. Tab switching just toggles
-  `[hidden]` on `.tab-panel`; note the `.tab-panel[hidden] { display: none }`
-  rule — a bare `display: grid` would otherwise override `hidden` and show every
-  panel at once. A match series is hundreds of LLM calls and takes minutes, so
+  `[hidden]` on `.tab-panel`; a single `[hidden] { display: none !important }`
+  rule near the top of the stylesheet makes the attribute win over any
+  `display` rule, so a hidden panel or a hidden heading never shows through.
+  A match series is hundreds of LLM calls and takes minutes, so
   `/api/matches/run` starts a background thread and returns at once; the client
   polls `/api/matches/status` (field `running`) and renders matches as they
   finish. Only one series runs at a time (a second start gives 409). The request
