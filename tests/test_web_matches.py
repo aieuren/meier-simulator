@@ -211,12 +211,11 @@ def test_local_series_is_written_outside_tmp(monkeypatch, tmp_path):
     En serie som bara låg där försvann, och felet syntes först när sidan sökte
     status ("Failed to fetch"). Filen ska ligga i den beständiga katalogen.
     """
+    client = _client(monkeypatch)
     log_dir = tmp_path / "bestandig"
     monkeypatch.setenv("MEIER_LOCAL_LOG_DIR", str(log_dir))
-    monkeypatch.setattr(match, "_new_agents", make_agents)
-    client = TestClient(web_app.app)
 
-    client.post("/api/matches/run", json={"count": 1, "check_in": False})
+    client.post("/api/matches/run", json={"count": 1})
     data = _wait_done(client)
 
     assert data["error"] is None
@@ -240,15 +239,14 @@ def test_default_log_dir_is_persistent(monkeypatch):
 
 def test_two_local_series_do_not_overwrite_each_other(monkeypatch, tmp_path):
     """Två lokala serier ska bli två filer, inte en som skrivs över."""
+    client = _client(monkeypatch)
     log_dir = tmp_path / "serier"
     monkeypatch.setenv("MEIER_LOCAL_LOG_DIR", str(log_dir))
-    monkeypatch.setattr(match, "_new_agents", make_agents)
-    client = TestClient(web_app.app)
 
-    client.post("/api/matches/run", json={"count": 1, "check_in": False})
+    client.post("/api/matches/run", json={"count": 1})
     first = _wait_done(client)["file"]
     time.sleep(1.1)  # filnamnet har sekundupplösning
-    client.post("/api/matches/run", json={"count": 1, "check_in": False})
+    client.post("/api/matches/run", json={"count": 1})
     second = _wait_done(client)["file"]
 
     assert first != second
@@ -313,3 +311,118 @@ def test_check_in_is_on_by_default():
     from meier.web.app import MatchRequest
 
     assert MatchRequest().check_in is True
+
+
+def test_check_in_runs_even_when_client_says_no(monkeypatch, tmp_path):
+    """Klienten kan inte längre välja bort incheckningen.
+
+    Kryssrutan är borta ur gränssnittet. En gammal klient som skickar
+    check_in=False ska ändå få serien incheckad, annars finns två beteenden
+    kvar och den lokala filen blir återigen något man kan råka välja.
+    """
+    clone = tmp_path / "clone"
+    origin = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)
+    monkeypatch.setenv("MEIER_LOGS_DIR", str(clone))
+    monkeypatch.setenv("MEIER_LOGS_REMOTE_URL", str(origin))
+    monkeypatch.setenv("MEIER_LOGS_TOKEN_FILE", str(tmp_path / "token"))
+    (tmp_path / "token").write_text("dummy\n", encoding="utf-8")
+    client = _client(monkeypatch)
+    monkeypatch.setenv("MEIER_LOGS_PUSH", "1")
+
+    client.post("/api/matches/run", json={"count": 1, "check_in": False})
+    data = _wait_done(client)
+
+    assert data["error"] is None
+    # Filen hamnade i klonen, inte i den lokala katalogen.
+    assert (clone / data["file"]).exists()
+    assert "Incheckat" in data["push_status"]
+
+
+def test_status_works_after_restart_from_pointer_file(monkeypatch, tmp_path):
+    """Efter omstart ska status läsas tillbaka från filen, inte ge 404.
+
+    Servern tappar jobbet i minnet vid omstart. Filen ligger kvar i /workspace.
+    Utan pekfil svarade status 404 och serien såg förlorad ut.
+    """
+    client = _client(monkeypatch)
+    log_dir = tmp_path / "serier"
+    monkeypatch.setenv("MEIER_LOCAL_LOG_DIR", str(log_dir))
+
+    client.post("/api/matches/run", json={"count": 2})
+    done = _wait_done(client)
+    name = done["file"]
+
+    # Simulera omstart: jobbet i minnet är borta, pekfilen ligger kvar.
+    monkeypatch.setattr(web_app, "_match_job", None)
+    monkeypatch.setattr(web_app, "_restored", False)
+
+    res = client.get("/api/matches/status")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["running"] is False
+    assert data["restored"] is True
+    assert data["file"] == name
+    assert data["games"] == 2
+    assert data["count"] == 2
+    assert len(data["records"]) == 2
+
+
+def test_pointer_file_lets_download_work_after_restart(monkeypatch, tmp_path):
+    """Nedladdning och sammanfattning ska också fungera efter omstart."""
+    client = _client(monkeypatch)
+    monkeypatch.setenv("MEIER_LOCAL_LOG_DIR", str(tmp_path / "serier"))
+
+    client.post("/api/matches/run", json={"count": 1})
+    done = _wait_done(client)
+
+    monkeypatch.setattr(web_app, "_match_job", None)
+    monkeypatch.setattr(web_app, "_restored", False)
+
+    dl = client.get("/api/matches/download")
+    assert dl.status_code == 200
+    assert dl.content.strip()
+    summary = client.get("/api/matches/summary")
+    assert summary.status_code == 200
+    assert summary.json()["games"] == 1
+    assert done["file"] in dl.headers.get("content-disposition", "")
+
+
+def test_analysis_lists_local_series(monkeypatch, tmp_path):
+    """Analys-fliken ska visa lokala serier, inte bara incheckade.
+
+    En serie som spelats utan fungerande fjärr ska gå att analysera. Tidigare
+    listades bara loggre pets filer, så lokala serier var osynliga.
+    """
+    client = _client(monkeypatch)
+    log_dir = tmp_path / "serier"
+    monkeypatch.setenv("MEIER_LOCAL_LOG_DIR", str(log_dir))
+
+    client.post("/api/matches/run", json={"count": 1})
+    done = _wait_done(client)
+
+    res = client.get("/api/analysis/logs")
+    assert res.status_code == 200
+    data = res.json()
+    names = [e["name"] for e in data["logs"]]
+    assert done["file"] in names
+    entry = next(e for e in data["logs"] if e["name"] == done["file"])
+    assert entry["local"] is True
+    assert entry["games"] == 1
+
+
+def test_analysis_can_load_local_series(monkeypatch, tmp_path):
+    """En lokal serie ska gå att läsa in i analysen och räknas."""
+    client = _client(monkeypatch)
+    log_dir = tmp_path / "serier"
+    monkeypatch.setenv("MEIER_LOCAL_LOG_DIR", str(log_dir))
+
+    client.post("/api/matches/run", json={"count": 2})
+    done = _wait_done(client)
+
+    res = client.post("/api/analysis/select", json={"names": [done["file"]]})
+    assert res.status_code == 200
+    assert res.json()["games"] == 2
+
+    data = client.get("/api/analysis/data").json()
+    assert data["games"] == 2

@@ -146,11 +146,17 @@ class LogRepo:
     def _credential_config(self) -> tuple[str, ...]:
         # Helpern läser token från fil, så att själva token aldrig står på
         # kommandoraden (den skulle annars synas i `ps`).
+        #
+        # Tomt värde först nollställer listan av helpers. Git lägger annars
+        # ihop alla helpers som finns (t.ex. OpenHands globala
+        # git-credential-helper) och frågar dem i tur och ordning; den
+        # globala svarar med en token som saknar rättighet till loggrepet och
+        # då blir pushen 403 trots att vår egen token fungerar.
         helper = (
             '!f() { echo "username=x-access-token"; '
             f'echo "password=$(cat {self.token_path})"; }}; f'
         )
-        return (f"credential.helper={helper}",)
+        return ("credential.helper=", f"credential.helper={helper}")
 
     def _git(self, *args: str, check: bool = True, config: tuple[str, ...] = ()) -> subprocess.CompletedProcess:
         env = dict(os.environ)

@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import threading
+import time
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -61,8 +62,61 @@ def _local_log_dir() -> Path:
 
 _current_match_file: Path = _local_log_dir() / "meier_matches.jsonl"
 
+#: Pekfil med senaste serien. Servern tappar allt i minnet vid omstart, men
+#: filen ligger kvar i /workspace. Utan pekfil svarar status 404 och serien ser
+#: förlorad ut fast den finns på disk.
+_LAST_SERIES = "last-series.json"
+
+_restored = False
+
+
+def _last_series_path() -> Path:
+    return _local_log_dir() / _LAST_SERIES
+
+
+def _remember_series(path: Path, count: int) -> None:
+    """Skriv pekfil så att serien hittas igen efter en omstart."""
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        _last_series_path().write_text(
+            json.dumps(
+                {"file": str(path), "count": count, "started_at": time.time()},
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+    except OSError:
+        # Pekfilen är en bekvämlighet. Går den inte att skriva får serien
+        # fortfarande sin loggfil, och den syns i analysen.
+        pass
+
+
+def _restore_last_series() -> None:
+    """Läs pekfilen en gång och peka om till serien från förra körningen."""
+    global _current_match_file, _restored
+    if _restored:
+        return
+    _restored = True
+    try:
+        data = json.loads(_last_series_path().read_text(encoding="utf-8"))
+        path = Path(data["file"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return
+    if path.is_file():
+        _current_match_file = path
+
+
+def _last_series_count() -> int:
+    """Antalet matcher i serien enligt pekfilen, annars 0."""
+    try:
+        data = json.loads(_last_series_path().read_text(encoding="utf-8"))
+        return int(data.get("count") or 0)
+    except (OSError, ValueError, TypeError, AttributeError):
+        return 0
+
 
 def _match_file() -> Path:
+    _restore_last_series()
     return _current_match_file
 
 
@@ -367,8 +421,8 @@ class MatchRequest(BaseModel):
         True,
         description=(
             "Checka in loggfilen till loggrepet på GitHub efter varje match. "
-            "På som standard: containern startar om efter inaktivitet och "
-            "nollställer /tmp, så en serie som bara ligger lokalt kan försvinna."
+            "Alltid på: serier ska hamna i git, inte bara på disk. Fältet finns "
+            "kvar för äldre klienter men styr inget — servern checkar alltid in."
         ),
     )
 
@@ -401,15 +455,19 @@ class _MatchJob:
         self.thread = threading.Thread(target=self._run, daemon=True)
 
     def _open_log(self) -> tuple[Path, logrepo.LogRepo | None]:
-        """Välj fil för serien och en loggreps-klon om incheckning är på."""
+        """Välj fil för serien och en loggreps-klon.
+
+        Incheckning är alltid på: serier ska hamna i git. Går den inte att
+        starta (token saknas, fjärren onåbar, MEIER_LOGS_PUSH=0) sparas serien
+        i stället lokalt i /workspace, och statusraden säger var.
+        """
         global _current_match_file
         repo: logrepo.LogRepo | None = None
-        if self.check_in and not logrepo.push_enabled():
-            # MEIER_LOGS_PUSH=0 ska stänga av incheckningen på riktigt, inte
-            # bara dölja kryssrutan. Annars skriver en körning ändå till
-            # loggrepet och committar där.
+        if not logrepo.push_enabled():
+            # MEIER_LOGS_PUSH=0 stänger av incheckningen på riktigt. Det är en
+            # nödbroms för tester och för en trasig fjärr, inte ett val i UI:t.
             self.push_status = "Incheckning avstängd (MEIER_LOGS_PUSH=0)."
-        elif self.check_in:
+        else:
             repo = logrepo.LogRepo()
             try:
                 repo.ensure_clone()
@@ -433,6 +491,7 @@ class _MatchJob:
                 self.push_status = f"{self.push_status} Serien sparas lokalt i {path.parent}"
         self.file = path
         _current_match_file = path
+        _remember_series(path, self.count)
         return path, repo
 
     def _run(self) -> None:
@@ -521,10 +580,43 @@ def matches_run(req: MatchRequest) -> dict:
 
 @app.get("/api/matches/status")
 def matches_status() -> dict:
-    """Läget för den senaste (eller pågående) matchserien."""
+    """Läget för den senaste (eller pågående) matchserien.
+
+    Efter en omstart finns inget jobb i minnet. Då läses serien tillbaka från
+    filen i stället, så att status, nedladdning och sammanfattning fortsätter
+    fungera. Tidigare gavs 404 och serien såg förlorad ut fast den låg kvar.
+    """
     if _match_job is None:
-        raise HTTPException(status_code=404, detail="Ingen matchserie startad.")
+        return _status_from_file()
     return _match_job.status()
+
+
+def _status_from_file() -> dict:
+    """Bygg en statusrad ur den senaste seriefilen, för visning efter omstart."""
+    path = _match_file()
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Ingen matchserie startad.")
+    records: list[dict] = []
+    failures: list[dict] = []
+    for rec in read_jsonl(path):
+        (failures if rec.get("failed") else records).append(rec)
+    # Antalet matcher i serien står i pekfilen. Faller tillbaka på antalet
+    # rader om pekfilen saknas, t.ex. för en serie spelad före den infördes.
+    count = _last_series_count() or len(records) + len(failures)
+    return {
+        "running": False,
+        "done": len(records) + len(failures),
+        "count": count,
+        "error": None,
+        "push_status": None,
+        "file": path.name,
+        "games": len(records),
+        "failures": failures,
+        "records": records,
+        "summary": summarize(records + failures) if records or failures else None,
+        "download_url": "/api/matches/download",
+        "restored": True,
+    }
 
 
 @app.get("/api/matches/summary")
@@ -572,12 +664,26 @@ _store = analysis.AnalysisStore()
 
 
 def _count_lines(path: Path) -> int:
-    """Antal matcher i en JSONL-fil (en match per rad)."""
+    """Antal spelade matcher i en JSONL-fil.
+
+    Rader som markerats som misslyckade räknas inte: en serie där alla matcher
+    föll på ett LLM-fel ska inte se ut som en spelad match i listan.
+    """
+    ok = 0
     try:
         with open(path, encoding="utf-8") as fh:
-            return sum(1 for line in fh if line.strip())
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    if not json.loads(line).get("failed"):
+                        ok += 1
+                except ValueError:
+                    continue
     except OSError:
         return 0
+    return ok
 
 
 @app.get("/api/analysis/data")
@@ -595,19 +701,55 @@ def analysis_data() -> dict:
 
 @app.get("/api/analysis/logs")
 def analysis_logs() -> dict:
-    """Lista de loggar som finns incheckade i loggrepet."""
+    """Lista loggar: de incheckade i loggrepet och de lokala i /workspace."""
     repo = logrepo.LogRepo()
-    if not repo.is_repo():
-        return {"ready": False, "logs": []}
-    try:
-        logs = repo.list_logs()
-    except logrepo.LogRepoError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    logs: list[dict] = []
+    if repo.is_repo():
+        try:
+            logs = repo.list_logs()
+        except logrepo.LogRepoError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+    local = _local_log_files()
+    known = {e["name"] for e in logs}
+    # Lokala serier listas efter de incheckade. En lokal serie kan heta samma
+    # sak som en incheckad (samma tidsstämpel), då vinner den incheckade.
+    logs += [e for e in local if e["name"] not in known]
     loaded = set(_store.sources())
     for entry in logs:
-        entry["games"] = _count_lines(repo.directory / entry["name"])
+        entry["games"] = _count_lines(_path_for_log(entry))
         entry["loaded"] = entry["name"] in loaded
-    return {"ready": True, "logs": logs}
+    return {"ready": True, "logs": logs, "local_dir": str(_local_log_dir())}
+
+
+def _local_log_files() -> list[dict]:
+    """JSONL-serier i den lokala katalogen, nyaste först."""
+    directory = _local_log_dir()
+    out: list[dict] = []
+    if not directory.is_dir():
+        return out
+    for p in sorted(directory.glob("*.jsonl")):
+        try:
+            stat = p.stat()
+        except OSError:
+            continue
+        out.append(
+            {
+                "name": p.name,
+                "label": logrepo.series_label(p.name),
+                "size": stat.st_size,
+                "modified": int(stat.st_mtime),
+                "local": True,
+            }
+        )
+    out.sort(key=lambda d: d["modified"], reverse=True)
+    return out
+
+
+def _path_for_log(entry: dict) -> Path:
+    """Sökvägen till en logg, antingen i loggrepet eller lokalt."""
+    if entry.get("local"):
+        return _local_log_dir() / entry["name"]
+    return logrepo.LogRepo().directory / entry["name"]
 
 
 class _SelectLogsRequest(BaseModel):
@@ -618,13 +760,17 @@ class _SelectLogsRequest(BaseModel):
 def analysis_select(req: _SelectLogsRequest) -> dict:
     """Sätt vilka loggar som är inlästa. Valda läses in, övriga tas bort."""
     repo = logrepo.LogRepo()
+    local_names = {e["name"]: e for e in _local_log_files()}
     wanted = list(dict.fromkeys(req.names))
     loaded = set(_store.sources())
     for name in wanted:
         if name in loaded:
             continue
         try:
-            path = repo.log_path(name)
+            if name in local_names:
+                path = _local_log_dir() / name
+            else:
+                path = repo.log_path(name)
         except logrepo.LogRepoError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         _store.add_file(path)

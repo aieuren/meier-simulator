@@ -150,6 +150,8 @@ def _log_repo(monkeypatch, tmp_path, games: int = 2) -> str:
 
 def test_analysis_lists_logs_from_repo(monkeypatch, tmp_path):
     name = _log_repo(monkeypatch, tmp_path, games=2)
+    # Tom lokal katalog, så bara loggre pets fil räknas upp.
+    monkeypatch.setenv("MEIER_LOCAL_LOG_DIR", str(tmp_path / "lokalt"))
     client = TestClient(web_app.app)
     web_app._store.clear()
     data = client.get("/api/analysis/logs").json()
@@ -193,10 +195,37 @@ def test_analysis_select_rejects_unknown_name(monkeypatch, tmp_path):
 
 
 def test_analysis_logs_without_repo(monkeypatch, tmp_path):
+    """Utan loggrepo listas ändå lokala serier, och ready är True."""
     monkeypatch.setenv("MEIER_LOGS_DIR", str(tmp_path / "finns-inte"))
+    monkeypatch.setenv("MEIER_LOCAL_LOG_DIR", str(tmp_path / "lokalt"))
     client = TestClient(web_app.app)
     data = client.get("/api/analysis/logs").json()
-    assert data == {"ready": False, "logs": []}
+    assert data["ready"] is True
+    assert data["logs"] == []
+
+
+def test_analysis_logs_without_repo_but_with_local_series(monkeypatch, tmp_path):
+    """En lokal serie ska synas även när loggrepet inte finns alls.
+
+    Detta var hela poängen: serien ska gå att analysera utan git-incheckning.
+    """
+    local = tmp_path / "lokalt"
+    local.mkdir()
+    name = "meier-matcher-2026-01-01-120000.jsonl"
+    (local / name).write_text(json.dumps(_records(1)[0]) + "\n", encoding="utf-8")
+    monkeypatch.setenv("MEIER_LOGS_DIR", str(tmp_path / "finns-inte"))
+    monkeypatch.setenv("MEIER_LOCAL_LOG_DIR", str(local))
+    client = TestClient(web_app.app)
+    web_app._store.clear()
+
+    data = client.get("/api/analysis/logs").json()
+    assert data["ready"] is True
+    assert [e["name"] for e in data["logs"]] == [name]
+    assert data["logs"][0]["local"] is True
+
+    res = client.post("/api/analysis/select", json={"names": [name]})
+    assert res.status_code == 200
+    assert res.json()["games"] == 1
 
 
 def test_analysis_ask_requires_data(monkeypatch):

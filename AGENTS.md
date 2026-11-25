@@ -81,10 +81,12 @@ lower claim). Multiple agents with distinct roles can also play full games.
   polls `/api/matches/status` (field `running`) and renders matches as they
   finish. Only one series runs at a time (a second start gives 409). The request
   field `workers` (1–8) plays several matches at once; the JSONL file is written
-  line by line as matches finish, so the download works mid-run. With
-  `check_in` set, each finished match is committed and pushed to the log repo
-  (see below); the outcome lands in the status field `push_status`. A push
-  failure never fails the run.
+  line by line as matches finish, so the download works mid-run. Every
+  finished match is committed and pushed to the log repo (see below); the
+  outcome lands in the status field `push_status`. Check-in is not optional:
+  the `check_in` request field is ignored, and the series only falls back to
+  local disk when the repo cannot be reached. A push failure never fails the
+  run.
   `/api/announce` takes `previous_claim`. With no previous claim the player has
   peeked and simply announces. With a previous claim the call is a *slag* and
   goes through `announce_shake`, so the look choice is not skipped. 21 –
@@ -857,35 +859,47 @@ separate log repo after every finished match.
   credential-helper passed via `-c`, so the value never lands on the command
   line (it would otherwise show up in `ps`). Fine-grained PAT with only
   Contents: Read and write on the log repo. `MEIER_LOGS_PUSH=0` disables push.
-- Wire-up: `web/app.py` `_MatchJob(check_in=...)`. Each record is appended and
+- Wire-up: `web/app.py` `_MatchJob`. Each record is appended and
   then `commit_and_push` runs; `push_status` reports the outcome.
   A push failure is caught and returned as a string — it must never kill a run.
-- Local fallback: when check-in is off or the repo cannot be reached, the series
-  is written to `MEIER_LOCAL_LOG_DIR` (default `/workspace/meier-runs`), read at
-  call time by `_local_log_dir()`. That directory is deliberately **outside** the
-  clone at `/workspace/meier-logs`: a file written inside the clone shows up in
-  the analysis tab as if it were checked in, and dirties `git status`.
+- Check-in is **always on**. The checkbox in the UI is gone (2026-11-25), and
+  `MatchRequest.check_in` no longer controls anything: it stays in the model so
+  an old client that sends `check_in=false` still gets its series checked in.
+  Series belong in git, not only on disk.
+- Local fallback: when the repo cannot be reached or `MEIER_LOGS_PUSH=0`
+  is set, the series is written to `MEIER_LOCAL_LOG_DIR` (default
+  `/workspace/meier-runs`), read at call time by `_local_log_dir()`. That
+  directory is deliberately **outside** the clone at `/workspace/meier-logs`.
   `push_status` says where the file went ("Serien sparas lokalt i …").
-- `MEIER_LOGS_PUSH=0` now really disables check-in. It used to only hide the
-  checkbox, while a run with `check_in=true` still wrote to the log repo and
-  committed there. `_open_log` checks `logrepo.push_enabled()` first.
-- Gotcha (2026-11-25): `check_in` defaults to `True`, so a test that posts
-  `/api/matches/run` without `check_in` writes to the **real** log repo. Every
-  test in `tests/test_web_matches.py` now passes `check_in` explicitly and
-  `_client` sets `MEIER_LOGS_PUSH=0` + `MEIER_LOCAL_LOG_DIR` to a temp dir.
-  Order matters: set env *after* `_client`, which overwrites both.
-  Verify with: run the suite and confirm `git -C /workspace/meier-logs rev-parse
-  HEAD` and the file count are unchanged.
-- Status (2026-11-25): the token in `/workspace/meier-secrets/logs.token` is
-  dead — GitHub answers `Invalid username or token`, and the log repo
-  `aieuren/meier-simulator-logs` returns 404 to `GITHUB_PUSH_TOKEN` (which does
-  have push on `aieuren/meier-simulator`). So nothing can be pushed right now;
-  series still land in the clone and stay committed locally. A failed push does
-  not lose data, but the remote never receives it. Fix: create the log repo and
-  put a fresh Contents: write PAT in `logs.token`.
-  Verified end to end 2026-11-25: a full match ran, committed locally, and
-  reported "Push misslyckades … Serien finns kvar lokalt: <path>"; the series
-  then appeared in `/api/analysis/logs`.
+- `MEIER_LOGS_PUSH=0` still really disables check-in. It is now an
+  emergency brake for tests and for a broken remote, not a choice in the UI.
+  `_open_log` checks `logrepo.push_enabled()` first.
+- **Credential-helper gotcha (root cause of the 403s, 2026-11-25).** The
+  token in `logs.token` was fine all along. OpenHands installs a global
+  `credential.https://github.com.helper` in `~/.gitconfig`, and git **appends**
+  helpers to that list. The app's own helper therefore came last, the global
+  one answered first with a token that lacks access to the log repo, and every
+  push failed with `Write access to repository not granted` (403). Fix in
+  `LogRepo._credential_config`: emit `credential.helper=` (empty) before the
+  real helper, which resets the list. Verified: a full series pushed and the
+  remote HEAD moved.
+- **Test leakage (2026-11-25).** While push was broken, tests that ran series
+  wrote to the **real** log repo without anyone noticing. Once push worked, two
+  invented series went out on the remote. Fixed in `tests/conftest.py`: an
+  autouse fixture points `MEIER_LOGS_DIR`, `MEIER_LOCAL_LOG_DIR` and
+  `MEIER_LOGS_TOKEN_FILE` at `tmp_path` and sets `MEIER_LOGS_PUSH=0`. Tests
+  that probe check-in override these themselves. After a suite run, confirm
+  `git -C /workspace/meier-logs rev-parse HEAD` is unchanged.
+- **Restart recovery.** `_current_match_file` lives in memory, so a restart
+  used to make `/api/matches/status` return 404 and the UI claim the series was
+  lost. Now `_MatchJob._open_log` writes `last-series.json` in
+  `MEIER_LOCAL_LOG_DIR`, and `_match_file()` / `_status_from_file()` read it
+  back. Status, download and summary keep working after a restart, and the
+  response carries `restored: true`.
+- **Local series in the analysis tab.** `/api/analysis/logs` lists the log repo
+  **and** `MEIER_LOCAL_LOG_DIR`, with `local: true` on the latter. Marked
+  `· local` in the UI. `_count_lines` counts only successful records, so a
+  series where every match fell on a 503 does not look played.
 - A series can sit at `done: 0` for 15+ minutes with no error and a 0-byte file.
   Nothing is wrong with the code: the record is written only when a match
   *finishes*, and a match is ~100 LLM calls. `MEIER_MAX_RPM` (default 15) is a

@@ -787,7 +787,6 @@ async function runMatchSeries() {
   const count = parseInt($("matchCount").value, 10) || 1;
   const lives = parseInt($("matchLives").value, 10) || 3;
   const workers = parseInt($("matchWorkers").value, 10) || 1;
-  const checkIn = $("matchCheckIn").checked;
 
   btn.disabled = true;
   const status = $("matchStatus");
@@ -798,7 +797,7 @@ async function runMatchSeries() {
     const res = await fetch("/api/matches/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ count, lives, workers, check_in: checkIn }),
+      body: JSON.stringify({ count, lives, workers }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -855,14 +854,13 @@ async function pollMatchSeries() {
     try {
       const res = await fetch("/api/matches/status");
       if (res.status === 404) {
-        // Servern lever men känner inte igen serien: den har startat om, och
-        // då är den lokala loggfilen borta. Säg det rakt ut i stället för att
-        // visa ett nätverksfel som ser ut som ett programfel.
+        // Servern känner inte igen någon serie. Loggfilen ligger kvar i
+        // /workspace och syns i Analys-fliken, så säg det i stället för att
+        // påstå att den är borta.
         status.className = "session-status warn";
         status.textContent =
-          "Servern har startat om och känner inte igen serien. " +
-          "Loggen skrevs lokalt och finns inte kvar. " +
-          "Kör serien igen med incheckning påslagen, då sparas den på GitHub.";
+          "Servern hittar ingen pågående serie. En avslutad serie ligger kvar " +
+          "på disk och går att läsa in i Analys-fliken.";
         btn.disabled = false;
         return;
       }
@@ -907,27 +905,22 @@ async function pollMatchSeries() {
 }
 async function setupLogRepo() {
   const hint = $("matchLogRepoHint");
-  const box = $("matchCheckIn");
-  if (!hint || !box) return;
+  if (!hint) return;
   try {
     const res = await fetch("/api/matches/logrepo");
     if (!res.ok) return;
     const data = await res.json();
     hint.hidden = false;
     if (data.ready && data.push_enabled) {
-      hint.textContent = `Incheckning är redo mot ${data.repo}. Loggen sparas som en egen fil med datum och klockslag.`;
-      box.disabled = false;
-      box.checked = true;
+      hint.textContent = `Serien checkas in i ${data.repo} efter varje match.`;
     } else {
-      box.disabled = true;
-      box.checked = false;
       hint.className = "hint warn";
       hint.textContent = data.ready
-        ? "Automatisk incheckning är avstängd på servern (MEIER_LOGS_PUSH=0). Serien sparas bara lokalt och kan försvinna om containern startar om."
-        : "Incheckning är inte konfigurerad på servern. Serien sparas bara lokalt och kan försvinna om containern startar om.";
+        ? "Automatisk incheckning är avstängd på servern (MEIER_LOGS_PUSH=0). Serien sparas bara lokalt, men syns i Analys-fliken."
+        : "Incheckning är inte konfigurerad på servern. Serien sparas bara lokalt, men syns i Analys-fliken.";
     }
   } catch (e) {
-    /* tyst: incheckning är valfritt */
+    /* tyst: tipset är bara information */
   }
 }
 
@@ -965,12 +958,12 @@ function renderAnalysisLogs(data) {
   }
   if (!data.logs.length) {
     box.innerHTML =
-      '<p class="hint">Inga loggar incheckade än. Spela en serie med incheckning påslagen.</p>';
+      '<p class="hint">Inga loggar än. Spela en serie, då sparas den automatiskt.</p>';
     return;
   }
   data.logs.forEach((log) => {
     const label = document.createElement("label");
-    label.className = "analysis-log";
+    label.className = "analysis-log" + (log.local ? " is-local" : "");
     const cb = document.createElement("input");
     cb.type = "checkbox";
     cb.value = log.name;
@@ -979,10 +972,12 @@ function renderAnalysisLogs(data) {
     const name = document.createElement("span");
     name.className = "analysis-log-name";
     name.textContent = log.label || log.name;
-    name.title = log.name;
+    name.title = log.local ? `Lokal fil: ${log.name}` : log.name;
     const meta = document.createElement("span");
     meta.className = "analysis-log-meta";
-    meta.textContent = `${log.games} matcher`;
+    // Lokala serier kan inte checkas in (trasig fjärr eller nödbröms). Märk
+    // dem, så att det syns varför de inte finns på GitHub.
+    meta.textContent = `${log.games} matcher${log.local ? " · lokal" : ""}`;
     label.append(cb, name, meta);
     box.appendChild(label);
   });
