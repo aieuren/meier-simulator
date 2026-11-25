@@ -701,6 +701,9 @@ Watch the two traps when touching this:
   (no credentials in the URL), then push and let the helper inject the token.
 - The user has delegated version control: from now on, commit and push to
   `main` yourself when the work is green and complete — no need to ask first.
+- The variable is spelled `GITHUB_PUSH_TOKEN`. Typos like `GITHUB_PUSH_TKEN` or
+  `GITHUB_TKEN` expand to an empty string, which fails with
+  `Invalid username or token`. Check `env | grep PUSH` if a push is refused.
 - Secrets for this conversation live in the agent-server, not the shell:
   `GET/PUT /api/settings/secrets[/{name}]` manages them, and
   `POST /api/conversations/{id}/secrets` attaches one to a running conversation.
