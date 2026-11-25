@@ -7,6 +7,7 @@ kontrollerar sedan status, protokoll och nedladdning.
 from __future__ import annotations
 
 import subprocess
+import tempfile
 import time
 from pathlib import Path
 
@@ -19,6 +20,10 @@ from tests.test_match import make_agents
 
 def _client(monkeypatch) -> TestClient:
     monkeypatch.setattr(match, "_new_agents", make_agents)
+    # Lokala serier ska inte hamna i den riktiga loggkatalogen under test, och
+    # incheckning ska vara av så att tester aldrig rör det riktiga loggrepet.
+    monkeypatch.setenv("MEIER_LOCAL_LOG_DIR", tempfile.mkdtemp(prefix="meier-test-"))
+    monkeypatch.setenv("MEIER_LOGS_PUSH", "0")
     return TestClient(web_app.app)
 
 
@@ -34,7 +39,7 @@ def _wait_done(client: TestClient, timeout: float = 10.0) -> dict:
 
 def test_run_series_and_fetch_status(monkeypatch):
     client = _client(monkeypatch)
-    start = client.post("/api/matches/run", json={"count": 2})
+    start = client.post("/api/matches/run", json={"count": 2, "check_in": False})
     assert start.status_code == 200
     assert start.json()["running"] is True
 
@@ -51,7 +56,7 @@ def test_run_series_and_fetch_status(monkeypatch):
 
 def test_summary_and_download_after_run(monkeypatch):
     client = _client(monkeypatch)
-    client.post("/api/matches/run", json={"count": 1})
+    client.post("/api/matches/run", json={"count": 1, "check_in": False})
     _wait_done(client)
 
     summary = client.get("/api/matches/summary")
@@ -104,8 +109,9 @@ def test_a_failing_match_does_not_stop_the_web_series(monkeypatch):
         return agents
 
     monkeypatch.setattr(match, "_new_agents", flaky_agents)
+    monkeypatch.setenv("MEIER_LOCAL_LOG_DIR", tempfile.mkdtemp(prefix="meier-test-"))
     client = TestClient(web_app.app)
-    client.post("/api/matches/run", json={"count": 2})
+    client.post("/api/matches/run", json={"count": 2, "check_in": False})
     data = _wait_done(client)
 
     # Serien gick vidare och matcherna efter felet spelades.
@@ -137,9 +143,11 @@ def test_second_series_while_running_conflicts(monkeypatch):
         return agents
 
     monkeypatch.setattr(match, "_new_agents", slow_agents)
+    monkeypatch.setenv("MEIER_LOCAL_LOG_DIR", tempfile.mkdtemp(prefix="meier-test-"))
     client = TestClient(web_app.app)
-    assert client.post("/api/matches/run", json={"count": 1}).status_code == 200
-    second = client.post("/api/matches/run", json={"count": 1})
+    run = {"count": 1, "check_in": False}
+    assert client.post("/api/matches/run", json=run).status_code == 200
+    second = client.post("/api/matches/run", json=run)
     assert second.status_code == 409
     _wait_done(client, timeout=30.0)
 
@@ -158,8 +166,10 @@ def test_check_in_writes_file_to_log_repo(monkeypatch, tmp_path):
     monkeypatch.setenv("MEIER_LOGS_DIR", str(tmp_path / "clone"))
     monkeypatch.setenv("MEIER_LOGS_REMOTE_URL", str(remote))
     monkeypatch.setenv("MEIER_LOGS_TOKEN_FILE", str(token))
-
     client = _client(monkeypatch)
+    # Dessa tester prövar incheckningen och behöver push påslagen. Sätts efter
+    # _client, som annars stänger av den.
+    monkeypatch.setenv("MEIER_LOGS_PUSH", "1")
     client.post("/api/matches/run", json={"count": 2, "check_in": True})
     data = _wait_done(client)
 
@@ -184,8 +194,122 @@ def test_logrepo_endpoint_reports_ready(monkeypatch, tmp_path):
     monkeypatch.setenv("MEIER_LOGS_REMOTE_URL", str(remote))
     monkeypatch.setenv("MEIER_LOGS_TOKEN_FILE", str(token))
     client = _client(monkeypatch)
+    # Detta test prövar incheckningen och behöver push påslagen. Sätts efter
+    # _client, som annars stänger av den.
+    monkeypatch.setenv("MEIER_LOGS_PUSH", "1")
     # Före första körningen är klonen inte gjord – inte redo.
     assert client.get("/api/matches/logrepo").json()["ready"] is False
     client.post("/api/matches/run", json={"count": 1, "check_in": True})
     _wait_done(client)
     assert client.get("/api/matches/logrepo").json()["ready"] is True
+
+
+def test_local_series_is_written_outside_tmp(monkeypatch, tmp_path):
+    """En lokal serie får aldrig hamna i /tmp.
+
+    Containern startar om efter 20 minuters inaktivitet och nollställer /tmp.
+    En serie som bara låg där försvann, och felet syntes först när sidan sökte
+    status ("Failed to fetch"). Filen ska ligga i den beständiga katalogen.
+    """
+    log_dir = tmp_path / "bestandig"
+    monkeypatch.setenv("MEIER_LOCAL_LOG_DIR", str(log_dir))
+    monkeypatch.setattr(match, "_new_agents", make_agents)
+    client = TestClient(web_app.app)
+
+    client.post("/api/matches/run", json={"count": 1, "check_in": False})
+    data = _wait_done(client)
+
+    assert data["error"] is None
+    path = log_dir / data["file"]
+    assert path.exists(), f"seriefilen skrevs inte till {path}"
+    assert path.read_text(encoding="utf-8").strip()
+
+
+def test_default_log_dir_is_persistent(monkeypatch):
+    """Utan konfiguration ska serien hamna i /workspace, inte i /tmp.
+
+    /tmp nollställs vid omstart, /workspace ligger kvar.
+    """
+    monkeypatch.delenv("MEIER_LOCAL_LOG_DIR", raising=False)
+    monkeypatch.delenv("MEIER_LOGS_DIR", raising=False)
+
+    default = web_app._local_log_dir()
+    assert str(default).startswith("/workspace/"), default
+    assert not str(default).startswith("/tmp/")
+
+
+def test_two_local_series_do_not_overwrite_each_other(monkeypatch, tmp_path):
+    """Två lokala serier ska bli två filer, inte en som skrivs över."""
+    log_dir = tmp_path / "serier"
+    monkeypatch.setenv("MEIER_LOCAL_LOG_DIR", str(log_dir))
+    monkeypatch.setattr(match, "_new_agents", make_agents)
+    client = TestClient(web_app.app)
+
+    client.post("/api/matches/run", json={"count": 1, "check_in": False})
+    first = _wait_done(client)["file"]
+    time.sleep(1.1)  # filnamnet har sekundupplösning
+    client.post("/api/matches/run", json={"count": 1, "check_in": False})
+    second = _wait_done(client)["file"]
+
+    assert first != second
+    assert (log_dir / first).exists()
+    assert (log_dir / second).exists()
+
+
+def test_push_disabled_really_disables_check_in(monkeypatch, tmp_path):
+    """MEIER_LOGS_PUSH=0 ska stänga av incheckningen på riktigt.
+
+    Flaggan styrde tidigare bara kryssrutan i gränssnittet. En körning med
+    check_in=True skrev ändå till loggrepet och committade där.
+    """
+    log_dir = tmp_path / "lokalt"
+    monkeypatch.setenv("MEIER_LOCAL_LOG_DIR", str(log_dir))
+    monkeypatch.setenv("MEIER_LOGS_PUSH", "0")
+    monkeypatch.setattr(match, "_new_agents", make_agents)
+    client = TestClient(web_app.app)
+
+    client.post("/api/matches/run", json={"count": 1, "check_in": True})
+    data = _wait_done(client)
+
+    assert data["error"] is None
+    assert data["push_status"] == "Incheckning avstängd (MEIER_LOGS_PUSH=0)."
+    # Serien skrevs lokalt i stället, och inget hamnade i loggrepet.
+    assert (log_dir / data["file"]).exists()
+
+
+def test_unreachable_remote_falls_back_to_local_with_message(monkeypatch, tmp_path):
+    """Går loggrepet inte att nå ska serien sparas lokalt och säga var.
+
+    Annars ser ett trasigt loggrepo ut som en förlorad serie, fast filen
+    ligger kvar på disk.
+    """
+    local = tmp_path / "lokalt"
+    remote = tmp_path / "finns-inte.git"  # aldrig skapad → kloning misslyckas
+    token = tmp_path / "token"
+    token.write_text("dummy\n", encoding="utf-8")
+    monkeypatch.setenv("MEIER_LOGS_DIR", str(tmp_path / "clone"))
+    monkeypatch.setenv("MEIER_LOGS_REMOTE_URL", str(remote))
+    monkeypatch.setenv("MEIER_LOGS_TOKEN_FILE", str(token))
+    client = _client(monkeypatch)
+    # Sätts efter _client, som annars pekar om katalogen och stänger av push.
+    monkeypatch.setenv("MEIER_LOCAL_LOG_DIR", str(local))
+    monkeypatch.setenv("MEIER_LOGS_PUSH", "1")
+
+    client.post("/api/matches/run", json={"count": 1, "check_in": True})
+    data = _wait_done(client)
+
+    assert data["error"] is None
+    assert "Serien sparas lokalt i" in data["push_status"]
+    assert str(local) in data["push_status"]
+    assert (local / data["file"]).exists()
+
+
+def test_check_in_is_on_by_default():
+    """Incheckning ska vara på som standard, så serien bevaras.
+
+    Standardvärdet var tidigare av, och då kunde en hel serie försvinna utan
+    att något gick att göra åt saken i efterhand.
+    """
+    from meier.web.app import MatchRequest
+
+    assert MatchRequest().check_in is True

@@ -847,16 +847,41 @@ function renderMatchList(data) {
 async function pollMatchSeries() {
   const status = $("matchStatus");
   const btn = $("matchRunBtn");
+  let netFails = 0;
 
   for (;;) {
     await new Promise((r) => setTimeout(r, 3000));
     let data;
     try {
       const res = await fetch("/api/matches/status");
+      if (res.status === 404) {
+        // Servern lever men känner inte igen serien: den har startat om, och
+        // då är den lokala loggfilen borta. Säg det rakt ut i stället för att
+        // visa ett nätverksfel som ser ut som ett programfel.
+        status.className = "session-status warn";
+        status.textContent =
+          "Servern har startat om och känner inte igen serien. " +
+          "Loggen skrevs lokalt och finns inte kvar. " +
+          "Kör serien igen med incheckning påslagen, då sparas den på GitHub.";
+        btn.disabled = false;
+        return;
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       data = await res.json();
+      netFails = 0;
     } catch (e) {
-      status.textContent = `Fel vid hämtning av status: ${e.message}`;
+      // Ett enstaka tappat anrop är normalt. Containern kan också ha startat
+      // om, och då kommer inget svar alls. Försök några gånger innan vi ger upp.
+      netFails += 1;
+      if (netFails < 5) {
+        status.textContent = `Tappade kontakten med servern, försöker igen (${netFails}/5) …`;
+        continue;
+      }
+      status.className = "session-status warn";
+      status.textContent =
+        `Ingen kontakt med servern (${e.message}). ` +
+        "Containern stängs av efter 20 minuters inaktivitet och startar då om. " +
+        "Ladda om sidan för att starta den igen.";
       btn.disabled = false;
       return;
     }
@@ -892,12 +917,14 @@ async function setupLogRepo() {
     if (data.ready && data.push_enabled) {
       hint.textContent = `Incheckning är redo mot ${data.repo}. Loggen sparas som en egen fil med datum och klockslag.`;
       box.disabled = false;
+      box.checked = true;
     } else {
       box.disabled = true;
       box.checked = false;
+      hint.className = "hint warn";
       hint.textContent = data.ready
-        ? "Automatisk incheckning är avstängd på servern (MEIER_LOGS_PUSH=0)."
-        : "Incheckning är inte konfigurerad på servern. Loggen sparas lokalt tills vidare.";
+        ? "Automatisk incheckning är avstängd på servern (MEIER_LOGS_PUSH=0). Serien sparas bara lokalt och kan försvinna om containern startar om."
+        : "Incheckning är inte konfigurerad på servern. Serien sparas bara lokalt och kan försvinna om containern startar om.";
     }
   } catch (e) {
     /* tyst: incheckning är valfritt */

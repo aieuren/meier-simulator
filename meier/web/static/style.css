@@ -239,6 +239,11 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 #okBtn:hover { background: #39415a; }
 
 .session-status { margin-top: 1rem; }
+.session-status.warn {
+  color: var(--warn, #b45309);
+  border-left: 3px solid var(--warn, #b45309);
+  padding-left: 0.7rem;
+}
 .session-note { margin-bottom: 0.7rem; font-size: 0.9rem; color: var(--muted); }
 .session-note.is-winner { color: var(--good); font-size: 1rem; }
 .log-row.is-game-over {

@@ -37,10 +37,29 @@ _agents: dict[str, object] = {}
 _session: Session | None = None
 
 # Senaste batchkörningen av matcher (för nedladdning och statistik).
-# Skrivs normalt i loggrepet; faller tillbaka på /tmp om loggrepet inte är
-# konfigurerat.
-_FALLBACK_MATCH_FILE = Path("/tmp/meier_matches.jsonl")
-_current_match_file: Path = _FALLBACK_MATCH_FILE
+#
+# Filen måste ligga i /workspace: containern startar om efter 20 minuters
+# inaktivitet, och då nollställs /tmp och /home. En serie som bara skrevs till
+# /tmp försvann vid omstarten, utan att något fel syntes förrän sidan sökte
+# status. Standard är nu en egen katalog under /workspace, skild från
+# loggrepets klon.
+def _local_log_dir() -> Path:
+    """Katalog för lokala seriefiler som inte checkas in.
+
+    Läses vid anrop, inte vid import, så att ``MEIER_LOCAL_LOG_DIR`` och
+    ``MEIER_LOGS_DIR`` kan sättas i efterhand (t.ex. i tester).
+
+    Katalogen ligger **utanför** loggrepets klon. Låg den i klonen skulle
+    lokala, ej incheckade serier dyka upp i analysen som om de vore
+    incheckade, och de skulle skräpa ner git-arbetskatalogen.
+    """
+    return Path(
+        os.environ.get("MEIER_LOCAL_LOG_DIR")
+        or "/workspace/meier-runs"
+    )
+
+
+_current_match_file: Path = _local_log_dir() / "meier_matches.jsonl"
 
 
 def _match_file() -> Path:
@@ -345,8 +364,12 @@ class MatchRequest(BaseModel):
         3, ge=1, le=8, description="Antal matcher som spelas samtidigt"
     )
     check_in: bool = Field(
-        False,
-        description="Checka in loggfilen till loggrepet på GitHub efter varje match.",
+        True,
+        description=(
+            "Checka in loggfilen till loggrepet på GitHub efter varje match. "
+            "På som standard: containern startar om efter inaktivitet och "
+            "nollställer /tmp, så en serie som bara ligger lokalt kan försvinna."
+        ),
     )
 
 
@@ -372,7 +395,7 @@ class _MatchJob:
         self.failures: list[dict] = []
         self.error: str | None = None
         self.push_status: str | None = None
-        self.file: Path = _FALLBACK_MATCH_FILE
+        self.file: Path = _current_match_file
         self.running = True
         self.lock = threading.Lock()
         self.thread = threading.Thread(target=self._run, daemon=True)
@@ -381,7 +404,12 @@ class _MatchJob:
         """Välj fil för serien och en loggreps-klon om incheckning är på."""
         global _current_match_file
         repo: logrepo.LogRepo | None = None
-        if self.check_in:
+        if self.check_in and not logrepo.push_enabled():
+            # MEIER_LOGS_PUSH=0 ska stänga av incheckningen på riktigt, inte
+            # bara dölja kryssrutan. Annars skriver en körning ändå till
+            # loggrepet och committar där.
+            self.push_status = "Incheckning avstängd (MEIER_LOGS_PUSH=0)."
+        elif self.check_in:
             repo = logrepo.LogRepo()
             try:
                 repo.ensure_clone()
@@ -392,7 +420,17 @@ class _MatchJob:
         if repo is not None:
             path = repo.directory / logrepo.series_filename()
         else:
-            path = _FALLBACK_MATCH_FILE
+            path = _local_log_dir() / logrepo.series_filename()
+            # En lokal serie får eget namn, så att en ny körning inte skriver
+            # över den förra. Incheckade serier har redan datum i namnet.
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+            except OSError as exc:
+                self.push_status = f"Kunde inte skapa {path.parent}: {exc}"
+            if self.push_status and not self.push_status.startswith("Incheckning avstängd (MEIER_LOGS_PUSH"):
+                # Incheckningen gick inte att starta. Säg var serien hamnar i
+                # stället, så att den går att hitta efter en omstart.
+                self.push_status = f"{self.push_status} Serien sparas lokalt i {path.parent}"
         self.file = path
         _current_match_file = path
         return path, repo
@@ -430,6 +468,10 @@ class _MatchJob:
         winner = rec.winner_role or rec.winner
         msg = f"Meier: match {self.done}/{self.count} klar (vinnare {winner})"
         status = repo.commit_and_push(self.file, msg)
+        if not status.startswith(("Incheckat", "Inga ändringar")):
+            # Datan ligger kvar i den lokala klonen. Säg det, så att ett
+            # misslyckat push inte ser ut som en förlorad serie.
+            status = f"{status} Serien finns kvar lokalt: {self.file}"
         with self.lock:
             self.push_status = status
 

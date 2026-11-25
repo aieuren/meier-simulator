@@ -860,7 +860,29 @@ separate log repo after every finished match.
 - Wire-up: `web/app.py` `_MatchJob(check_in=...)`. Each record is appended and
   then `commit_and_push` runs; `push_status` reports the outcome.
   A push failure is caught and returned as a string — it must never kill a run.
-  When no token/clone is available the log falls back to `/tmp/meier_matches.jsonl`.
+- Local fallback: when check-in is off or the repo cannot be reached, the series
+  is written to `MEIER_LOCAL_LOG_DIR` (default `/workspace/meier-runs`), read at
+  call time by `_local_log_dir()`. That directory is deliberately **outside** the
+  clone at `/workspace/meier-logs`: a file written inside the clone shows up in
+  the analysis tab as if it were checked in, and dirties `git status`.
+  `push_status` says where the file went ("Serien sparas lokalt i …").
+- `MEIER_LOGS_PUSH=0` now really disables check-in. It used to only hide the
+  checkbox, while a run with `check_in=true` still wrote to the log repo and
+  committed there. `_open_log` checks `logrepo.push_enabled()` first.
+- Gotcha (2026-11-25): `check_in` defaults to `True`, so a test that posts
+  `/api/matches/run` without `check_in` writes to the **real** log repo. Every
+  test in `tests/test_web_matches.py` now passes `check_in` explicitly and
+  `_client` sets `MEIER_LOGS_PUSH=0` + `MEIER_LOCAL_LOG_DIR` to a temp dir.
+  Order matters: set env *after* `_client`, which overwrites both.
+  Verify with: run the suite and confirm `git -C /workspace/meier-logs rev-parse
+  HEAD` and the file count are unchanged.
+- Status (2026-11-25): the token in `/workspace/meier-secrets/logs.token` is
+  dead — GitHub answers `Invalid username or token`, and the log repo
+  `aieuren/meier-simulator-logs` returns 404 to `GITHUB_PUSH_TOKEN` (which does
+  have push on `aieuren/meier-simulator`). So nothing can be pushed right now;
+  series still land in the clone and stay committed locally. A failed push does
+  not lose data, but the remote never receives it. Fix: create the log repo and
+  put a fresh Contents: write PAT in `logs.token`.
 - `_current_match_file` (module global) holds the file for the latest series;
   `/api/matches/download|summary` read it.
 - Gotcha: `git -c key=value` must be passed as two argv items before the
