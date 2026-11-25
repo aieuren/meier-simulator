@@ -176,6 +176,7 @@ def play_match(
     game: int = 1,
     lives: int = 3,
     with_llm: bool = True,
+    on_progress: "callable[[int, int], None] | None" = None,
 ) -> GameRecord:
     """Spela en hel match mellan rollerna och returnera protokollet.
 
@@ -184,6 +185,9 @@ def play_match(
     millisekunder — det är läget för utvärdering och statistik. En profil med
     ``unpredictability`` över noll varierar sig ändå.
 
+    ``on_progress(runda, kvar)`` anropas när en ny runda börjar. En match tar
+    minuter, så utan den står en statusrad still utan att något är fel.
+
     Antalet spelare är fritt: ``role_keys`` får innehålla två eller fler roller.
     """
     build = _new_agents if with_llm else _new_agents_no_llm
@@ -191,7 +195,9 @@ def play_match(
     tracker = _attach_tracker(agents)
     session = Session.new(agents, lives=lives)
     session.tracker = tracker
-    session.play_to_end()
+    if on_progress is not None:
+        on_progress(session.round, len(session._active_indices()))
+    session.play_to_end(on_round=on_progress)
 
     names = [a.name for a in agents]
     remaining = {session.name_of(i): session.lives[i] for i in range(len(agents))}
@@ -292,6 +298,7 @@ def run_matches(
     workers: int = 1,
     with_llm: bool = True,
     progress: "callable[[int, int], None] | None" = None,
+    on_match_progress: "callable[[int, int, int], None] | None" = None,
 ) -> Iterator[GameRecord | FailedMatch]:
     """Spela ``count`` matcher och ge protokollen efter hand.
 
@@ -306,11 +313,24 @@ def run_matches(
     ``with_llm=False`` stänger av LLM-anropen helt (bara mekaniska repliker).
     Draget ägs ändå av policyn, så resultatet blir detsamma — men en serie går
     från minuter till millisekunder. Det är läget för utvärdering.
+
+    ``on_match_progress(match, runda, kvar)`` anropas när en match byter runda.
+    Statusraden kan då visa vad som händer medan matchen spelas.
     """
 
     def _play(i: int) -> GameRecord | FailedMatch:
+        kwargs = {}
+        if on_match_progress is not None:
+            # on_progress skickas bara när någon lyssnar, så att play_match kan
+            # bytas ut i tester utan att känna till kroken.
+            kwargs["on_progress"] = (
+                lambda round_no, alive, _i=i: on_match_progress(_i + 1, round_no, alive)
+            )
+
         try:
-            return play_match(role_keys, game=i + 1, lives=lives, with_llm=with_llm)
+            return play_match(
+                role_keys, game=i + 1, lives=lives, with_llm=with_llm, **kwargs
+            )
         except Exception as exc:  # noqa: BLE001 - en match får aldrig fälla serien
             return FailedMatch(
                 game=i + 1,

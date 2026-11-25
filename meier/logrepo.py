@@ -62,15 +62,17 @@ def push_enabled() -> bool:
     return _env("MEIER_LOGS_PUSH", "1").lower() not in ("0", "false", "no", "off")
 
 
-def series_filename(now: datetime | None = None) -> str:
-    """Filnamn för en serie: meier-matcher-ÅÅÅÅ-MM-DD-TTMMSS.jsonl."""
-    stamp = (now or datetime.now()).strftime("%Y-%m-%d-%H%M%S")
-    return f"meier-matcher-{stamp}.jsonl"
-
-
 _SERIES_STAMP = "%Y-%m-%d-%H%M%S"
 _SERIES_STAMP_LEGACY = "%Y-%m-%d-%H%M"
+#: Prefix som äldre seriefiler har. Nya filer är bara en tidsstämpel.
 _SERIES_PREFIX = "meier-matcher-"
+
+
+def series_filename(now: datetime | None = None) -> str:
+    """Filnamn för en serie: ÅÅÅÅ-MM-DD-TTMMSS.jsonl."""
+    stamp = (now or datetime.now()).strftime(_SERIES_STAMP)
+    return f"{stamp}.jsonl"
+
 
 #: Svenska månadsnamn för läsbara etiketter.
 _MONTHS = (
@@ -89,15 +91,27 @@ def _parse_stamp(stamp: str) -> tuple[datetime, bool] | None:
     return None
 
 
+def _series_stamp(name: str) -> str | None:
+    """Tidsstämpeln ur ett seriefilnamn, gammalt eller nytt format."""
+    if not name.endswith(".jsonl"):
+        return None
+    stem = name[: -len(".jsonl")]
+    if stem.startswith(_SERIES_PREFIX):
+        stem = stem[len(_SERIES_PREFIX):]
+    return stem
+
+
 def parse_series_time(name: str) -> datetime | None:
     """Tidpunkten ur ett seriefilnamn, eller None om namnet inte matchar.
 
-    Accepterar även det äldre formatet utan sekunder, så att loggar från
-    tidigare körningar får rätt etikett.
+    Accepterar både det nya namnet (bara tidsstämpel) och det äldre med
+    prefixet ``meier-matcher-``, samt äldre stämplar utan sekunder, så att
+    loggar från tidigare körningar får rätt etikett.
     """
-    if not name.startswith(_SERIES_PREFIX) or not name.endswith(".jsonl"):
+    stamp = _series_stamp(name)
+    if stamp is None:
         return None
-    parsed = _parse_stamp(name[len(_SERIES_PREFIX):-len(".jsonl")])
+    parsed = _parse_stamp(stamp)
     return parsed[0] if parsed else None
 
 
@@ -107,9 +121,10 @@ def series_label(name: str) -> str:
     Äldre namn utan sekunder visar bara timme och minut. Faller tillbaka på
     själva filnamnet om det inte går att tolka.
     """
-    if not name.startswith(_SERIES_PREFIX) or not name.endswith(".jsonl"):
+    stamp = _series_stamp(name)
+    if stamp is None:
         return name
-    parsed = _parse_stamp(name[len(_SERIES_PREFIX):-len(".jsonl")])
+    parsed = _parse_stamp(stamp)
     if parsed is None:
         return name
     when, has_seconds = parsed

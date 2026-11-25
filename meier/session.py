@@ -368,17 +368,29 @@ class Session:
                 created.append(entry)
         return created
 
-    def play_to_end(self, *, max_steps: int = 20000) -> LogEntry | None:
+    def play_to_end(
+        self,
+        *,
+        max_steps: int = 20000,
+        on_round: "callable[[int, int], None] | None" = None,
+    ) -> LogEntry | None:
         """Spela hela sessionen klart, runda för runda, utan grind.
 
         Används för batchkörning av många matcher. Returnerar den sista
         loggposten. Ett skyddsnät stoppar efter ``max_steps`` steg.
+
+        ``on_round(runda, kvar)`` anropas när en ny runda tar vid, så att en
+        pågående match kan visas levande i stället för att se ut att ha fastnat.
         """
         last: LogEntry | None = None
         steps = 0
+        round_no = self.round
         while not self.finished and self.step_kind and steps < max_steps:
             steps += 1
             last = self.advance()
+            if on_round is not None and self.round != round_no:
+                round_no = self.round
+                on_round(round_no, len(self._active_indices()))
         return last
 
     def run_to_end(self, *, max_steps: int = 20000) -> list[LogEntry]:

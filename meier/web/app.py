@@ -74,21 +74,36 @@ def _last_series_path() -> Path:
     return _local_log_dir() / _LAST_SERIES
 
 
-def _remember_series(path: Path, count: int) -> None:
+def _remember_series(path: Path, count: int, started_at: float | None = None) -> None:
     """Skriv pekfil så att serien hittas igen efter en omstart."""
+    _write_series_pointer(
+        {
+            "file": str(path),
+            "count": count,
+            "started_at": started_at if started_at is not None else time.time(),
+        }
+    )
+
+
+def _write_series_pointer(data: dict) -> None:
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
+        _last_series_path().parent.mkdir(parents=True, exist_ok=True)
         _last_series_path().write_text(
-            json.dumps(
-                {"file": str(path), "count": count, "started_at": time.time()},
-                ensure_ascii=False,
-            ),
-            encoding="utf-8",
+            json.dumps(data, ensure_ascii=False), encoding="utf-8"
         )
     except OSError:
         # Pekfilen är en bekvämlighet. Går den inte att skriva får serien
         # fortfarande sin loggfil, och den syns i analysen.
         pass
+
+
+def _remember_series_end(finished_at: float) -> None:
+    """Spara sluttiden i pekfilen, så tiderna finns kvar efter omstart."""
+    info = _last_series_info()
+    if not info:
+        return
+    info["finished_at"] = finished_at
+    _write_series_pointer(info)
 
 
 def _restore_last_series() -> None:
@@ -109,10 +124,18 @@ def _restore_last_series() -> None:
 def _last_series_count() -> int:
     """Antalet matcher i serien enligt pekfilen, annars 0."""
     try:
-        data = json.loads(_last_series_path().read_text(encoding="utf-8"))
-        return int(data.get("count") or 0)
-    except (OSError, ValueError, TypeError, AttributeError):
+        return int(_last_series_info().get("count") or 0)
+    except (TypeError, ValueError):
         return 0
+
+
+def _last_series_info() -> dict:
+    """Innehållet i pekfilen, eller en tom dict om den saknas."""
+    try:
+        data = json.loads(_last_series_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def _match_file() -> Path:
@@ -449,6 +472,12 @@ class _MatchJob:
         self.failures: list[dict] = []
         self.error: str | None = None
         self.push_status: str | None = None
+        #: När serien startade och när sista matchen var klar (epoch-sekunder).
+        self.started_at = time.time()
+        self.finished_at: float | None = None
+        #: Pågående matcher: {"game", "round", "alive"}. En match tar minuter,
+        #: så statusraden behöver något som rör sig medan den spelas.
+        self.live: dict[int, dict] = {}
         self.file: Path = _current_match_file
         self.running = True
         self.lock = threading.Lock()
@@ -491,7 +520,7 @@ class _MatchJob:
                 self.push_status = f"{self.push_status} Serien sparas lokalt i {path.parent}"
         self.file = path
         _current_match_file = path
-        _remember_series(path, self.count)
+        _remember_series(path, self.count, self.started_at)
         return path, repo
 
     def _run(self) -> None:
@@ -505,6 +534,7 @@ class _MatchJob:
                     self.count,
                     lives=self.lives,
                     workers=self.workers,
+                    on_match_progress=self._on_match_progress,
                 ):
                     data = rec.to_dict()
                     with self.lock:
@@ -513,6 +543,7 @@ class _MatchJob:
                         else:
                             self.records.append(rec)
                         self.done += 1
+                        self.live.pop(data.get("game") or 0, None)
                     fh.write(json.dumps(data, ensure_ascii=False) + "\n")
                     fh.flush()
                     if repo is not None and not data.get("failed"):
@@ -520,7 +551,16 @@ class _MatchJob:
         except Exception as exc:  # pragma: no cover - skyddsnät
             self.error = f"Oväntat fel: {exc}"
         finally:
+            with self.lock:
+                self.finished_at = time.time()
+                self.live.clear()
+            _remember_series_end(self.finished_at)
             self.running = False
+
+    def _on_match_progress(self, game: int, round_no: int, alive: int) -> None:
+        """En match har bytt runda. Spara läget så statusraden kan visa det."""
+        with self.lock:
+            self.live[game] = {"game": game, "round": round_no, "alive": alive}
 
     def _check_in(self, repo: logrepo.LogRepo, rec: GameRecord) -> None:
         """Commit + push efter en färdig match. Får aldrig fälla körningen."""
@@ -538,6 +578,9 @@ class _MatchJob:
         with self.lock:
             snapshot = [rec.to_dict() for rec in self.records]
             failures = list(self.failures)
+            live = sorted(self.live.values(), key=lambda m: m["game"])
+            started_at = self.started_at
+            finished_at = self.finished_at
         summary = summarize(snapshot + failures) if snapshot or failures else None
         return {
             "running": self.running,
@@ -550,6 +593,9 @@ class _MatchJob:
             "failures": failures,
             "records": snapshot,
             "summary": summary,
+            "live": live,
+            "started_at": started_at,
+            "finished_at": finished_at,
             "download_url": "/api/matches/download",
         }
 
@@ -602,7 +648,12 @@ def _status_from_file() -> dict:
         (failures if rec.get("failed") else records).append(rec)
     # Antalet matcher i serien står i pekfilen. Faller tillbaka på antalet
     # rader om pekfilen saknas, t.ex. för en serie spelad före den infördes.
+    info = _last_series_info()
     count = _last_series_count() or len(records) + len(failures)
+    # Tiderna finns i pekfilen. Saknas de (äldre serie) visas ingen tid alls
+    # hellre än en påhittad.
+    started_at = info.get("started_at") if isinstance(info.get("started_at"), (int, float)) else None
+    finished_at = info.get("finished_at") if isinstance(info.get("finished_at"), (int, float)) else None
     return {
         "running": False,
         "done": len(records) + len(failures),
@@ -614,6 +665,9 @@ def _status_from_file() -> dict:
         "failures": failures,
         "records": records,
         "summary": summarize(records + failures) if records or failures else None,
+        "live": [],
+        "started_at": started_at,
+        "finished_at": finished_at,
         "download_url": "/api/matches/download",
         "restored": True,
     }

@@ -129,7 +129,7 @@ def _log_repo(monkeypatch, tmp_path, games: int = 2) -> str:
     subprocess.run(["git", "clone", "-q", str(remote), str(work)], check=True)
     subprocess.run(["git", "-C", str(work), "config", "user.name", "t"], check=True)
     subprocess.run(["git", "-C", str(work), "config", "user.email", "t@e"], check=True)
-    name = "meier-matcher-2026-01-01-120000.jsonl"
+    name = "2026-01-01-120000.jsonl"
     text = "".join(json.dumps(rec) + "\n" for rec in _records(games))
     (work / name).write_text(text, encoding="utf-8")
     subprocess.run(["git", "-C", str(work), "add", "-A"], check=True)
@@ -211,7 +211,7 @@ def test_analysis_logs_without_repo_but_with_local_series(monkeypatch, tmp_path)
     """
     local = tmp_path / "lokalt"
     local.mkdir()
-    name = "meier-matcher-2026-01-01-120000.jsonl"
+    name = "2026-01-01-120000.jsonl"
     (local / name).write_text(json.dumps(_records(1)[0]) + "\n", encoding="utf-8")
     monkeypatch.setenv("MEIER_LOGS_DIR", str(tmp_path / "finns-inte"))
     monkeypatch.setenv("MEIER_LOCAL_LOG_DIR", str(local))

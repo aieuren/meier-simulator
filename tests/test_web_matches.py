@@ -177,7 +177,7 @@ def test_check_in_writes_file_to_log_repo(monkeypatch, tmp_path):
     assert data["done"] == 2
     assert data["push_status"] and "pushat" in data["push_status"].lower()
     # Filnamnet har datum och klockslag.
-    assert data["file"].startswith("meier-matcher-") and data["file"].endswith(".jsonl")
+    assert data["file"].endswith(".jsonl") and data["file"][0].isdigit()
     # Filen finns i fjärren med båda matcherna.
     names = _git("--git-dir", str(remote), "ls-tree", "-r", "--name-only", "HEAD").stdout
     assert data["file"] in names
@@ -426,3 +426,85 @@ def test_analysis_can_load_local_series(monkeypatch, tmp_path):
 
     data = client.get("/api/analysis/data").json()
     assert data["games"] == 2
+
+
+def test_status_reports_start_and_finish_time(monkeypatch, tmp_path):
+    """Serien ska tala om när den startade och när den blev klar."""
+    client = _client(monkeypatch)
+    monkeypatch.setenv("MEIER_LOCAL_LOG_DIR", str(tmp_path / "serier"))
+
+    start = time.time()
+    client.post("/api/matches/run", json={"count": 2})
+    data = _wait_done(client)
+
+    assert isinstance(data["started_at"], (int, float))
+    assert isinstance(data["finished_at"], (int, float))
+    assert data["started_at"] <= data["finished_at"]
+    assert data["finished_at"] >= start
+    # Ingen match pågår när serien är klar.
+    assert data["live"] == []
+
+
+def test_status_reports_live_round_while_running(monkeypatch, tmp_path):
+    """Medan en match spelas ska statusraden visa runda och antal kvar."""
+    client = _client(monkeypatch)
+    monkeypatch.setenv("MEIER_LOCAL_LOG_DIR", str(tmp_path / "serier"))
+
+    seen_live: list[dict] = []
+    real_play = match.play_match
+
+    def slow_play(*args, on_progress=None, **kwargs):
+        if on_progress is not None:
+            on_progress(1, 2)
+        time.sleep(0.3)
+        return real_play(*args, on_progress=on_progress, **kwargs)
+
+    monkeypatch.setattr(match, "play_match", slow_play)
+
+    client.post("/api/matches/run", json={"count": 1})
+    deadline = time.time() + 5
+    while time.time() < deadline:
+        data = client.get("/api/matches/status").json()
+        if data.get("live"):
+            seen_live = data["live"]
+            break
+        time.sleep(0.05)
+    _wait_done(client)
+
+    assert seen_live, "status ska visa pågående match med runda"
+    assert seen_live[0]["game"] == 1
+    assert seen_live[0]["round"] >= 1
+    assert seen_live[0]["alive"] >= 1
+
+
+def test_restored_status_keeps_the_times(monkeypatch, tmp_path):
+    """Efter omstart ska start- och sluttid läsas tillbaka ur pekfilen."""
+    client = _client(monkeypatch)
+    monkeypatch.setenv("MEIER_LOCAL_LOG_DIR", str(tmp_path / "serier"))
+
+    client.post("/api/matches/run", json={"count": 1})
+    done = _wait_done(client)
+
+    monkeypatch.setattr(web_app, "_match_job", None)
+    monkeypatch.setattr(web_app, "_restored", False)
+
+    data = client.get("/api/matches/status").json()
+    assert data["restored"] is True
+    assert data["started_at"] == done["started_at"]
+    assert data["finished_at"] == done["finished_at"]
+
+
+def test_series_file_name_is_a_bare_timestamp(monkeypatch, tmp_path):
+    """Nya seriefiler heter bara datum och tid, utan prefix."""
+    client = _client(monkeypatch)
+    monkeypatch.setenv("MEIER_LOCAL_LOG_DIR", str(tmp_path / "serier"))
+
+    client.post("/api/matches/run", json={"count": 1})
+    data = _wait_done(client)
+
+    name = data["file"]
+    assert name.endswith(".jsonl")
+    assert not name.startswith("meier-matcher-")
+    # ÅÅÅÅ-MM-DD-TTMMSS
+    assert len(name) == len("2026-11-25-202542.jsonl")
+    assert name[4] == "-" and name[7] == "-" and name[10] == "-"

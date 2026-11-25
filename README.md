@@ -272,12 +272,12 @@ minnet.
 
 ### Spara loggen automatiskt till GitHub
 
-En lång serie kan avbrytas om miljön startar om. Kryssa därför i Checka in
-loggen till GitHub efter varje match innan du startar serien. Då skrivs
-protokollet i en separat klon av ett loggrepo och checkas in (commit + push)
-efter varje färdig match. Filen heter `meier-matcher-ÅÅÅÅ-MM-DD-TTMMSS.jsonl`, så
-varje serie blir en egen fil med datum och klockslag. Även om servern dör mitt i
-serien finns de färdiga matcherna kvar på GitHub.
+En lång serie kan avbrytas om miljön startar om. Serien checkas därför in
+automatiskt till GitHub efter varje match. Protokollet skrivs i en separat klon
+av ett loggrepo och checkas in (commit + push) efter varje färdig match. Filen
+heter `ÅÅÅÅ-MM-DD-TTMMSS.jsonl`, så varje serie blir en egen fil med datum och
+klockslag. Även om servern dör mitt i serien finns de färdiga matcherna kvar på
+GitHub.
 
 Ett push-fel stoppar aldrig körningen; felet rapporteras i statusfältet och
 nästa match försöker igen. Om ingen token finns sparas loggen lokalt i stället.

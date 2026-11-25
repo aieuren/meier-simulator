@@ -41,27 +41,36 @@ def log_repo(tmp_path: Path):
     return LogRepo(directory=work, token_path=token), remote, work
 
 
-def test_series_filename_has_date_and_second():
+def test_series_filename_is_a_bare_timestamp():
     name = logrepo.series_filename(datetime(2026, 11, 12, 1, 48, 13))
-    assert name == "meier-matcher-2026-11-12-014813.jsonl"
+    assert name == "2026-11-12-014813.jsonl"
 
 
 def test_series_label_reads_date_and_time():
-    label = logrepo.series_label("meier-matcher-2026-11-12-014813.jsonl")
+    label = logrepo.series_label("2026-11-12-014813.jsonl")
     assert label == "12 november 2026, 01:48:13"
 
 
+def test_series_label_handles_legacy_prefixed_name():
+    """Gamla loggar med prefixet meier-matcher- ska fortsätta läsas."""
+    label = logrepo.series_label("meier-matcher-2026-11-12-014813.jsonl")
+    assert label == "12 november 2026, 01:48:13"
+    assert logrepo.parse_series_time("meier-matcher-2026-11-12-014813.jsonl") == datetime(
+        2026, 11, 12, 1, 48, 13
+    )
+
+
 def test_series_label_handles_legacy_minute_only_name():
-    label = logrepo.series_label("meier-matcher-2026-11-12-0148.jsonl")
+    label = logrepo.series_label("2026-11-12-0148.jsonl")
     assert label == "12 november 2026, 01:48"
-    assert logrepo.parse_series_time("meier-matcher-2026-11-12-0148.jsonl") == datetime(
+    assert logrepo.parse_series_time("2026-11-12-0148.jsonl") == datetime(
         2026, 11, 12, 1, 48
     )
 
 
 def test_series_label_falls_back_to_the_name():
     assert logrepo.series_label("nagot-annat.jsonl") == "nagot-annat.jsonl"
-    assert logrepo.parse_series_time("meier-matcher-2026-11-12-014813.jsonl") == datetime(
+    assert logrepo.parse_series_time("2026-11-12-014813.jsonl") == datetime(
         2026, 11, 12, 1, 48, 13
     )
     assert logrepo.parse_series_time("trasig.jsonl") is None
@@ -69,7 +78,7 @@ def test_series_label_falls_back_to_the_name():
 
 def test_commit_and_push_publishes_the_file(log_repo):
     repo, remote, work = log_repo
-    path = work / "meier-matcher-2026-11-12-014813.jsonl"
+    path = work / "2026-11-12-014813.jsonl"
     path.write_text('{"game": 1}\n', encoding="utf-8")
 
     status = repo.commit_and_push(path, "Meier: 1 match")
@@ -77,7 +86,7 @@ def test_commit_and_push_publishes_the_file(log_repo):
     assert "pushat" in status.lower()
     # Filen ska finnas i fjärren efter push.
     names = _git("--git-dir", str(remote), "ls-tree", "-r", "--name-only", "HEAD").stdout
-    assert "meier-matcher-2026-11-12-014813.jsonl" in names
+    assert "2026-11-12-014813.jsonl" in names
     # Och en commit ska ha skapats.
     log = _git("--git-dir", str(remote), "log", "--oneline", "HEAD").stdout
     assert "Meier: 1 match" in log
@@ -96,7 +105,7 @@ def test_push_failure_is_reported_not_raised(log_repo):
     repo, remote, work = log_repo
     # Gör fjärren oåtkomlig.
     subprocess.run(["rm", "-rf", str(remote)], check=True)
-    path = work / "meier-matcher-2026-11-12-014813.jsonl"
+    path = work / "2026-11-12-014813.jsonl"
     path.write_text('{"game": 1}\n', encoding="utf-8")
 
     status = repo.commit_and_push(path, "Meier: 1 match")

@@ -439,7 +439,9 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 .loading { color: var(--muted); font-style: italic; }
 
 /* -- Flik 4: matchserie och statistik -- */
-.match-controls { display: flex; gap: 0.9rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 1rem; }
+/* Kontrollerna staplas: etikett och fält på rad, men varje fält under
+   det förra. Det passar bättre i en smal mobilskärm än fyra i bredd. */
+.match-controls { display: flex; flex-direction: column; gap: 0.7rem; align-items: stretch; margin-bottom: 1rem; }
 .match-controls label { display: flex; flex-direction: column; font-size: 0.8rem; color: var(--muted); gap: 0.3rem; }
 .match-controls input {
   background: var(--panel-2);
@@ -450,7 +452,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
   font-size: 0.95rem;
   width: 8rem;
 }
-.match-controls .primary { width: auto; margin-top: 0; }
+.match-controls .primary { width: 100%; margin-top: 0; }
 .match-controls label.check { flex-direction: row; align-items: center; gap: 0.45rem; max-width: 16rem; }
 .match-controls label.check input { width: auto; }
 
@@ -485,7 +487,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 .match-stat-line { display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.85rem; padding: 0.15rem 0; }
 .ms-name { min-width: 11rem; font-weight: 600; }
 .ms-cell { color: var(--muted); }
-.match-download { margin-top: 0.8rem; }
+.match-download { margin-top: 1.2rem; }
 .match-download a { color: var(--accent-2); }
 
 /* -- Flik 5: analys -- */

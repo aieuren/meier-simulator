@@ -164,6 +164,41 @@ def test_run_matches_parallel_workers(monkeypatch):
 # -- En kraschad match får inte fälla serien ---------------------------------
 
 
+def test_progress_reports_each_round(monkeypatch):
+    """Rundan ska rapporteras medan matchen spelas, inte bara vid start.
+
+    En match tar minuter. Utan rapporter står statusraden still och ser ut att
+    ha fastnat, trots att allt går som det ska.
+    """
+    monkeypatch.setattr(match, "_new_agents", make_agents)
+    seen: list[tuple[int, int]] = []
+
+    def on_match_progress(game, round_no, alive):
+        seen.append((game, round_no))
+
+    list(match.run_matches(["a", "b"], 1, on_match_progress=on_match_progress))
+
+    assert seen, "progress ska rapporteras minst en gång per match"
+    assert {g for g, _ in seen} == {1}
+    # Första rapporten är runda 1, och rundnumret får aldrig gå bakåt.
+    assert seen[0][1] == 1
+    assert [r for _, r in seen] == sorted(r for _, r in seen)
+
+
+def test_play_match_calls_on_progress_when_a_round_ends(monkeypatch):
+    """on_progress ska anropas från play_match, med runda och antal kvar."""
+    monkeypatch.setattr(match, "_new_agents", make_agents)
+    seen: list[tuple[int, int]] = []
+
+    match.play_match(
+        ["a", "b"], on_progress=lambda r, k: seen.append((r, k))
+    )
+
+    assert seen, "on_progress ska anropas"
+    assert seen[0][0] == 1
+    assert all(1 <= kvar <= 2 for _, kvar in seen)
+
+
 def test_a_failing_match_does_not_stop_the_series(monkeypatch):
     """Ett LLM-fel i match 2 ska bara kosta match 2, inte hela serien.
 

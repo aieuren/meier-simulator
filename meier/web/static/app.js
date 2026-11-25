@@ -716,8 +716,9 @@ function matchRow(rec) {
   return div;
 }
 
-function renderMatchSummary(summary) {
+function renderMatchSummary(summary, data) {
   const box = $("matchSummaryBody");
+  const status = data || {};
   const roles = summary.roles || {};
   const rows = Object.keys(roles)
     .map((role) => {
@@ -762,13 +763,12 @@ function renderMatchSummary(summary) {
        </p>`
     : "";
   box.innerHTML = `
+    ${seriesTimeLine(status)}
     <p class="hint">
       ${summary.games} matcher, i snitt ${summary.avg_rounds} rundor per match.
       Startspelaren vinner ${pct(summary.starter_win_rate)} av matcherna.
     </p>
     ${failLine}
-    ${tokenLine}
-    ${modelLine}
     <table class="stat-table">
       <thead>
         <tr>
@@ -778,8 +778,65 @@ function renderMatchSummary(summary) {
       </thead>
       <tbody>${rows}</tbody>
     </table>
+    ${tokenLine}
+    ${modelLine}
   `;
   $("matchSummary").hidden = false;
+  showMatchDownload();
+}
+
+// Start- och sluttid för serien, när de finns i statusraden.
+function seriesTimeLine(data) {
+  const start = formatTime(data.started_at);
+  const end = formatTime(data.finished_at);
+  if (!start) return "";
+  if (!end) {
+    // En serie från före tidsstämplingen saknar sluttid. Säg det i stället
+    // för att påstå att en avslutad serie fortfarande pågår.
+    return data.running
+      ? `<p class="hint">Startad ${start}. Serien pågår.</p>`
+      : `<p class="hint">Startad ${start}. Sluttid saknas för den här serien.</p>`;
+  }
+  const secs = data.finished_at - data.started_at;
+  return `<p class="hint">Startad ${start} · klar ${end} · speltid ${formatDuration(secs)}.</p>`;
+}
+
+function formatTime(ts) {
+  if (!ts) return "";
+  return new Date(ts * 1000).toLocaleString("sv-SE", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function formatDuration(secs) {
+  const total = Math.max(0, Math.round(secs));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h) return `${h} tim ${m} min`;
+  if (m) return `${m} min ${s} s`;
+  return `${s} s`;
+}
+
+function showMatchDownload() {
+  const box = $("matchDownload");
+  if (box) box.hidden = false;
+}
+
+// Töm sammanställningen när en ny serie startar, så att siffror från förra
+// serien inte står kvar och ser ut att gälla den nya.
+function clearMatchSummary() {
+  $("matchSummary").hidden = true;
+  $("matchSummaryBody").innerHTML = "";
+  const dl = $("matchDownload");
+  if (dl) dl.hidden = true;
+  _renderedGames = -1;
+  _renderedSummaryKey = "";
 }
 
 async function runMatchSeries() {
@@ -789,7 +846,12 @@ async function runMatchSeries() {
   const workers = parseInt($("matchWorkers").value, 10) || 1;
 
   btn.disabled = true;
+  // Ny serie: nollställ allt från förra körningen, så inga gamla siffror
+  // står kvar och ser ut att gälla den nya serien.
+  clearMatchSummary();
+  $("matchList").innerHTML = "";
   const status = $("matchStatus");
+  status.className = "session-status";
   status.hidden = false;
   status.textContent = `Startar serien (${count} matcher)…`;
 
@@ -822,7 +884,10 @@ async function resumeMatchSeries() {
     return;
   }
   renderMatchList(data);
-  if (data.summary) renderMatchSummary(data.summary);
+  if (data.summary) {
+    _renderedSummaryKey = summaryKey(data.summary);
+    renderMatchSummary(data.summary, data);
+  }
   if (data.running) {
     $("matchStatus").hidden = false;
     $("matchStatus").textContent = matchProgressText(data);
@@ -833,14 +898,52 @@ async function resumeMatchSeries() {
 
 function matchProgressText(data) {
   const base = `${data.done} av ${data.count} matcher klara`;
-  const avg = data.summary ? ` · snitt ${data.summary.avg_rounds} rundor/match` : "";
-  return `${base}${avg}…`;
+  // En match tar minuter, så `done` står still länge. Visa rundan som spelas
+  // just nu och tiden som gått, annars ser raden ut att ha fastnat.
+  const live = liveMatchText(data);
+  const elapsed = data.started_at ? ` · ${formatDuration(Date.now() / 1000 - data.started_at)}` : "";
+  return `${base}${live}${elapsed}…`;
 }
 
+// "match 2: runda 5, 3 kvar" för de matcher som körs just nu.
+function liveMatchText(data) {
+  const live = data.live || [];
+  if (!live.length) return "";
+  const parts = live.map((m) => {
+    const runda = m.round ? `runda ${m.round}` : "startar";
+    const kvar = m.alive !== undefined ? `, ${m.alive} kvar` : "";
+    return `match ${m.game}: ${runda}${kvar}`;
+  });
+  return ` (${parts.join(" · ")})`;
+}
+
+// Antal rader och sammanfattning som senast ritades. Statuspollningen går var
+// tredje sekund, och att rita om allt då skulle stänga en rad man just fällt
+// upp. Vi ritar bara när något faktiskt har ändrats.
+let _renderedGames = -1;
+let _renderedSummaryKey = "";
+
 function renderMatchList(data) {
+  const games = (data.records || []).length;
+  if (games === _renderedGames) return;
+  _renderedGames = games;
   const list = $("matchList");
   list.innerHTML = "";
   (data.records || []).forEach((rec) => list.appendChild(matchRow(rec)));
+}
+
+function summaryKey(summary) {
+  if (!summary) return "";
+  const roles = summary.roles || {};
+  return [
+    summary.games,
+    summary.avg_rounds,
+    summary.starter_win_rate,
+    (summary.tokens || {}).calls,
+    Object.keys(roles)
+      .map((r) => `${r}:${roles[r].wins}/${roles[r].games}`)
+      .join(","),
+  ].join("|");
 }
 
 async function pollMatchSeries() {
@@ -885,7 +988,11 @@ async function pollMatchSeries() {
     }
 
     renderMatchList(data);
-    if (data.summary) renderMatchSummary(data.summary);
+    const key = summaryKey(data.summary);
+    if (data.summary && key !== _renderedSummaryKey) {
+      _renderedSummaryKey = key;
+      renderMatchSummary(data.summary, data);
+    }
 
     if (data.error) {
       status.textContent = `Fel: ${data.error}`;
@@ -893,6 +1000,12 @@ async function pollMatchSeries() {
       return;
     }
     if (!data.running) {
+      // Serien är klar: rita om sammanställningen så att sluttiden kommer med,
+      // även om siffrorna i övrigt är desamma som vid förra pollningen.
+      if (data.summary) {
+        _renderedSummaryKey = summaryKey(data.summary);
+        renderMatchSummary(data.summary, data);
+      }
       const name = data.file ? ` (${data.file})` : "";
       status.textContent = `Klart: ${data.done} matcher spelade${name}.`;
       if (data.push_status) status.textContent += ` ${data.push_status}.`;
