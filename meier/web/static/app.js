@@ -849,7 +849,7 @@ async function runMatchSeries() {
   // Ny serie: nollställ allt från förra körningen, så inga gamla siffror
   // står kvar och ser ut att gälla den nya serien.
   clearMatchSummary();
-  $("matchList").innerHTML = "";
+  $("matchList").innerHTML = `<p class="hint">Matcherna listas här när de är klara.</p>`;
   const status = $("matchStatus");
   status.className = "session-status";
   status.hidden = false;
@@ -929,6 +929,10 @@ function renderMatchList(data) {
   if (games === _renderedGames) return;
   _renderedGames = games;
   const list = $("matchList");
+  if (!games) {
+    list.innerHTML = `<p class="hint">Matcherna listas här när de är klara.</p>`;
+    return;
+  }
   list.innerHTML = "";
   // Matcherna spelas parallellt och blir klara i olika ordning. Visa dem i
   // matchnummer, inte i den ordning de råkade bli färdiga.
