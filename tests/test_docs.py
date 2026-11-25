@@ -774,6 +774,30 @@ def test_axel_section_call_odds_are_real_numbers():
     )
 
 
+def test_axel_section_says_calls_get_easier_on_higher_claims():
+    """Synen lyckas oftare ju högre påståendet är. Riktningen är lätt att vända fel.
+
+    p_win faller monotont längs RANKING, så ett starkare påstående ger en
+    säkrare syn. Texten ska säga det, inte motsatsen.
+    """
+    from meier import policy, rules
+
+    p = [policy.CALL_ODDS[v].p_win for v in rules.RANKING]
+    assert all(a >= b for a, b in zip(p, p[1:])), "p_win ska falla med svagare påstående"
+    assert (
+        policy.CALL_ODDS[11].p_win
+        > policy.CALL_ODDS[64].p_win
+        > policy.CALL_ODDS[63].p_win
+    )
+
+    flat = " ".join(_om().split())
+    assert "Chansen stiger alltså ju högre påståendet är" in flat
+    assert "ju högre påståendet är, för då är det allt mindre" in flat
+    # Den felvända formuleringen ska inte kunna smyga tillbaka.
+    assert "Chansen faller alltså ju närmare Meier" not in flat
+    assert "Han synar helst de låga påståendena" not in flat
+
+
 def test_axel_section_says_63_is_a_coin_flip():
     """63 ska beskrivas som i praktiken jämnt mellan syna och skicka."""
     from meier import policy, rules

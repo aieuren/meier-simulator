@@ -137,6 +137,28 @@ Higher is *not* the larger number. The order is `21` (Meier, highest), then
 higher than `44`, and `55` is higher than `66`. Always compare with
 `rules.is_higher` / `rules.compare` — never with `<`/`>` on the raw value.
 
+### Vad "högt" och "lågt" betyder i prosan
+
+Ett **högt** påstående står högt i ordningen, nära Meier. Ett **lågt** står
+nära 31. Riktningen är alltså samma som i "21 är högst". `64` är högre än
+`63`, och `11` är högre än `64`.
+
+Följden är lätt att vända fel, och det har hänt tre gånger:
+
+- **Synen lyckas bättre på höga påståenden.** `CALL_ODDS[claim].p_win` faller
+  monotont längs `rules.RANKING`: 11 → 96 %, 64 → 65 %, 63 → 58 %, 31 → 0 %.
+  Tärningarna når sällan upp till ett starkt påstående, så en syn på 11 vinner
+  oftast.
+- **Ett lågt påstående är lätt att slå över**, eftersom nästa spelare lätt
+  hittar något högre (31 → 95 % chans till ett sant påstående ovanför). Ett
+  högt påstående är svårt att slå över men synas oftare (`p_called` stiger med
+  nivån: 31 → 10 %, 66 → 38 %, Meier → 50 %).
+- **Livsvärdet, inte vinstchansen, avgör draget.** En förlorad syn kan kosta
+  två liv vid Meier, så "synen vinner oftast" räcker inte som skäl.
+
+`test_axel_section_says_calls_get_easier_on_higher_claims` låser riktningen i
+texten. Skriv aldrig "chansen faller ju högre påståendet är".
+
 ## Slå = a fresh shake, not a peek (gotcha)
 
 The three choices are: slå (shake the cup again and name a higher claim

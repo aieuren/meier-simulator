@@ -31,6 +31,16 @@ Två tärningar i en bägare med lock. Tärningarna läses som ett tal med den
 högsta först: 2 och 5 blir 52. 21 kallas Meier och är högst. Sedan
 faller ordningen, och par slår singlar – 44 slår alltså 65.
 
+> **Hög och låg.** Ett påstående kallas **högt** när det står högt i
+> ordningen, alltså nära Meier, och **lågt** när det står långt ner, nära 31.
+> Ett högt påstående är svårare att få, och därför mer värt. Ordet har samma
+> riktning som i "högst" ovan: 21 är det högsta av alla. Ett högre påstående
+> är alltid ett starkare påstående, och 64 är högre än 63.
+>
+> Det gör att ett högt påstående är lättare att syna. Tärningarna når sällan
+> upp till det. Ett lågt påstående är tvärtom lätt att slå över, men svårt att
+> få synat.
+
 En runda går från första påståendet till dess att någon synar.
 En match är många rundor i följd. Varje spelare har tre liv, och den som
 mist sina liv är ute. Sist kvar vinner matchen.
@@ -221,9 +231,10 @@ motståndaren än en syn på 51, eftersom tärningarna då oftare är lägre än
 påståendet. Att höja långt ökar alltså risken att åka dit.
 
 När spelaren i stället slår finns ingen sann nivå att lägga sig strax över,
-och kalkylen är en annan: ett lågt påstående är svårt för nästa spelare att slå
-över, ett högt sätter press men synas oftare. Spelaren får titta på sina nya
-tärningar innan den påstår. Väljer den bort titten vet den inget om utfallet.
+och kalkylen är en annan. Ett lågt påstående är lätt för nästa spelare att slå
+över, men svårt att få synat. Ett högt påstående sätter press och synas
+oftare. Spelaren får titta på sina nya tärningar innan den påstår. Väljer den
+bort titten vet den inget om utfallet.
 
 Vem väger det ena mot det andra? Modellen. Koden räknar bara upp vilka
 påståenden som är lagliga i läget, och modellen väljer bland dem. Den får
@@ -342,8 +353,8 @@ frivilligt.
 |---|---|
 | vilket värde som helst | samma värde |
 
-**När någon annan har påstått** har han inte sett tärningarna. Då väger han tre
-svar mot varandra och tar det som är värt mest i liv:
+**När föregående spelare skickat bägaren** har han inte sett tärningarna. Då
+väger han tre svar mot varandra och tar det som är värt mest i liv:
 
 | Påståendet han får | Han gör |
 |---|---|
@@ -351,13 +362,13 @@ svar mot varandra och tar det som är värt mest i liv:
 | 63, 62, 61, 54, 53, 52, 51, 43, 42 | **skicka vidare** |
 | 41, 32, 31 | **slå** |
 
-Han synar helst de låga påståendena, för nästan varje slag ligger **under**
+Han synar helst de **höga** påståendena, för nästan varje slag ligger under
 dem.
 
 Säger någon 11 vinner synen i 96 fall av 100. Säger någon 22 vinner synen i 94.
 Vid 64 vinner synen fortfarande i 65 fall av 100. Vid 63 vinner den i 58.
-Chansen faller alltså ju närmare Meier påståendet ligger, för då är det allt
-mindre sannolikt att tärningarna når upp till det.
+Chansen stiger alltså ju högre påståendet är, för då är det allt mindre
+sannolikt att tärningarna når upp till det.
 
 Men sannolikheten att vinna är inte hela kalkylen. Han räknar i liv, och en
 syn som slår fel kan kosta mer än ett liv: visar tärningarna Meier kostar den
