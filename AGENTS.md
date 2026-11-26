@@ -2,6 +2,23 @@
 
 Repository memory for the Meier AI-agent project.
 
+## Fråga eller uppdrag: ändra bara det som efterfrågas
+
+Användaren bad om den här regeln uttryckligen (2026-11-26), efter att agenten
+flera gånger börjat ändra kod och dokument när frågan bara gällde ett svar.
+
+- Ställer användaren en **fråga** (var, hur, varför, hur många, vad händer om)
+  är svaret hela leveransen. Läs, räkna och svara. Ändra inte kod, tester,
+  dokument eller konfiguration, och öppna inga PR:er.
+- Ber användaren dig **göra något** (lägg till, fixa, kör, starta, ta bort) är
+  det ok att ändra just det uppdraget gäller, och bara det.
+- Är det oklart om det är en fråga eller ett uppdrag? Fråga i stället för att
+  ändra.
+
+Exempel: "hur många matcher går det på kvoten?" ska ge en uträkning och ett
+svar. Stämmer inte siffrorna i den här filen med mätningarna ska svaret säga
+det, inte filen skrivas om.
+
 ## LLM-provider: Gemini only (beslut, läs detta först)
 
 **Gemini är den enda LLM-leverantören. Anthropic/Claude används inte.**
