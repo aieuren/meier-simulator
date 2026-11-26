@@ -2,6 +2,36 @@
 
 Repository memory for the Meier AI-agent project.
 
+## LLM-provider: Gemini only (beslut, läs detta först)
+
+**Gemini är den enda LLM-leverantören. Anthropic/Claude används inte.**
+
+Detta är ett fattat beslut, inte en tillfällig avsaknad av nyckel. Frågan har
+kommit upp tre gånger och svaret är nej varje gång. Anthropic stödet byggdes,
+provades och togs bort 2026-11-08. Ta inte upp det igen och föreslå det inte som
+en lösning på kvotproblem. Lägg inte tillbaka providern, nyckelvariabeln, en
+`anthropic.key` eller ett Anthropic-kodspår i kod, tester eller dokumentation.
+Bara om användaren själv uttryckligen ber om Anthropic ska det byggas.
+
+**När Gemini-kvoten tar slut:** vänta tills den fylls på igen. Ett 429 är inte
+ett skäl att byta leverantör.
+
+Kvoten på fri nivå är **500 anrop per dygn** för `gemini-3.1-flash-lite`, plus
+15 anrop/minut. Det som brukar slå till i en matchserie är dygnstaket, och då
+hjälper ingen väntan på minuter. Google skriver själv hur länge det är kvar, som
+`Please retry in 5h38m11s`. Klienten läser den tiden och avbryter direkt:
+`_QuotaExhausted` gör inga omförsök, och feltexten säger "Kvoten fylls på om
+5 tim 38 min". Ser du det meddelandet är det bara att vänta.
+
+Räkna med att en match med språkmodell gör ca 20 anrop. 500 anrop per dygn
+räcker alltså till ungefär 25 matcher, så en längre serie tar slut. Kör då
+`--no-llm` (snabb, deterministisk, ingen kvot) eller färre matcher.
+
+Signalen är `/api/health` (provider `gemini`) och `LLMError` med väntetiden.
+`tests/test_llm_retry.py` vaktar dygnstakslogiken och
+`tests/test_docs.py` vaktar att inget spår av den bortvalda leverantören
+smyger tillbaka.
+
 ## What this project is
 
 A Python library plus FastAPI web app where independent, LLM-based AI agents
@@ -21,15 +51,10 @@ lower claim). Multiple agents with distinct roles can also play full games.
   `FACE_WEIGHTS`, so changing the die shape moves all of them. See
   `docs/agent-model.md` §3.0. Odd and even stay equally likely, since 1/2 sit
   on the ends (one odd, one even).
-- `meier/llm.py` – LLM client with two providers: Anthropic (Claude) and
-  Google Gemini. Claude wins when both keys exist, since a user with a Claude
-  account wants that. Key via `ANTHROPIC_API_KEY` (or
-  `$MEIER_SECRETS_DIR/anthropic.key`); Gemini via
+- `meier/llm.py` – LLM client, Gemini only. Key via
   `GEMINI_API_KEY`/`GOOGLE_API_KEY` (or `$MEIER_SECRETS_DIR/gemini.key`).
-  Anthropic uses `/v1/messages` with `x-api-key` and `anthropic-version`; the
-  system prompt is a top-level field and the reply is a list of text blocks.
-  529 means overloaded, same as 503, so it switches model without retrying.
-  Gemini uses the OpenAI-compatible endpoint
+  This is the only provider; see "LLM-provider: Gemini only" below. Gemini
+  uses the OpenAI-compatible endpoint
   `https://generativelanguage.googleapis.com/v1beta/openai`.
   `LLMClient.last_usage` holds the token count from the last call. Without a
   key, `LLMConfig.from_env()` raises `LLMError`. There is no fallback to the
@@ -315,13 +340,13 @@ Earlier the app could fall back to the local agent-server proxy
 (`http://127.0.0.1:60000/v1/chat/completions`, model `openhands_<profile>`).
 That path is deleted. Every request there started a whole OpenHands
 conversation, so a match filled `/var/openhands/conversations` with hundreds of
-conversations. `LLMConfig._from_provider_env()` now accepts `anthropic` and `gemini` and
+conversations. `LLMConfig._from_provider_env()` now accepts only `gemini` and
 raises `LLMError` when no key exists.
 
 Consequences to keep in mind:
 
-- There is no proxy fallback. Without `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`
-  (or the key files) the app fails fast with a clear message instead of quietly
+- There is no proxy fallback. Without `GEMINI_API_KEY`
+  (or the key file) the app fails fast with a clear message instead of quietly
   spending a conversation per call.
 - The self-healing profile logic (`_MissingProfile`, `_ensure_profile`,
   `profile_name`) and the session-key helper are removed. Do not reintroduce
@@ -1038,11 +1063,10 @@ gone — replaced by four neutral-named players in `meier/agents/roster.py`:
   every reading player the same tracker (one shared view of the table).
 - Monkeypatch seam: `play_match` builds agents through `match._new_agents`
   (LLM on) or `match._new_agents_no_llm` (LLM off). Tests patch `_new_agents`.
-- Provider: Anthropic (Claude) or Gemini. Claude wins when
-  `ANTHROPIC_API_KEY` (or `$MEIER_SECRETS_DIR/anthropic.key`) is set, otherwise
-  Gemini via `GEMINI_API_KEY` or `$MEIER_SECRETS_DIR/gemini.key`.
-  `LLMConfig.from_env()` raises `LLMError` without a key. `/api/health` reports
-  which provider and model is in use, so check it before a long series.
+- Provider: Gemini only, via `GEMINI_API_KEY` or
+  `$MEIER_SECRETS_DIR/gemini.key`. `LLMConfig.from_env()` raises `LLMError`
+  without a key. `/api/health` reports the model in use, so check it before a
+  long series.
 - The Gemini proxy hits a 429 quota. When it does, `LLMError` surfaces after
   three retries and a full LLM round can hang for many minutes. Do not use a live
   session to verify model wiring while the quota is exhausted — a session-level

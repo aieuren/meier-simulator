@@ -41,7 +41,7 @@ def test_from_env_raises_without_any_key(tmp_path, monkeypatch):
     from meier.llm import LLMError
 
     monkeypatch.setenv("MEIER_SECRETS_DIR", str(tmp_path))
-    for name in ("ANTHROPIC_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY"):
+    for name in ("GEMINI_API_KEY", "GOOGLE_API_KEY"):
         monkeypatch.delenv(name, raising=False)
     with pytest.raises(LLMError) as exc:
         LLMConfig.from_env()
@@ -64,7 +64,7 @@ def test_from_env_reads_gemini_key_from_file(tmp_path, monkeypatch):
     """Utan nyckel i miljön ska nyckelfilen ge gemini-providern."""
     (tmp_path / "gemini.key").write_text("filnyckel")
     monkeypatch.setenv("MEIER_SECRETS_DIR", str(tmp_path))
-    for name in ("ANTHROPIC_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY"):
+    for name in ("GEMINI_API_KEY", "GOOGLE_API_KEY"):
         monkeypatch.delenv(name, raising=False)
     cfg = LLMConfig.from_env()
     assert cfg.provider == "gemini"
@@ -75,7 +75,6 @@ def test_from_env_reads_gemini_key_from_file(tmp_path, monkeypatch):
 def test_max_rpm_can_be_disabled(tmp_path, monkeypatch):
     (tmp_path / "gemini.key").write_text("filnyckel")
     monkeypatch.setenv("MEIER_SECRETS_DIR", str(tmp_path))
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setenv("MEIER_MAX_RPM", "0")
     assert LLMConfig.from_env().max_rpm == 0.0
 
@@ -150,47 +149,3 @@ def test_client_paces_retries(monkeypatch):
     elapsed = time.monotonic() - start
     # Tre försök: två väntor på ~0.3 s.
     assert elapsed >= 0.55, elapsed
-
-
-# -- Claude (Anthropic) som leverantör ---------------------------------------
-
-
-def test_from_env_prefers_anthropic_when_key_exists(tmp_path, monkeypatch):
-    """Finns ett Claude-konto ska agenterna använda det, inte Gemini."""
-    monkeypatch.setenv("MEIER_SECRETS_DIR", str(tmp_path))
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-nyckel")
-    monkeypatch.setenv("GEMINI_API_KEY", "gemini-nyckel")
-    monkeypatch.delenv("MEIER_MODEL", raising=False)
-    cfg = LLMConfig.from_env()
-    assert cfg.provider == "anthropic"
-    assert cfg.api_key == "sk-ant-nyckel"
-    assert cfg.base_url == "https://api.anthropic.com"
-    assert cfg.model.startswith("claude")
-
-
-def test_anthropic_key_can_come_from_file(tmp_path, monkeypatch):
-    """Nyckeln ska kunna ligga i den beständiga nyckelkatalogen."""
-    (tmp_path / "anthropic.key").write_text("sk-ant-filnyckel")
-    monkeypatch.setenv("MEIER_SECRETS_DIR", str(tmp_path))
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    for name in ("GEMINI_API_KEY", "GOOGLE_API_KEY"):
-        monkeypatch.delenv(name, raising=False)
-    cfg = LLMConfig.from_env()
-    assert cfg.provider == "anthropic"
-    assert cfg.api_key == "sk-ant-filnyckel"
-
-
-def test_gemini_is_used_when_no_anthropic_key(tmp_path, monkeypatch):
-    """Utan Claude-nyckel ska Gemini fungera som förut."""
-    (tmp_path / "gemini.key").write_text("gemini-nyckel")
-    monkeypatch.setenv("MEIER_SECRETS_DIR", str(tmp_path))
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    cfg = LLMConfig.from_env()
-    assert cfg.provider == "gemini"
-
-
-def test_anthropic_model_can_be_overridden(tmp_path, monkeypatch):
-    monkeypatch.setenv("MEIER_SECRETS_DIR", str(tmp_path))
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-nyckel")
-    monkeypatch.setenv("MEIER_MODEL", "claude-opus-4-5")
-    assert LLMConfig.from_env().model == "claude-opus-4-5"

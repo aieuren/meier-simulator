@@ -1,14 +1,9 @@
 """LLM-klient för Meier-agenterna.
 
-Klienten kan tala med två leverantörer:
+Klienten använder Google Gemini via ``GEMINI_API_KEY``. Gemini talar
+OpenAI-liknande ``/v1/chat/completions`` på ``/v1beta/openai``.
 
-* **Anthropic (Claude)**, om ``ANTHROPIC_API_KEY`` finns. Anropet går till
-  ``/v1/messages`` med nyckeln i ``x-api-key``.
-* **Google Gemini**, om ``GEMINI_API_KEY`` finns. Gemini talar OpenAI-liknande
-  ``/v1/chat/completions`` på ``/v1beta/openai``.
-
-Anthropic väljs först när båda nycklarna finns, eftersom den som har ett
-Claude-konto vill använda det.
+Det är den enda leverantören. Lägg inte till någon annan; se AGENTS.md.
 
 Det finns **ingen** återfallsväg till OpenHands agent-server. Den proxyn är en
 shim som startar en hel OpenHands-konversation per anrop, vilket fyllde
@@ -23,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
 import time
 from dataclasses import dataclass, field
@@ -42,6 +38,19 @@ class _Transient(LLMError):
 
 class _RateLimited(_Transient):
     """Kvottak (429). Kräver längre väntan än ett vanligt tillfälligt fel."""
+
+
+class _QuotaExhausted(LLMError):
+    """Dygnskvoten är slut (429 med "per day").
+
+    Att göra om anropet hjälper inte: kvoten fylls på först nästa dygn. Fältet
+    ``retry_hint`` bär leverantörens egen väntetid, så feltexten kan säga när
+    det går att köra igen i stället för att bara säga 429.
+    """
+
+    def __init__(self, message: str, retry_hint: str = "") -> None:
+        super().__init__(message)
+        self.retry_hint = retry_hint
 
 
 class _Overloaded(LLMError):
@@ -170,7 +179,7 @@ def _fallback_models() -> tuple[str, ...]:
 class LLMConfig:
     """Konfiguration för en LLM-anslutning."""
 
-    #: "anthropic" eller "gemini". Styr vilket API-format anropet använder.
+    #: Alltid "gemini". Gemini är den enda leverantören.
     provider: str
     model: str
     #: Modeller att falla tillbaka på när den primära svarar 503 (överbelastad).
@@ -197,10 +206,8 @@ class LLMConfig:
     def from_env(cls) -> "LLMConfig":
         """Välj anslutning utifrån miljövariabler.
 
-        Anthropic väljs om ``ANTHROPIC_API_KEY`` finns, annars Google Gemini.
-        Nycklarna läses från miljön eller från nyckelfilerna i
-        ``MEIER_SECRETS_DIR``. Gemini-nyckeln läses från ``GEMINI_API_KEY`` eller
-        ``GOOGLE_API_KEY``, annars från ``$MEIER_SECRETS_DIR/gemini.key``.
+        Nyckeln läses från ``GEMINI_API_KEY`` eller ``GOOGLE_API_KEY``, annars
+        från ``$MEIER_SECRETS_DIR/gemini.key`` (se ``_read_secret``).
 
         Saknas nyckeln höjs ett fel. Det finns ingen återfallsväg till
         OpenHands agent-server, eftersom varje anrop där startar en egen
@@ -218,18 +225,6 @@ class LLMConfig:
 
     @classmethod
     def _from_provider_env(cls) -> "LLMConfig":
-        # Anthropic först: den som har ett Claude-konto vill använda det.
-        # Nyckeln läses från ANTHROPIC_API_KEY eller $MEIER_SECRETS_DIR/anthropic.key.
-        anthropic_key = _read_secret("anthropic.key", ("ANTHROPIC_API_KEY",))
-        if anthropic_key:
-            return cls(
-                provider="anthropic",
-                model=os.environ.get("MEIER_MODEL", "claude-sonnet-4-5-20250929"),
-                fallback_models=_fallback_models(),
-                api_key=anthropic_key,
-                base_url=os.environ.get("MEIER_BASE_URL", "https://api.anthropic.com"),
-            )
-
         # Gemini talar OpenAI-format på /v1beta/openai.
         gemini_key = _read_secret("gemini.key", ("GEMINI_API_KEY", "GOOGLE_API_KEY"))
         if gemini_key:
@@ -245,12 +240,10 @@ class LLMConfig:
             )
 
         raise LLMError(
-            "Ingen LLM-nyckel hittades. Sätt ANTHROPIC_API_KEY för Claude, eller "
-            "GEMINI_API_KEY för Gemini. Nyckeln kan också ligga i "
+            "Ingen LLM-nyckel hittades. Sätt GEMINI_API_KEY, eller lägg nyckeln i "
             f"{os.environ.get('MEIER_SECRETS_DIR', '/workspace/meier-secrets')}"
-            "/anthropic.key respektive .../gemini.key. Anrop mot OpenHands "
-            "agent-server används medvetet inte: varje anrop där startar en egen "
-            "konversation."
+            "/gemini.key. Anrop mot OpenHands agent-server används medvetet inte: "
+            "varje anrop där startar en egen konversation."
         )
 
 
@@ -347,6 +340,11 @@ class LLMClient:
                 limiter.acquire()
             try:
                 return call()
+            except _QuotaExhausted:
+                # Dygnstak: att vänta och göra om hjälper inte. Låt felet nå
+                # användaren direkt med väntetiden, i stället för att sex
+                # omförsök ska dra ut på en serie som ändå inte kan köra.
+                raise
             except (_Transient, httpx.HTTPError) as exc:
                 last = exc
                 if attempt + 1 >= attempts:
@@ -357,13 +355,10 @@ class LLMClient:
                 time.sleep(delay)
         raise LLMError(f"Kunde inte nå LLM efter {attempts} försök: {last}") from last
 
-    # -- HTTP mot leverantören ---------------------------------------------
+    # -- Gemini via OpenAI-kompatibelt HTTP --------------------------------
     def _complete_http(
         self, system: str, user: str, *, json_mode: bool, model: str | None = None
     ) -> str:
-        if self.config.provider == "anthropic":
-            return self._complete_anthropic(system, user, model=model)
-
         base = self.config.base_url.rstrip("/")
         if base.endswith("/v1"):
             url = f"{base}/chat/completions"
@@ -391,46 +386,6 @@ class LLMClient:
         except (KeyError, IndexError, TypeError) as exc:
             raise LLMError(f"Oväntat LLM-svar: {json.dumps(data)[:300]}") from exc
 
-    def _complete_anthropic(
-        self, system: str, user: str, *, model: str | None = None
-    ) -> str:
-        """Anrop mot Anthropic Messages API.
-
-        Anthropic har systemprompten som eget fält, inte som ett meddelande, och
-        nyckeln går i ``x-api-key`` i stället för ``Authorization``. Svaret är en
-        lista av innehållsblock, inte ``choices``.
-        """
-        base = self.config.base_url.rstrip("/") or "https://api.anthropic.com"
-        url = f"{base}/v1/messages"
-        payload: dict[str, Any] = {
-            "model": model or self.config.model,
-            "max_tokens": self.config.max_tokens,
-            "temperature": self.config.temperature,
-            "system": system,
-            "messages": [{"role": "user", "content": user}],
-        }
-        headers = {
-            "Content-Type": "application/json",
-            "x-api-key": self.config.api_key,
-            "anthropic-version": "2023-06-01",
-        }
-
-        resp = self._post(url, payload, headers)
-        data = resp.json()
-        usage = data.get("usage") or {}
-        self._record_usage(
-            {
-                "prompt_tokens": usage.get("input_tokens", 0),
-                "completion_tokens": usage.get("output_tokens", 0),
-            }
-        )
-        try:
-            blocks = data["content"]
-            text = "".join(b.get("text", "") for b in blocks if b.get("type") == "text")
-        except (KeyError, TypeError) as exc:
-            raise LLMError(f"Oväntat LLM-svar: {json.dumps(data)[:300]}") from exc
-        return text.strip()
-
     def _post(self, url: str, payload: dict, headers: dict) -> httpx.Response:
         try:
             resp = httpx.post(url, json=payload, headers=headers, timeout=self.config.timeout)
@@ -438,13 +393,22 @@ class LLMClient:
             return resp
         except httpx.HTTPStatusError as exc:
             status = exc.response.status_code
-            # 529 är Anthropics "overloaded"; den betyder samma sak som 503.
-            if status in (503, 529):
+            if status == 503:
                 raise _Overloaded(
                     f"Modellen är överbelastad (503): {exc.response.text[:200]}"
                 ) from exc
             if status == 429 or status >= 500:
-                message = f"LLM-anropet avvisades tillfälligt ({status}): {exc.response.text[:200]}"
+                body = exc.response.text
+                if status == 429 and _is_daily_quota(body):
+                    hint = _retry_hint(body)
+                    when = f" Kvoten fylls på om {hint}." if hint else ""
+                    raise _QuotaExhausted(
+                        "Dygnskvoten för Gemini är slut (429, free tier)."
+                        f"{when} Vänta in den i stället för att byta leverantör;"
+                        " se AGENTS.md.",
+                        retry_hint=hint,
+                    ) from exc
+                message = f"LLM-anropet avvisades tillfälligt ({status}): {body[:200]}"
                 if status == 429:
                     raise _RateLimited(message) from exc
                 raise _Transient(message) from exc
@@ -455,6 +419,39 @@ class LLMClient:
             raise _Transient(f"Kunde inte nå LLM: {exc}") from exc
         except httpx.HTTPError as exc:
             raise LLMError(f"Kunde inte nå LLM: {exc}") from exc
+
+
+def _is_daily_quota(body: str) -> bool:
+    """Är 429:an ett dygnstak och inte ett minutkvot-tak?
+
+    Google skriver "per day" / "Free Tier" för dygnstaket. Ett minutkvot-tak
+    går att vänta ut på under en minut och ska därför göras om som vanligt.
+    """
+    lowered = body.lower()
+    return "per day" in lowered or "per_day" in lowered
+
+
+def _retry_hint(body: str) -> str:
+    """Plocka leverantörens väntetid ur en 429-text, som "retry in 5h38m11s"."""
+    match = re.search(r"retry in ([0-9hms.]+)", body)
+    if not match:
+        return ""
+    raw = match.group(1)
+    parts = re.findall(r"([0-9.]+)([hms])", raw)
+    if not parts:
+        return ""
+    seconds = 0.0
+    for value, unit in parts:
+        seconds += float(value) * {"h": 3600, "m": 60, "s": 1}[unit]
+    if seconds < 60:
+        return "mindre än en minut"
+    minutes = int(round(seconds / 60))
+    hours, rest = divmod(minutes, 60)
+    if hours and rest:
+        return f"{hours} tim {rest} min"
+    if hours:
+        return f"{hours} tim"
+    return f"{rest} min"
 
 
 def parse_json_object(text: str) -> dict[str, Any]:

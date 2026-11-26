@@ -856,3 +856,45 @@ def test_axel_section_example_part_moves_match_the_policy():
     # Runda 1: lika -> synaren förlorar. Runda 2: lägre -> påståendet förlorar.
     assert not rules.is_higher(64, 64)
     assert rules.is_higher(64, 31)
+
+
+# -- Leverantörsbeslutet ----------------------------------------------------
+
+PROJECT = README.parent
+
+#: Leverantörer som prövats och valts bort. De får inte smyga tillbaka.
+#: Namnen byggs av delar, så att den här filen inte matchar sig själv.
+_REJECTED = ("anthro" + "pic", "clau" + "de", "sk-" + "ant")
+
+
+def _source_files() -> list[Path]:
+    out: list[Path] = []
+    for pattern in ("meier/**/*.py", "meier/web/static/*.js", "tests/*.py"):
+        out.extend(PROJECT.glob(pattern))
+    out.extend([PROJECT / "run.sh", README])
+    return sorted(p for p in out if p.is_file())
+
+
+def test_rejected_provider_stays_out_of_the_code():
+    """Den bortvalda leverantören används inte. Inget spår får ligga kvar.
+
+    Frågan har återkommit flera gånger. Det här testet gör beslutet
+    verkställigt: lägger någon tillbaka providern faller sviten, och då syns
+    det direkt i stället för att frågan öppnas igen.
+    """
+    offenders: list[str] = []
+    for path in _source_files():
+        text = path.read_text(encoding="utf-8").lower()
+        for word in _REJECTED:
+            if word in text:
+                offenders.append(f"{path.relative_to(PROJECT)}: {word}")
+    assert not offenders, "Bortvald leverantör finns kvar: " + ", ".join(offenders)
+
+
+def test_agents_md_states_the_provider_decision():
+    """AGENTS.md ska bära beslutet, så nästa session läser det först."""
+    text = (PROJECT / "AGENTS.md").read_text(encoding="utf-8")
+    assert "Gemini only" in text
+    assert "endast" in text or "only" in text
+    # Beslutet ska ligga högt upp, inte begravt i historiken.
+    assert text.index("Gemini only") < 3000
