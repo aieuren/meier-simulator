@@ -250,3 +250,171 @@ def test_analysis_ask_uses_llm(monkeypatch):
     res = client.post("/api/analysis/ask", json={"question": "Vem vinner?"})
     assert res.status_code == 200
     assert res.json()["answer"] == "42"
+
+
+# -- Detaljvy: match → runda → händelse -------------------------------------
+
+
+def test_group_rounds_splits_on_round_number():
+    rec = _records(1)[0]
+    rounds = match.group_rounds(rec["events"])
+    assert len(rounds) == rec["rounds"]
+    # Alla händelser ska hamna i exakt en runda, i loggordning.
+    assert sum(len(r["events"]) for r in rounds) == len(rec["events"])
+    assert [r["round"] for r in rounds] == list(range(1, rec["rounds"] + 1))
+
+
+def test_group_rounds_counts_rolls_and_lives():
+    rec = _records(1)[0]
+    rounds = match.group_rounds(rec["events"])
+    for bucket in rounds:
+        kinds = [e["kind"] for e in bucket["events"]]
+        assert bucket["rolls"] == kinds.count("roll")
+        lost = sum(e.get("lives_lost") or 0 for e in bucket["events"])
+        assert bucket["lives_lost"] == lost
+        for name in bucket["losers"]:
+            assert any(
+                e.get("player_name") == name and e["kind"] == "life"
+                for e in bucket["events"]
+            )
+
+
+def test_claim_truth_matches_dice_not_log_flag():
+    """Loggens truth är False på syn- och skickarader, men budet kan vara sant."""
+    # 64 slaget mot tärningarna 64: budet är sant, även på en synrad.
+    assert match.claim_truth({"claim": 64, "dice": [6, 4]}) is True
+    assert match.claim_truth({"claim": 65, "dice": [6, 4]}) is False
+    # Mejer (21) är högst och sant bara när tärningarna visar just 21.
+    assert match.claim_truth({"claim": 21, "dice": [1, 2]}) is True
+    assert match.claim_truth({"claim": 21, "dice": [2, 2]}) is False
+    # Utan bud finns inget att döma.
+    assert match.claim_truth({"claim": None, "dice": [6, 4]}) is None
+    assert match.claim_truth({"claim": 64, "dice": None}) is None
+
+
+def test_match_detail_marks_claim_truth_on_call_events():
+    rec = _records(1)[0]
+    detail = match.match_detail(rec)
+    calls = [
+        e
+        for bucket in detail["rounds_list"]
+        for e in bucket["events"]
+        if e["action"] == "syna" and e.get("claim_name")
+    ]
+    assert calls, "matchen ska innehålla minst en syn"
+    for e in calls:
+        assert isinstance(e["claim_truth"], bool)
+
+
+def test_group_rounds_tracks_final_dice_after_reroll():
+    """Ett slag mitt i rundan byter tärningar. Rubriken ska visa båda."""
+    events = [
+        {"kind": "roll", "round": 1, "shown_name": "43", "dice": [3, 4]},
+        {"kind": "action", "round": 1, "action": "påstå", "shown_name": "43"},
+        {"kind": "roll", "round": 1, "shown_name": "64", "dice": [6, 4]},
+        {"kind": "action", "round": 1, "action": "påstå", "shown_name": "64"},
+    ]
+    [bucket] = match.group_rounds(events)
+    assert bucket["shown"] == "43"
+    assert bucket["final_shown"] == "64"
+    assert bucket["rolls"] == 2
+
+
+def test_match_detail_has_rounds_and_summary():
+    rec = _records(2)[1]
+    detail = match.match_detail(rec)
+    assert detail["game"] == rec["game"]
+    assert detail["winner"] == rec["winner"]
+    assert detail["rounds"] == rec["rounds"]
+    assert detail["events"] == len(rec["events"])
+    assert len(detail["rounds_list"]) == rec["rounds"]
+    assert all("events" in r for r in detail["rounds_list"])
+    # Rundorna bär händelserna, så listan ska inte ligga med en gång till.
+    assert "events_list" not in detail
+
+
+def test_match_brief_merges_player_stats():
+    rec = _records(1)[0]
+    brief = match.match_brief(rec["game"], rec)
+    assert brief["events"] == len(rec["events"])
+    assert brief["legacy"] is False
+    by_name = {p["name"]: p for p in brief["players"]}
+    for entry in rec["players"]:
+        assert by_name[entry["name"]]["role"] == entry["role"]
+    # Statistiken ska följa med, så att listan kan visa bluff och syn.
+    assert any(p.get("decisions") for p in brief["players"])
+
+
+def _loaded_client(monkeypatch, tmp_path) -> TestClient:
+    name = _log_repo(monkeypatch, tmp_path, games=3)
+    client = TestClient(web_app.app)
+    web_app._store.clear()
+    client.post("/api/analysis/select", json={"names": [name]})
+    return client
+
+
+def test_analysis_matches_lists_without_events(monkeypatch, tmp_path):
+    client = _loaded_client(monkeypatch, tmp_path)
+    source = web_app._store.sources()[0]
+    data = client.get("/api/analysis/matches", params={"source": source}).json()
+    assert data["source"] == source
+    assert data["games"] == 3
+    assert [m["game"] for m in data["matches"]] == [1, 2, 3]
+    for m in data["matches"]:
+        assert m["events"] > 0
+        assert "rounds_list" not in m
+
+
+def test_analysis_match_returns_rounds(monkeypatch, tmp_path):
+    client = _loaded_client(monkeypatch, tmp_path)
+    source = web_app._store.sources()[0]
+    rec = client.get(
+        "/api/analysis/match", params={"source": source, "game": 2}
+    ).json()["match"]
+    assert rec["game"] == 2
+    assert len(rec["rounds_list"]) == rec["rounds"]
+    first = rec["rounds_list"][0]
+    assert first["events"]
+    assert first["events"][0]["round"] == first["round"]
+
+
+def test_analysis_match_unknown_game_is_404(monkeypatch, tmp_path):
+    client = _loaded_client(monkeypatch, tmp_path)
+    source = web_app._store.sources()[0]
+    res = client.get("/api/analysis/match", params={"source": source, "game": 99})
+    assert res.status_code == 404
+
+
+def test_analysis_matches_unknown_source_is_404(monkeypatch, tmp_path):
+    client = _loaded_client(monkeypatch, tmp_path)
+    res = client.get("/api/analysis/matches", params={"source": "finns-inte.jsonl"})
+    assert res.status_code == 404
+
+
+def test_analysis_detail_reads_disk_when_not_loaded(monkeypatch, tmp_path):
+    """Efter omstart är butiken tom, men detaljvyn ska ändå fungera."""
+    name = _log_repo(monkeypatch, tmp_path, games=2)
+    client = TestClient(web_app.app)
+    web_app._store.clear()
+    res = client.get("/api/analysis/matches", params={"source": name})
+    assert res.status_code == 200
+    assert res.json()["games"] == 2
+
+
+def test_analysis_detail_reads_record_without_format(monkeypatch, tmp_path):
+    """En logg från före format 2 saknar format-fältet men ska gå att öppna."""
+    name = _log_repo(monkeypatch, tmp_path, games=2)
+    # Servern läser klonen, inte arbetskatalogen.
+    path = tmp_path / "clone" / name
+    lines = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        rec = json.loads(line)
+        rec.pop("format", None)
+        lines.append(json.dumps(rec))
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    client = TestClient(web_app.app)
+    web_app._store.clear()
+    data = client.get("/api/analysis/matches", params={"source": name}).json()
+    assert data["games"] == 2
+    assert all(m["legacy"] for m in data["matches"])

@@ -161,6 +161,23 @@ def test_skicka_logs_accepted_claim_and_keeps_same_claim():
     assert entry.to_dict()["accepted_claim_name"] == "44"
 
 
+def test_skicka_marks_whether_the_carried_claim_is_true():
+    """Den som skickar vidare säger inget eget bud, men bär budet.
+
+    Flaggan ska spegla budet mot tärningarna. Förr sattes den till False rakt
+    av, och då såg varje vidarebefordran ut som en lögn i loggen.
+    """
+    players = [
+        make_player(k, ScriptedLLM(claims=[44], actions=["skicka"])) for k in ("a", "b")
+    ]
+    session = Session.new(players)
+    session.advance()  # påstående 44, tärningarna läses av
+    entry = session.advance()  # skickar vidare
+
+    shown = rules.read_dice(*entry.dice)
+    assert entry.truth is rules.is_true_claim(entry.claim, shown)
+
+
 def test_slag_logs_accepted_claim_and_new_claim_separately():
     players = [
         make_player(k, ScriptedLLM(claims=[44], actions=["slå"])) for k in ("a", "b")

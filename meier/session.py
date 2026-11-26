@@ -508,7 +508,12 @@ class Session:
             player=player.role.key,
             player_name=player.name,
             claim=claim,
-            truth=False,
+            # Spelaren sa inget eget bud, men bär nu budet. Flaggan beskriver
+            # därför budet mot tärningarna – inte spelaren – och ska inte sättas
+            # till False rakt av, då ser varje vidarebefordran ut som en lögn.
+            truth=rules.is_true_claim(
+                claim, rules.read_dice(*(self.pending_dice or (1, 1)))
+            ),
             line=decision.line,
             reasoning=decision.reasoning,
             action="skicka",

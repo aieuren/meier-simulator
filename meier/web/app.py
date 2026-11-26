@@ -21,7 +21,14 @@ from pydantic import BaseModel, Field
 from .. import rules
 from ..agents.roster import ROSTER, make_player, make_players, role_keys
 from ..llm import LLMClient, LLMError
-from ..match import GameRecord, read_jsonl, run_matches, summarize
+from ..match import (
+    GameRecord,
+    match_brief,
+    match_detail,
+    read_jsonl,
+    run_matches,
+    summarize,
+)
 from ..opponents import OpponentTracker, describe_params
 from ..session import Session
 from .. import analysis, logrepo
@@ -599,6 +606,9 @@ class _MatchJob:
             "started_at": started_at,
             "finished_at": finished_at,
             "download_url": "/api/matches/download",
+            # Detaljvyn hämtar händelserna per match härifrån, i stället för
+            # att få alla 1800 händelser i varje statuspoll.
+            "source": self.file.name,
         }
 
 
@@ -676,6 +686,7 @@ def _status_from_file() -> dict:
         "finished_at": finished_at,
         "download_url": "/api/matches/download",
         "restored": True,
+        "source": path.name,
     }
 
 
@@ -780,6 +791,57 @@ def analysis_logs() -> dict:
         entry["games"] = _count_lines(_path_for_log(entry))
         entry["loaded"] = entry["name"] in loaded
     return {"ready": True, "logs": logs, "local_dir": str(_local_log_dir())}
+
+
+def _source_records(source: str) -> list[dict]:
+    """Protokollen för en källa, från minnet om den är inläst, annars från disk.
+
+    Detaljvyn ska fungera även för en serie som inte är inläst i analysen, och
+    efter en omstart då butiken är tom. Filen läses då direkt, med samma
+    översättning av äldre nyckelnamn som analysen använder.
+    """
+    records = _store.records_for(source)
+    if records:
+        return records
+    for entry in _local_log_files():
+        if entry["name"] == source:
+            return read_jsonl(_local_log_dir() / source)
+    try:
+        return read_jsonl(logrepo.LogRepo().log_path(source))
+    except (logrepo.LogRepoError, FileNotFoundError, ValueError):
+        return []
+
+
+@app.get("/api/analysis/matches")
+def analysis_matches(source: str) -> dict:
+    """Matcherna i en källa, för detaljvyn i flikarna.
+
+    Svaret är en lätt lista utan händelser. Händelserna hämtas per match med
+    ``/api/analysis/match``, så att en stor serie inte skickas i onödan.
+    """
+    records = _source_records(source)
+    if not records:
+        raise HTTPException(status_code=404, detail=f"Källan finns inte: {source}")
+    return {
+        "source": source,
+        "games": len(records),
+        "matches": [match_brief(i, rec) for i, rec in enumerate(records, start=1)],
+    }
+
+
+@app.get("/api/analysis/match")
+def analysis_match(source: str, game: int) -> dict:
+    """En match med alla sina händelser, för utvikning till runda och händelse."""
+    records = _source_records(source)
+    if not records:
+        raise HTTPException(status_code=404, detail=f"Källan finns inte: {source}")
+    for i, rec in enumerate(records, start=1):
+        if (rec.get("game") or i) == game:
+            return {
+                "source": source,
+                "match": match_detail(rec),
+            }
+    raise HTTPException(status_code=404, detail=f"Matchen finns inte: {game}")
 
 
 def _local_log_files() -> list[dict]:

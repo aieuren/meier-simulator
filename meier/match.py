@@ -22,7 +22,7 @@ from typing import Any
 from .agents.roster import make_players
 from .legacy import upgrade_record
 from .llm import LLMClient
-from .rules import MEIER, rank
+from .rules import MEIER, is_true_claim, rank, read_dice
 from .session import LogEntry, Session
 
 #: Åtgärder som är spelarens eget påstående (spelaren säger ett värde).
@@ -437,6 +437,112 @@ def read_jsonl(path: str | Path) -> list[dict[str, Any]]:
             if line:
                 records.append(upgrade_record(json.loads(line)))
     return records
+
+
+# -- Detaljvy: match, runda, händelse ---------------------------------------
+
+
+def match_brief(index: int, rec: dict[str, Any]) -> dict[str, Any]:
+    """En matchrad utan händelser, för listan i detaljvyn."""
+    stats = rec.get("player_stats") or {}
+    return {
+        "game": rec.get("game") or index,
+        "winner": rec.get("winner"),
+        "winner_role": rec.get("winner_role"),
+        "rounds": rec.get("rounds"),
+        "starter": rec.get("starter"),
+        "order": list(rec.get("order") or []),
+        "events": len(rec.get("events") or []),
+        "legacy": not rec.get("format"),
+        "players": [
+            {
+                "name": p.get("name"),
+                "role": p.get("role"),
+                "lives": (rec.get("lives") or {}).get(p.get("name")),
+                **(stats.get(p.get("name")) or {}),
+            }
+            for p in (rec.get("players") or [])
+        ],
+    }
+
+
+def group_rounds(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Dela in händelserna i rundor, i loggordning.
+
+    En runda kan innehålla flera slag: när budet går runt ett varv slås nya
+    tärningar mitt i rundan. Tärningarna tas därför från rundans första
+    händelse, och ``rolls`` räknar hur många slag som gjordes.
+    """
+    rounds: list[dict[str, Any]] = []
+    for event in events:
+        number = event.get("round")
+        if not rounds or rounds[-1]["round"] != number:
+            rounds.append(
+                {
+                    "round": number,
+                    "shown": event.get("shown_name"),
+                    "dice": event.get("dice"),
+                    "events": [],
+                    "rolls": 0,
+                    "lives_lost": 0,
+                    "losers": [],
+                }
+            )
+        bucket = rounds[-1]
+        # Tärningarna kan bytas mitt i rundan. Rubriken visar startvärdet, och
+        # ``final_shown`` vad bordet stod på när rundan avgjordes.
+        bucket["final_shown"] = event.get("shown_name")
+        bucket["events"].append(event)
+        kind = event.get("kind")
+        if kind == "roll":
+            bucket["rolls"] += 1
+        elif kind == "life":
+            lost = event.get("lives_lost") or 0
+            bucket["lives_lost"] += lost
+            name = event.get("player_name")
+            if name and name not in bucket["losers"]:
+                bucket["losers"].append(name)
+    return rounds
+
+
+def claim_truth(event: dict[str, Any]) -> bool | None:
+    """Var budet i händelsen sant, räknat mot tärningarna? ``None`` utan bud.
+
+    Loggen sätter ``truth`` till False på syn- och skickarader, för att markera
+    att spelaren inte sa något eget bud. Fältet duger därför inte för att avgöra
+    om *budet* var en bluff. Det görs här i stället, med samma regel som spelet
+    dömer efter.
+    """
+    claim = event.get("claim")
+    dice = event.get("dice")
+    if claim is None or not dice or len(dice) != 2:
+        return None
+    try:
+        return is_true_claim(claim, read_dice(*dice))
+    except (TypeError, ValueError):
+        return None
+
+
+def match_detail(rec: dict[str, Any]) -> dict[str, Any]:
+    """En match med händelserna grupperade per runda, för utvikning."""
+    events = [
+        # ``claim_truth`` räknar budet mot tärningarna och gäller alla rader som
+        # bär ett bud – även syn och skicka. Loggens egen ``truth`` gör inte det.
+        {**e, "claim_truth": claim_truth(e)}
+        for e in rec.get("events") or []
+    ]
+    brief = match_brief(rec.get("game") or 1, rec)
+    return {
+        **brief,
+        "lives_per_player": rec.get("lives_per_player"),
+        "elimination_order": list(rec.get("elimination_order") or []),
+        "provider": rec.get("provider"),
+        "model": rec.get("model"),
+        "usage": rec.get("usage") or {},
+        "started_at": rec.get("started_at"),
+        "finished_at": rec.get("finished_at"),
+        "rounds_list": group_rounds(events),
+    }
 
 
 def _rate(part: int, whole: int) -> float:

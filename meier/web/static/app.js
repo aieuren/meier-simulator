@@ -681,7 +681,7 @@ function renderLog(entries, result) {
 
 const pct = (v) => `${((v || 0) * 100).toFixed(1)} %`;
 
-function matchRow(rec) {
+function matchRow(rec, source) {
   const div = document.createElement("details");
   div.className = "match-row";
   const order = (rec.order || []).join(" → ");
@@ -713,7 +713,277 @@ function matchRow(rec) {
       ${lines}
     </div>
   `;
+  const body = div.querySelector(".match-body");
+  attachDrill(body, rec, source);
   return div;
+}
+
+// -- Utvikning: match → runda → händelse ------------------------------------
+//
+// Händelserna hämtas först när matchen fälls upp, så att en serie på 200
+// matcher inte skickar 15 000 händelser till webbläsaren i onödan.
+//
+// Varje rad som fälls upp minns att den var öppen. Listan ritas om när en ny
+// match blir klar, och då ska det man tittar på inte slås ihop.
+
+const _openKeys = new Set();
+
+function drillKey(kind, ...parts) {
+  return [kind, ...parts].join(":");
+}
+
+// <details> som minns om den var öppen, och som laddar sitt innehåll lat.
+function drillDetails(key, className, summaryHtml, onOpen) {
+  const d = document.createElement("details");
+  d.className = className;
+  d.dataset.key = key;
+  const sum = document.createElement("summary");
+  sum.innerHTML = summaryHtml;
+  d.appendChild(sum);
+  if (_openKeys.has(key)) {
+    d.open = true;
+    if (onOpen) onOpen(d);
+  }
+  d.addEventListener("toggle", () => {
+    if (d.open) {
+      _openKeys.add(key);
+      if (onOpen) onOpen(d);
+    } else {
+      // Stängningen ska också stänga det som ligger inuti, annars står
+      // delträdet kvar och laddar vid nästa öppning.
+      _openKeys.delete(key);
+      d.querySelectorAll("details[data-key]").forEach((child) => {
+        _openKeys.delete(child.dataset.key);
+        if (child.open) child.open = false;
+      });
+    }
+  });
+  return d;
+}
+
+function drillBody(details) {
+  let body = details.querySelector(":scope > .drill-body");
+  if (!body) {
+    body = document.createElement("div");
+    body.className = "drill-body";
+    details.appendChild(body);
+  }
+  return body;
+}
+
+// Hämta en gång per nyckel. Ett misslyckat försök glöms bort, så att ett
+// tillfälligt nätfel går att försöka igen genom att fälla upp raden på nytt.
+const _drillCache = new Map();
+
+async function drillFetch(key, url) {
+  if (_drillCache.has(key)) return _drillCache.get(key);
+  const promise = (async () => {
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+    return data;
+  })();
+  _drillCache.set(key, promise);
+  promise.catch(() => _drillCache.delete(key));
+  return promise;
+}
+
+function attachDrill(box, rec, source) {
+  const key = drillKey("m", source, rec.game);
+  const details = drillDetails(
+    key,
+    "drill-row drill-match",
+    `<span class="drill-title">Rundor</span>` +
+      `<span class="drill-meta">${rec.rounds} rundor · händelser rad för rad</span>`,
+    (d) => loadMatchRounds(d, source, rec.game)
+  );
+  box.appendChild(details);
+}
+
+async function loadMatchRounds(details, source, game) {
+  const body = drillBody(details);
+  if (details.dataset.loaded === "1" || details.dataset.loading === "1") return;
+  details.dataset.loading = "1";
+  body.innerHTML = '<p class="hint">Hämtar rundor …</p>';
+  let data;
+  try {
+    const url =
+      `/api/analysis/match?source=${encodeURIComponent(source)}` +
+      `&game=${encodeURIComponent(game)}`;
+    data = await drillFetch(drillKey("m", source, game), url);
+  } catch (e) {
+    delete details.dataset.loading;
+    body.innerHTML = `<p class="error">Kunde inte hämta matchen: ${escapeHtml(e.message)}</p>`;
+    return;
+  }
+  delete details.dataset.loading;
+  details.dataset.loaded = "1";
+  body.innerHTML = "";
+  const match = data.match || {};
+  body.appendChild(matchMetaLine(match));
+  (match.rounds_list || []).forEach((round) => {
+    body.appendChild(roundRow(round, source, game));
+  });
+}
+
+function matchMetaLine(match) {
+  const p = document.createElement("p");
+  p.className = "drill-match-meta";
+  const parts = [];
+  if (match.lives_per_player) parts.push(`${match.lives_per_player} liv var`);
+  if (match.provider && match.provider !== "none") {
+    parts.push(`${match.model} via ${match.provider}`);
+  }
+  if ((match.elimination_order || []).length) {
+    parts.push(`utslagna i ordning: ${match.elimination_order.join(", ")}`);
+  }
+  if (match.legacy) parts.push("äldre logg utan spelarprofiler");
+  p.textContent = parts.join(" · ");
+  return p;
+}
+
+function roundRow(round, source, game) {
+  const bits = [`${round.events.length} händelser`];
+  if (round.shown) {
+    // Vid flera slag byts tärningarna mitt i rundan. Visa då både start och
+    // slut, så att rubriken inte påstår fel värde.
+    bits.push(
+      round.rolls > 1 && round.final_shown && round.final_shown !== round.shown
+        ? `tärningar ${round.shown} → ${round.final_shown}`
+        : `tärningar ${round.shown}`
+    );
+  }
+  if (round.rolls > 1) bits.push(`${round.rolls} slag`);
+  if (round.lives_lost) {
+    bits.push(`${round.losers.join(", ")} −${round.lives_lost} liv`);
+  }
+  const key = drillKey("r", source, game, round.round);
+  const details = drillDetails(
+    key,
+    "drill-row drill-round",
+    `<span class="drill-title">Runda ${round.round}</span>` +
+      `<span class="drill-meta">${escapeHtml(bits.join(" · "))}</span>`
+  );
+  const body = drillBody(details);
+  round.events.forEach((event, i) => {
+    body.appendChild(eventRow(event, source, game, round.round, i));
+  });
+  return details;
+}
+
+// Vad en händelse heter i rubriken. Slag och liv har ingen egen replik, så de
+// får en beskrivning i stället.
+const _ACTION_LABEL = {
+  slag: "slag",
+  påstå: "påstår",
+  slå: "slår",
+  höja: "höjer",
+  skicka: "skickar vidare",
+  syna: "synar",
+  liv: "förlorar liv",
+  slut: "matchen slut",
+};
+
+// Bara de handlingar där spelaren själv säger budet. På "syna" och "skicka"
+// beskriver sant/falskt budet, inte spelaren, och får därför en annan etikett.
+const _OWN_CLAIM_ACTIONS = new Set(["påstå", "slå", "höja"]);
+
+function eventRow(event, source, game, roundNo, index) {
+  const label = _ACTION_LABEL[event.action] || event.action || event.kind;
+  const who = event.player_name || "";
+  const claim = event.claim_name ? ` ${event.claim_name}` : "";
+  const ownClaim = _OWN_CLAIM_ACTIONS.has(event.action);
+  const bits = [];
+  if (event.shown_name && event.kind !== "roll") bits.push(`tärningar ${event.shown_name}`);
+  // claim_truth är räknat mot tärningarna på servern och gäller alla rader med
+  // bud. Loggens lie/truth gör inte det på syn och skicka.
+  if (event.claim_name) {
+    if (event.claim_truth === false) bits.push(ownClaim ? "lögn" : "budet falskt");
+    else if (event.claim_truth === true) bits.push(ownClaim ? "sant" : "budet sant");
+  }
+  if (event.unseen === true) bits.push("utan att titta");
+  if (event.lives_lost) bits.push(`−${event.lives_lost} liv`);
+  if (event.corrected) bits.push("rättat bud");
+
+  const key = drillKey("e", source, game, roundNo, index);
+  const summary =
+    `<span class="drill-title">${escapeHtml(who)} ${escapeHtml(label)}${escapeHtml(claim)}</span>` +
+    (bits.length ? `<span class="drill-meta">${escapeHtml(bits.join(" · "))}</span>` : "");
+
+  const details = drillDetails(key, "drill-row drill-event", summary);
+  const body = drillBody(details);
+  body.appendChild(eventDetail(event));
+  return details;
+}
+
+function eventDetail(event) {
+  const dl = document.createElement("dl");
+  dl.className = "drill-fields";
+  const ownClaim = _OWN_CLAIM_ACTIONS.has(event.action);
+  const add = (label, value) => {
+    const dt = document.createElement("dt");
+    dt.textContent = label;
+    const dd = document.createElement("dd");
+    dd.textContent = value;
+    dl.append(dt, dd);
+  };
+
+  // Texten först: den är det man läser.
+  [
+    ["line", "Replik"],
+    ["choice_line", "Val"],
+    ["reasoning", "Motivering"],
+    ["choice_reasoning", "Motivering till valet"],
+  ].forEach(([field, label]) => {
+    if (event[field]) add(label, String(event[field]));
+  });
+
+  [
+    ["claim_name", "Bud"],
+    ["previous_claim_name", "Föregående bud"],
+    ["accepted_claim_name", "Antaget bud"],
+    ["shown_name", "Tärningar"],
+  ].forEach(([field, label]) => {
+    if (event[field]) add(label, String(event[field]));
+  });
+
+  // Lögnflaggan hör till budet. Bara den som själv sa budet kan kallas lögnare.
+  if (event.claim_name && event.claim_truth != null) {
+    add(
+      ownClaim ? (event.claim_truth ? "Sant" : "Lögn") : "Budet mot tärningarna",
+      event.claim_truth ? "sant" : "falskt"
+    );
+  }
+  if (event.unseen === true) add("Sagd utan att titta", "ja");
+  if (event.corrected === true) {
+    add("Rättat bud", "ja");
+    if (event.proposed != null) add("Agenten föreslog", String(event.proposed));
+  }
+  if (event.caller_loses != null && event.action === "syna") {
+    add("Synaren förlorade", event.caller_loses ? "ja" : "nej");
+  }
+  if (event.holder_name) add("Höll budet", event.holder_name);
+
+  if (event.lives_lost) add("Liv förlorade", String(event.lives_lost));
+  if (event.lives_left != null) add("Liv kvar", String(event.lives_left));
+  if (event.actor_lives != null) add("Spelarens liv", String(event.actor_lives));
+  if (event.active_players != null) add("Aktiva spelare", String(event.active_players));
+
+  if (Array.isArray(event.standings) && event.standings.length) {
+    add(
+      "Livsläge",
+      event.standings
+        .map((s) => `${s.name} ${s.lives}${s.active ? "" : " (ute)"}`)
+        .join(", ")
+    );
+  }
+  if (dl.children.length === 0) {
+    const p = document.createElement("p");
+    p.className = "hint";
+    p.textContent = "Händelsen har inga fler fält.";
+    return p;
+  }
+  return dl;
 }
 
 function renderMatchSummary(summary, data) {
@@ -1058,7 +1328,7 @@ function renderMatchList(data) {
   // matchnummer, inte i den ordning de råkade bli färdiga.
   [...records]
     .sort((a, b) => (a.game || 0) - (b.game || 0))
-    .forEach((rec) => list.appendChild(matchRow(rec)));
+    .forEach((rec) => list.appendChild(matchRow(rec, data.source)));
 }
 
 function summaryKey(summary) {
@@ -1225,7 +1495,59 @@ function renderAnalysisLogs(data) {
     meta.textContent = `${log.games} matcher${log.local ? " · lokal" : ""}`;
     label.append(cb, name, meta);
     box.appendChild(label);
+
+    // Detaljvyn ligger utanför labeln, annars hade ett klick på knappen
+    // växlat kryssrutan. Den fungerar även för loggar som inte är inlästa.
+    box.appendChild(logDrill(log));
   });
+}
+
+// En hopfälld rad per logg: match → runda → händelse, hämtat lat.
+function logDrill(log) {
+  const key = drillKey("s", log.name);
+  const details = drillDetails(
+    key,
+    "drill-row drill-source",
+    `<span class="drill-title">Visa matcher</span>` +
+      `<span class="drill-meta">fäll ut för att bläddra i rundor och händelser</span>`,
+    (d) => loadSourceMatches(d, log.name)
+  );
+  return details;
+}
+
+async function loadSourceMatches(details, source) {
+  const body = drillBody(details);
+  if (details.dataset.loaded === "1" || details.dataset.loading === "1") return;
+  details.dataset.loading = "1";
+  body.innerHTML = '<p class="hint">Hämtar matcher …</p>';
+  let data;
+  try {
+    const url = `/api/analysis/matches?source=${encodeURIComponent(source)}`;
+    data = await drillFetch(drillKey("s", source), url);
+  } catch (e) {
+    delete details.dataset.loading;
+    body.innerHTML = `<p class="error">Kunde inte hämta matcherna: ${escapeHtml(e.message)}</p>`;
+    return;
+  }
+  delete details.dataset.loading;
+  details.dataset.loaded = "1";
+  body.innerHTML = "";
+  (data.matches || []).forEach((m) => body.appendChild(sourceMatchRow(m, source)));
+}
+
+function sourceMatchRow(m, source) {
+  const bits = [`${m.events} händelser`];
+  if (m.legacy) bits.push("äldre logg");
+  const key = drillKey("m", source, m.game);
+  const details = drillDetails(
+    key,
+    "drill-row drill-match",
+    `<span class="drill-title">Match ${m.game}</span>` +
+      `<span class="drill-meta">vinnare ${escapeHtml(m.winner)} · ${m.rounds} rundor · ` +
+      `${escapeHtml(bits.join(" · "))}</span>`,
+    (d) => loadMatchRounds(d, source, m.game)
+  );
+  return details;
 }
 
 // Markerade loggar läses in, avmarkerade tas bort. Sker direkt, utan feedback.

@@ -496,6 +496,53 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 .match-download { margin-top: 1.2rem; }
 .match-download a { color: var(--accent-2); }
 
+/* -- Utvikning: match → runda → händelse -- */
+/* Raderna ligger inuti varandra, så indraget visar djupet. Vänsterkanten
+   gör det tydligt vilken nivå man tittar på. */
+.drill-row {
+  border-left: 2px solid var(--line);
+  padding: 0.3rem 0 0.3rem 0.7rem;
+  margin-top: 0.35rem;
+}
+.drill-match > summary,
+.drill-round > summary,
+.drill-event > summary {
+  cursor: pointer;
+  display: flex;
+  gap: 0.9rem;
+  align-items: baseline;
+  flex-wrap: wrap;
+  list-style: none;
+}
+.drill-row > summary::-webkit-details-marker { display: none; }
+.drill-row > summary:hover .drill-title { color: var(--text); }
+.drill-title { font-weight: 600; font-size: 0.9rem; }
+.drill-meta { color: var(--muted); font-size: 0.8rem; }
+.drill-body { margin-top: 0.3rem; }
+.drill-match { border-left-color: var(--accent-2); }
+.drill-round { border-left-color: var(--line); }
+.drill-event { border-left-color: #3d465c; }
+.drill-event .drill-title { font-weight: 400; }
+/* Öppna rader får en ljusare bakgrund, så att man ser var man är i trädet. */
+.drill-row[open] > summary .drill-title { color: var(--text); }
+.drill-match-meta { font-size: 0.82rem; color: var(--muted); margin-bottom: 0.3rem; }
+/* Händelsens fält som en tvåkolumnslista: etikett till vänster, värde till
+   höger. Långa motiveringar radbryts och kan läsas. */
+.drill-fields {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.15rem 0.9rem;
+  margin: 0.3rem 0 0.5rem;
+  font-size: 0.85rem;
+}
+.drill-fields dt { color: var(--muted); }
+.drill-fields dd { margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 620px) {
+  .drill-fields { grid-template-columns: 1fr; }
+  .drill-fields dt { margin-top: 0.35rem; }
+  .drill-row { padding-left: 0.5rem; }
+}
+
 /* -- Flik 5: analys -- */
 .analysis-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; }
 .analysis-actions button { margin-top: 0; width: auto; }
@@ -517,6 +564,12 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 .analysis-log input[type="checkbox"] { width: auto; flex: none; }
 .analysis-log-name { font-size: 0.92rem; }
 .analysis-log-meta { margin-left: auto; color: var(--muted); font-size: 0.8rem; }
+/* Detaljraden ligger under loggraden och hör till samma logg. */
+.drill-source {
+  margin: -0.15rem 0 0.5rem 0.7rem;
+  border-left-color: var(--accent-2);
+}
+.drill-source .drill-title { font-weight: 400; font-size: 0.85rem; }
 .analysis-ask { display: grid; gap: 0.6rem; }
 .analysis-ask textarea {
   width: 100%;

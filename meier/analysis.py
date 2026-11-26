@@ -443,6 +443,15 @@ class AnalysisStore:
         with self.lock:
             return [rec for records in self._sources.values() for rec in records]
 
+    def records_for(self, name: str) -> list[dict[str, Any]]:
+        """Protokollen från en inläst källa, i filens ordning. Tom lista om okänd.
+
+        Hela protokollen med händelser hålls kvar per källa, så en detaljvy kan
+        läsa en enskild match utan att läsa om filen från disk.
+        """
+        with self.lock:
+            return list(self._sources.get(name, []))
+
     def digest(self) -> dict[str, Any]:
         return build_digest(self.snapshot())
 
