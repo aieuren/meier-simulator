@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from .agents.roster import make_players
+from .legacy import upgrade_record
 from .llm import LLMClient
 from .rules import MEIER, rank
 from .session import LogEntry, Session
@@ -425,16 +426,16 @@ def write_jsonl(records: Iterable[GameRecord | FailedMatch], path: str | Path) -
 def read_jsonl(path: str | Path) -> list[dict[str, Any]]:
     """Läs tillbaka en JSONL-fil med matchprotokoll.
 
-    Filen läses som den är. Protokoll från före ``format``-fältet stöds inte:
-    de saknar spelarnas förmågor, och en analys på dem skulle se ut som en
-    analys av en serie med tomma profiler.
+    Filen läses som den är, men äldre nyckelnamn översätts vid inläsning, så
+    att en logg från före namnbytet går att läsa som en ny. Filerna skrivs
+    aldrig om: de är historik.
     """
     records: list[dict[str, Any]] = []
     with open(path, encoding="utf-8") as fh:
         for line in fh:
             line = line.strip()
             if line:
-                records.append(json.loads(line))
+                records.append(upgrade_record(json.loads(line)))
     return records
 
 

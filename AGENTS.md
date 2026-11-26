@@ -139,6 +139,24 @@ lower claim). Multiple agents with distinct roles can also play full games.
   at load time, so historical JSONL files keep working and are never rewritten
   on disk. Both `read_jsonl` and `analysis.parse_jsonl_text` call it. Do not
   delete it while old logs exist under `meier-logs/`.
+
+  Three log formats exist in practice, and all three must stay readable:
+
+  | Format | Markers | In the repo |
+  |---|---|---|
+  | 1, pre-rename | `bid`, `bid_name`, `blind`, `player_stats` keyed `bids`/`blinds`, action `"bud"`, role keys like `arling` | `meier-matcher-2026-11-12-*.jsonl` |
+  | 2, post-rename, pre-version | `claim`, `unseen`, `player_stats` still a dict | `2026-11-25-*.jsonl`, `2026-11-26-005458.jsonl` |
+  | 3, current | `format: 2` plus `params`/`uses_llm` per player | new runs |
+
+  Only format 3 has the players' abilities. Formats 1 and 2 load fine and
+  analyse fine except for the "FÖRMÅGA MOT UTFALL" table, which needs
+  `params`. `normalize_record` accepts a record without `format` and tags it
+  `format: 0` **in memory only**; `build_digest` then reports `legacy_games`
+  and `render_digest_text` writes an `OBS:` line explaining the empty
+  abilities table. Files on disk are never rewritten. `tests/test_legacy.py`
+  covers all three; it exists because an earlier change required `format` at
+  load time, which silently dropped every old log and crashed `summarize`
+  with `KeyError: 'claims'`.
 - `meier/cli.py` – command line entry points (`announce`, `decide`, `play`,
   `session`, `match`, `summarize`).
 - `meier/analysis.py` – analysis of collected match protocols. `build_digest`

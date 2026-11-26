@@ -277,12 +277,13 @@ def test_an_unexpected_error_is_not_mistaken_for_an_llm_error(monkeypatch):
 # -- Gamla loggar (skrivna före namnbytet bid -> claim) ----------------------
 
 
-def test_logg_utan_format_avvisas(tmp_path):
-    """En post utan ``format`` läses inte som ett protokoll.
+def test_logg_utan_format_lases_som_aldre_logg(tmp_path):
+    """En post utan ``format`` är en äldre logg och ska läsas in, inte kastas.
 
-    Den skrevs före protokollversionen och saknar spelarnas förmågor. Att läsa
-    den som en ny post skulle göra en serie med tomma profiler, och då går det
-    inte att se skillnad på "spelade utan profil" och "loggades inte".
+    Filerna på disk skrivs inte om: de är historik. Händelserna och statistiken
+    i en äldre post är fullt läsbara, så posten behålls med ``format`` 0.
+    Flaggan gör att en blandad serie syns i sammanställningen i stället för att
+    gamla matcher tyst försvinner ur underlaget.
     """
     path = tmp_path / "gammal.jsonl"
     post = {
@@ -295,8 +296,18 @@ def test_logg_utan_format_avvisas(tmp_path):
 
     raw = match.read_jsonl(path)
     assert "format" not in raw[0]
-    records, skipped = analysis.parse_jsonl_text(path.read_text(encoding="utf-8"))
-    assert records == [] and skipped == 1
+
+    text = path.read_text(encoding="utf-8")
+    records, skipped = analysis.parse_jsonl_text(text)
+    assert skipped == 0
+    assert len(records) == 1
+    assert records[0]["format"] == 0
+
+    digest = analysis.build_digest(records)
+    assert digest["legacy_games"] == 1
+    assert digest["formats"] == {0: 1}
+    # Originalposten på disk ska vara orörd.
+    assert "format" not in json.loads(text.splitlines()[0])
 
 
 # -- Protokollet bär spelarnas förmågor -------------------------------------

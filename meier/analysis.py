@@ -14,14 +14,19 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+from .legacy import upgrade_record
 from .llm import LLMClient, LLMConfig, LLMError, parse_json_object
 from .match import PROTOCOL_FORMAT, summarize
 
 #: Fält som måste finnas i en post för att den ska räknas som ett protokoll.
-#: ``format`` krävs med flit: en post som skrevs före protokollversionen saknar
-#: spelarnas förmågor, och den går inte att skilja från en serie med tomma
-#: profiler. Att avvisa den är ärligare än att analysera den som om den vore ny.
-_REQUIRED = ("format", "players", "events", "player_stats", "winner_role")
+#: ``format`` står inte här: poster skrivna före protokollversionen saknar det
+#: men är fullt läsbara i övrigt. De läses in och flaggas i stället för att
+#: kastas, så att äldre serier fortfarande går att analysera.
+_REQUIRED = ("players", "events", "player_stats", "winner_role")
+
+#: Protokollversioner vi känner igen. 2 är den nuvarande. Poster utan ``format``
+#: skrevs före versioneringen och saknar spelarnas förmågor.
+_KNOWN_FORMATS = (2,)
 
 #: Hur många av de vanligaste värdena som tas med per fördelning.
 _TOP_N = 12
@@ -31,13 +36,18 @@ _MAX_SERIES = 100
 
 
 def normalize_record(obj: Any) -> dict[str, Any] | None:
-    """Returnera posten om den ser ut som ett matchprotokoll, annars None."""
+    """Returnera posten om den ser ut som ett matchprotokoll, annars None.
+
+    En post utan ``format`` är en äldre logg. Den saknar spelarnas förmågor,
+    men händelserna och statistiken finns, så den går att analysera. Den
+    behålls och får ``format`` 0, vilket sammanställningen flaggar.
+    """
     if not isinstance(obj, dict):
         return None
     if not all(key in obj for key in _REQUIRED):
         return None
-    # En post från en nyare version kan innehålla fält vi inte känner igen. Den
-    # läses ändå, men flaggas, så att en blandad serie syns i sammanställningen.
+    if record_format(obj) is None:
+        obj = {**obj, "format": 0}
     return obj
 
 
@@ -60,7 +70,8 @@ def parse_jsonl_text(text: str) -> tuple[list[dict[str, Any]], int]:
         except json.JSONDecodeError:
             skipped += 1
             continue
-        rec = normalize_record(obj)
+        # Filerna skrivs aldrig om; äldre nyckelnamn översätts vid inläsning.
+        rec = normalize_record(upgrade_record(obj))
         if rec is None:
             skipped += 1
             continue
@@ -112,8 +123,15 @@ def build_digest(records: list[dict[str, Any]]) -> dict[str, Any]:
             }
         )
 
+    formats = Counter(record_format(r) for r in records)
+    legacy = formats.get(0, 0)
+    unknown = sum(n for f, n in formats.items() if f not in _KNOWN_FORMATS and f != 0)
+
     return {
         "games": len(records),
+        "formats": dict(formats),
+        "legacy_games": legacy,
+        "unknown_format_games": unknown,
         "avg_rounds": summary.get("avg_rounds", 0.0),
         "starter_win_rate": summary.get("starter_win_rate", 0.0),
         "roles": summary.get("roles", {}),
@@ -184,6 +202,21 @@ def render_digest_text(digest: dict[str, Any]) -> str:
         if digest.get("games_series_truncated"):
             lines.append(f"(endast de första {_MAX_SERIES} matcherna visas)")
 
+    if digest.get("legacy_games"):
+        lines.append("")
+        lines.append(
+            f"OBS: {digest['legacy_games']} av {digest['games']} matcher skrevs före "
+            "protokollversionen och saknar spelarnas förmågor. Deras händelser och "
+            "statistik räknas som vanligt, men FÖRMÅGA MOT UTFALL bygger bara på de "
+            "matcher som har profiler."
+        )
+    if digest.get("unknown_format_games"):
+        lines.append("")
+        lines.append(
+            f"OBS: {digest['unknown_format_games']} matcher har en protokollversion "
+            "den här koden inte känner igen. De läses ändå, men fält kan saknas."
+        )
+
     lines.append("")
     lines.append("SPELSÄTT PER ROLL (mätt ur händelserna)")
     tactics = digest.get("tactics", {})
@@ -213,6 +246,11 @@ def render_digest_text(digest: dict[str, Any]) -> str:
 
     lines.append("FÖRMÅGA MOT UTFALL (vinstfrekvens per nivå)")
     abilities = digest.get("abilities", {})
+    if not abilities:
+        lines.append(
+            "  (tomt: matcherna saknar spelarnas förmågor, så nivåerna kan inte "
+            "räknas. Kör en ny serie med nuvarande version för att få dem.)"
+        )
     for key, levels in abilities.items():
         for level, b in levels.items():
             lines.append(
@@ -225,11 +263,16 @@ def render_digest_text(digest: dict[str, Any]) -> str:
     setup = digest.get("setup") or {}
     if setup:
         lines.append("")
+        lines.append(f"Uppsättning: {setup.get('player_count')} spelare, "
+                     f"{', '.join(setup.get('roles') or [])}")
+        lives = setup.get("lives_per_player") or []
+        if lives:
+            lines.append(f"Liv per spelare: {lives}")
+        else:
+            lines.append("Liv per spelare: okänt (loggen skrevs före protokollversionen)")
         lines.append(
-            f"Uppsättning: {setup.get('player_count')} spelare, "
-            f"{', '.join(setup.get('roles') or [])}, "
-            f"liv per spelare {setup.get('lives_per_player')}, "
-            f"profiler oförändrade i serien: {'ja' if setup.get('stable') else 'nej'}"
+            "Profiler oförändrade i serien: "
+            f"{'ja' if setup.get('stable') else 'nej'}"
         )
 
     lines.append("")
