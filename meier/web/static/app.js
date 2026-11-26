@@ -905,13 +905,13 @@ function matchProgressText(data) {
   return `${base}${live}${elapsed}…`;
 }
 
-// "match 2: runda 5, 3 kvar" för de matcher som körs just nu.
+// "match 2: runda 5, 3 spelare kvar" för de matcher som körs just nu.
 function liveMatchText(data) {
   const live = data.live || [];
   if (!live.length) return "";
   const parts = live.map((m) => {
     const runda = m.round ? `runda ${m.round}` : "startar";
-    const kvar = m.alive !== undefined ? `, ${m.alive} kvar` : "";
+    const kvar = m.alive !== undefined ? `, ${m.alive} spelare kvar` : "";
     return `match ${m.game}: ${runda}${kvar}`;
   });
   return ` (${parts.join(" · ")})`;
