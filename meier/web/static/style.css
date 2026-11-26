@@ -112,6 +112,15 @@ h2 {
 .hint { color: var(--muted); font-size: 0.9rem; margin: 0 0 1rem; }
 .hint.warn { color: var(--warn, #b45309); }
 
+/* Feltexten från ett bortfall kan vara lång (kvot, nätverk). Den ska gå att
+   läsa och kopiera, inte tryckas ihop till en enda lång rad. */
+.hint.fail-reason {
+  margin-top: 0.25rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
+}
+
 .dice-row {
   display: flex;
   gap: 1rem;

@@ -262,6 +262,33 @@ def test_failed_matches_are_written_and_excluded_from_the_summary(tmp_path, monk
     assert stats["failed"]["count"] == 2
     assert stats["failed"]["games"] == [1, 2]
     assert stats["failed"]["reasons"] == {"llm": 2}
+    # Orsaken måste följa med ut, inte bara typen. Kvotbrist och nätverksfel
+    # kräver helt olika åtgärder.
+    assert stats["failed"]["messages"] == ["LLMError: överbelastad"]
+
+
+def test_failed_messages_are_deduplicated_and_capped(monkeypatch):
+    """Samma fel två gånger ska bara visas en gång, och listan ska vara kort."""
+    recs = [
+        {"failed": True, "kind": "llm", "error": "LLMError: kvoten är slut"},
+        {"failed": True, "kind": "llm", "error": "LLMError: kvoten är slut"},
+        {"failed": True, "kind": "llm", "error": "LLMError: nätverket svarar inte"},
+        {"failed": True, "kind": "llm", "error": "LLMError: modellen är överbelastad"},
+        {"failed": True, "kind": "llm", "error": "LLMError: ett fjärde fel"},
+    ]
+    stats = match.summarize(recs)
+    assert stats["failed"]["count"] == 5
+    assert stats["failed"]["messages"] == [
+        "LLMError: kvoten är slut",
+        "LLMError: nätverket svarar inte",
+        "LLMError: modellen är överbelastad",
+    ]
+
+
+def test_failed_messages_skip_records_without_error():
+    stats = match.summarize([{"failed": True, "kind": "okänt"}])
+    assert stats["failed"]["count"] == 1
+    assert stats["failed"]["messages"] == []
 
 
 def test_an_unexpected_error_is_not_mistaken_for_an_llm_error(monkeypatch):

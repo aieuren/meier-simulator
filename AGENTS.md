@@ -28,6 +28,10 @@ räcker alltså till ungefär 25 matcher, så en längre serie tar slut. Kör d�
 `--no-llm` (snabb, deterministisk, ingen kvot) eller färre matcher.
 
 Signalen är `/api/health` (provider `gemini`) och `LLMError` med väntetiden.
+`summarize` skickar med de faktiska feltexterna i `failed.messages` (högst tre,
+dubbletter borttagna), inte bara typen i `failed.reasons`. Typen "llm" säger
+bara att något gick fel; kvotbrist, nätverksfel och modellfel kräver olika
+åtgärder, så orsaken måste synas i sammanställningen.
 `tests/test_llm_retry.py` vaktar dygnstakslogiken och
 `tests/test_docs.py` vaktar att inget spår av den bortvalda leverantören
 smyger tillbaka.

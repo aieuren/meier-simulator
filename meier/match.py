@@ -558,6 +558,24 @@ def _failed_reasons(failed: list[dict[str, Any]]) -> dict[str, int]:
     return reasons
 
 
+def _failed_messages(failed: list[dict[str, Any]], limit: int = 3) -> list[str]:
+    """De faktiska feltexterna, ett per bortfall (högst ``limit``).
+
+    Typen ("llm") säger att något gick fel men inte varför. Kvotbrist och
+    nätverksfel kräver helt olika åtgärder, så orsaken måste följa med ut.
+    """
+    messages: list[str] = []
+    for rec in failed:
+        error = " ".join(str(rec.get("error") or "").split())
+        if not error:
+            continue
+        if error not in messages:
+            messages.append(error)
+        if len(messages) >= limit:
+            break
+    return messages
+
+
 def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
     """Aggregera en serie matcher till statistik per roll och totalt.
 
@@ -676,6 +694,7 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
             "rate": _rate(len(failed), len(records)),
             "games": [rec.get("game") for rec in failed],
             "reasons": _failed_reasons(failed),
+            "messages": _failed_messages(failed),
         },
         "avg_rounds": round(total_rounds / total_games, 3) if total_games else 0.0,
         "winner_counts": winner_counts,

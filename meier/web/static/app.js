@@ -1016,12 +1016,18 @@ function renderMatchSummary(summary, data) {
           .join(", ")}.</p>`
       : "";
   const fail = summary.failed;
+  // Typen ("llm") säger bara att något gick fel. Orsaken – kvot, nätverk,
+  // modellfel – avgör vad man ska göra, så den måste visas.
+  const failMessages = (fail && fail.messages) || [];
   const failLine =
     fail && fail.count
       ? `<p class="hint warn">${fail.count} av ${summary.attempted} matcher föll bort
          och räknas inte i statistiken (${Object.entries(fail.reasons)
            .map(([k, n]) => `${k}: ${n}`)
-           .join(", ")}).</p>`
+           .join(", ")}).</p>` +
+        failMessages
+          .map((m) => `<p class="hint warn fail-reason">${escapeHtml(m)}</p>`)
+          .join("")
       : "";
   const tokenLine = tok
     ? `<p class="hint">
