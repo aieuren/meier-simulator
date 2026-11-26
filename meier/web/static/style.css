@@ -503,6 +503,14 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 .ms-name { min-width: 11rem; font-weight: 600; }
 .ms-cell { color: var(--muted); }
 .match-download { margin-top: 1.2rem; }
+/* Teknisk information om var serien hamnar. Den hör inte till spelet, så den
+   ligger sist och avskild med en tunn linje. */
+.match-repo-hint {
+  margin-top: 1.6rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.8rem;
+}
 .match-download a { color: var(--accent-2); }
 
 /* -- Utvikning: match → runda → händelse -- */
@@ -515,7 +523,8 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 }
 .drill-match > summary,
 .drill-round > summary,
-.drill-event > summary {
+.drill-event > summary,
+.drill-source > summary {
   cursor: pointer;
   display: flex;
   gap: 0.9rem;
@@ -529,6 +538,30 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 .drill-meta { color: var(--muted); font-size: 0.8rem; }
 .drill-body { margin-top: 0.3rem; }
 .drill-match { border-left-color: var(--accent-2); }
+
+/* Utfällbar rad: en triangel som pekar höger när raden är stängd och ner när
+   den är öppen. Utan den syns det inte att raden går att fälla ut, eftersom
+   webbläsarens egen markör är borttagen. */
+.match-row > summary::before,
+.drill-row > summary::before {
+  content: "";
+  flex: 0 0 auto;
+  align-self: center;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+}
+.match-row[open] > summary::before,
+.drill-row[open] > summary::before {
+  transform: rotate(45deg);
+  border-color: var(--accent-2);
+}
+/* Fällbara rader ska kännas klickbara. */
+.match-row > summary:hover::before,
+.drill-row > summary:hover::before { border-color: var(--text); }
 .drill-round { border-left-color: var(--line); }
 .drill-event { border-left-color: #3d465c; }
 .drill-event .drill-title { font-weight: 400; }

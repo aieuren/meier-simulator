@@ -876,7 +876,9 @@ function roundRow(round, source, game) {
 const _ACTION_LABEL = {
   slag: "slag",
   påstå: "påstår",
-  slå: "slår",
+  // "slår 64" läses som att spelaren slog 64 med tärningarna. Att slå är att
+  // skaka bägaren på nytt, så rubriken säger båda stegen.
+  slå: "slår om och säger",
   höja: "höjer",
   skicka: "skickar vidare",
   syna: "synar",

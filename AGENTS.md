@@ -29,6 +29,10 @@ räcker alltså till ungefär 25 matcher, så en längre serie tar slut. Kör d�
 finns i webbgränssnittet som kryssrutan "Använd språkmodellen" i Matchserie
 (`with_llm` i `MatchRequest`), så appen går att använda även när kvoten är slut.
 
+Etiketten för `slå` är "slår om och säger", inte "slår". Att slå är att skaka
+bägaren på nytt och säga ett högre bud; "slår 64" läses som att spelaren slog
+64 med tärningarna. Samma formulering används i CLI:t.
+
 Signalen är `/api/health` (provider `gemini`) och `LLMError` med väntetiden.
 `summarize` skickar med de faktiska feltexterna i `failed.messages` (högst tre,
 dubbletter borttagna), inte bara typen i `failed.reasons`. Typen "llm" säger
