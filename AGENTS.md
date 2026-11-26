@@ -735,6 +735,10 @@ Watch the two traps when touching this:
   the explicit way to play a rule engine.
 - Never print the session API key. Read it from the process env if needed.
 - The web app is served on port 12000 in this environment.
+- `/api/health` svarar alltid 200 när appen lever: `{"status":"ok","llm":true,
+  "provider":…, "model":…}` med nyckel, annars `llm:false` och `null`. run.sh,
+  SessionStart-kroken och Canvas-panelen använder svaret som "appen kör"-signal;
+  en 500 vid saknad nyckel fick dem att starta om en frisk app.
 - Long runs / sandbox lifetime: the runtime pauses an idle environment
   (`OH_RUNTIME_IDLE_TIMEOUT_SECONDS`, 1200s = 20 min in Canvas). LLM traffic and
   the client's 3s status polling keep it awake. A match series runs in a

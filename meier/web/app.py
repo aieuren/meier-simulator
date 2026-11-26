@@ -324,8 +324,18 @@ def decide(req: DecideRequest) -> dict:
 
 @app.get("/api/health")
 def health() -> dict:
-    cfg = LLMClient().config
-    return {"status": "ok", "provider": cfg.provider, "model": cfg.model}
+    """Appen svarar även utan LLM-nyckel; då är llm false och modellen null.
+
+    run.sh, SessionStart-kroken och Canvas-panelen avgör om appen kör med
+    hjälp av den här slutpunkten. En 500 på grund av en saknad nyckel skulle
+    få dem att tro att appen är nere och starta om den i tid och otid, trots
+    att regelbaserat spel fungerar.
+    """
+    try:
+        cfg = LLMClient().config
+    except LLMError:
+        return {"status": "ok", "llm": False, "provider": None, "model": None}
+    return {"status": "ok", "llm": True, "provider": cfg.provider, "model": cfg.model}
 
 
 # -- Interaktiv spelsession ------------------------------------------------
