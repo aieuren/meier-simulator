@@ -180,7 +180,28 @@ lower claim). Multiple agents with distinct roles can also play full games.
   `/api/analysis/select` sets the selection — chosen names are read in,
   dropped names are removed (`LogRepo.log_path` rejects anything outside the
   clone).
+- Drill-down in the analysis tab. `/api/analysis/matches?source=` returns the
+  match briefs of one log without events, and `/api/analysis/match?source=&game=`
+  returns one match with `rounds_list` (from `match.group_rounds`). Both resolve
+  the source on disk, so the drill-down works after a restart when the in-memory
+  store is empty. `match.group_rounds` buckets events by `round` and adds
+  `rolls`, `lives_lost` and `losers` per round; a round can hold several rolls
+  when the claim goes a full lap, so the header shows start dice and, when they
+  differ, final dice. The frontend opens three levels (source → match → round →
+  event) lazily via `attachDrill`/`drillKey`, and remembers open rows across
+  redraws.
 - `tests/` – unit tests. No real LLM calls; `FakeLLM`/`ScriptedAgent` are used.
+
+## `truth` in the log is not claim truth (gotcha)
+
+`LogEntry.truth` describes the *player's own* claim. The call and pass entries
+set it to `False` on purpose, because that player did not state a claim. So
+`truth is False` on a `syna` row does **not** mean the claim was a bluff; every
+pass would look like a lie. To judge the claim against the dice on any row, use
+`match.claim_truth(event)` (which uses `rules.is_true_claim`), and the detail
+view sets it as `claim_truth` on each event. The pass entry now records the
+carried claim's truth in `truth` too, since the passer takes over responsibility
+for that claim.
 
 ## Meier ranking is non-numeric (gotcha)
 
