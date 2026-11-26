@@ -25,7 +25,9 @@ hjälper ingen väntan på minuter. Google skriver själv hur länge det är kva
 
 Räkna med att en match med språkmodell gör ca 20 anrop. 500 anrop per dygn
 räcker alltså till ungefär 25 matcher, så en längre serie tar slut. Kör då
-`--no-llm` (snabb, deterministisk, ingen kvot) eller färre matcher.
+`--no-llm` (snabb, deterministisk, ingen kvot) eller färre matcher. Samma val
+finns i webbgränssnittet som kryssrutan "Använd språkmodellen" i Matchserie
+(`with_llm` i `MatchRequest`), så appen går att använda även när kvoten är slut.
 
 Signalen är `/api/health` (provider `gemini`) och `LLMError` med väntetiden.
 `summarize` skickar med de faktiska feltexterna i `failed.messages` (högst tre,

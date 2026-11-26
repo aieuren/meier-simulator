@@ -55,6 +55,32 @@ def test_run_series_and_fetch_status(monkeypatch):
     assert rec["winner"] and rec["events"] and rec["player_stats"]
 
 
+def test_series_can_run_without_llm(monkeypatch):
+    """Utan språkmodell ska serien spelas med den mekaniska agentfabriken.
+
+    Kvoten på fri nivå tar slut, och då måste appen gå att använda ändå.
+    """
+    client = _client(monkeypatch)
+    calls = []
+    real = match._new_agents_no_llm
+
+    def counting(role_keys):
+        calls.append(list(role_keys))
+        return real(role_keys)
+
+    monkeypatch.setattr(match, "_new_agents_no_llm", counting)
+    start = client.post(
+        "/api/matches/run", json={"count": 1, "check_in": False, "with_llm": False}
+    )
+    assert start.status_code == 200
+
+    data = _wait_done(client)
+    assert data["error"] is None
+    assert data["done"] == 1
+    assert calls, "den LLM-fria fabriken ska ha använts"
+    assert data["summary"]["games"] == 1
+
+
 def test_summary_and_download_after_run(monkeypatch):
     client = _client(monkeypatch)
     client.post("/api/matches/run", json={"count": 1, "check_in": False})

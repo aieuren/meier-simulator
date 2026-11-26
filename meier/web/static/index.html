@@ -158,8 +158,16 @@
         <label>Samtidiga matcher
           <input type="number" id="matchWorkers" min="1" max="8" value="3" />
         </label>
+        <label class="check">
+          <input type="checkbox" id="matchWithLlm" checked />
+          Använd språkmodellen
+        </label>
         <button id="matchRunBtn" class="primary">Spela serien</button>
       </div>
+      <p class="hint" id="matchLlmHint">
+        Utan språkmodellen spelas serien direkt, utan kvotförbrukning.
+        Replikerna blir mekaniska.
+      </p>
       <p class="hint" id="matchLogRepoHint" hidden></p>
 
       <div id="matchStatus" class="session-status" hidden></div>

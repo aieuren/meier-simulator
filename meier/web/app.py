@@ -447,6 +447,13 @@ class MatchRequest(BaseModel):
     workers: int = Field(
         3, ge=1, le=8, description="Antal matcher som spelas samtidigt"
     )
+    with_llm: bool = Field(
+        True,
+        description=(
+            "Låt agenterna använda språkmodellen. False ger ett snabbt, "
+            "deterministiskt läge utan LLM-anrop och utan kvotförbrukning."
+        ),
+    )
     check_in: bool = Field(
         True,
         description=(
@@ -467,12 +474,14 @@ class _MatchJob:
         lives: int,
         workers: int = 1,
         check_in: bool = False,
+        with_llm: bool = True,
     ):
         self.roles = roles
         self.count = count
         self.lives = lives
         self.workers = workers
         self.check_in = check_in
+        self.with_llm = with_llm
         self.done = 0
         self.records: list[GameRecord] = []
         #: Matcher som inte kunde spelas klart. Serien fortsätter ändå.
@@ -541,6 +550,7 @@ class _MatchJob:
                     self.count,
                     lives=self.lives,
                     workers=self.workers,
+                    with_llm=self.with_llm,
                     on_match_progress=self._on_match_progress,
                 ):
                     data = rec.to_dict()
@@ -631,6 +641,7 @@ def matches_run(req: MatchRequest) -> dict:
     _match_job = _MatchJob(
         roles, req.count, req.lives, req.workers,
         check_in=req.check_in,
+        with_llm=req.with_llm,
     )
     _match_job.thread.start()
     return _match_job.status()

@@ -1240,6 +1240,7 @@ async function runMatchSeries() {
   const count = parseInt($("matchCount").value, 10) || 1;
   const lives = parseInt($("matchLives").value, 10) || 3;
   const workers = parseInt($("matchWorkers").value, 10) || 1;
+  const withLlm = $("matchWithLlm").checked;
 
   btn.disabled = true;
   // Ny serie: nollställ allt från förra körningen, så inga gamla siffror
@@ -1255,7 +1256,7 @@ async function runMatchSeries() {
     const res = await fetch("/api/matches/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ count, lives, workers }),
+      body: JSON.stringify({ count, lives, workers, with_llm: withLlm }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
