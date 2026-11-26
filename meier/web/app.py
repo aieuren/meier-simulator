@@ -31,7 +31,7 @@ from ..match import (
 )
 from ..opponents import OpponentTracker, describe_params
 from ..session import Session
-from .. import analysis, logrepo
+from .. import analysis, logrepo, quota
 
 STATIC_DIR = Path(__file__).parent / "static"
 RULES_PDF = Path(__file__).resolve().parents[2] / "docs" / "regler" / "meier-regler.pdf"
@@ -733,6 +733,21 @@ def matches_logrepo() -> dict:
         "dir": str(repo.directory),
         "repo": logrepo.logs_repo(),
     }
+
+
+@app.get("/api/quota")
+def quota_state() -> dict:
+    """Dagskvoten för Gemini: använt, kvar och när den fylls på.
+
+    Google redovisar inte återstående kvot i något API, så siffrorna bygger på
+    vår egen räkning (``meier/quota.py``) och gränsen för fri nivå. Ett 429
+    som säger att dygnstaket är nått sparas med Googles egen väntetid.
+    """
+    try:
+        model = LLMClient().config.model
+    except LLMError:
+        model = None
+    return quota.snapshot(model)
 
 
 # -- Analys: ställ frågor mot insamlade matchprotokoll ---------------------

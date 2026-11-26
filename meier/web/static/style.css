@@ -111,6 +111,14 @@ h2 {
 
 .hint { color: var(--muted); font-size: 0.9rem; margin: 0 0 1rem; }
 .hint.warn { color: var(--warn, #b45309); }
+.quota-line {
+  border-left: 3px solid var(--good);
+  background: var(--panel-2);
+  border-radius: 4px;
+  padding: 0.55rem 0.75rem;
+  line-height: 1.45;
+}
+.quota-line.warn { border-left-color: var(--bad); }
 
 /* Feltexten från ett bortfall kan vara lång (kvot, nätverk). Den ska gå att
    läsa och kopiera, inte tryckas ihop till en enda lång rad. */

@@ -78,6 +78,10 @@ async function boot() {
 
 
   setupLogRepo();
+  setupQuota();
+  // Kvoten tickar nedan medan en serie spelas, så raden hålls färsk även när
+  // serien står stilla mellan matcherna.
+  setInterval(setupQuota, 60000);
   setupAnalysis();
 }
 
@@ -93,6 +97,7 @@ function setupTabs() {
       document.querySelectorAll(".tab-panel").forEach((p) => {
         p.hidden = p.id !== tab.dataset.tab;
       });
+      if (tab.dataset.tab === "tab-spel") setupQuota();
     };
   });
 }
@@ -1404,6 +1409,7 @@ async function pollMatchSeries() {
 
     if (data.error) {
       status.textContent = `Fel: ${data.error}`;
+      setupQuota();
       btn.disabled = false;
       return;
     }
@@ -1417,6 +1423,7 @@ async function pollMatchSeries() {
       const name = data.file ? ` (${data.file})` : "";
       status.textContent = `Klart: ${data.done} matcher spelade${name}.`;
       if (data.push_status) status.textContent += ` ${data.push_status}.`;
+      setupQuota();
       btn.disabled = false;
       return;
     }
@@ -1443,6 +1450,53 @@ async function setupLogRepo() {
   } catch (e) {
     /* tyst: tipset är bara information */
   }
+}
+
+// -- Dagskvoten för Gemini ---------------------------------------------------
+//
+// Google redovisar inte kvarvarande kvot i något API. Servern räknar våra egna
+// anrop per dygn (meier/quota.py) och jämför med gränsen för fri nivå, så
+// siffrorna här är en uppskattning och inte ett kvitto från Google.
+
+async function setupQuota() {
+  const line = $("quotaLine");
+  if (!line) return;
+  try {
+    const res = await fetch("/api/quota");
+    if (!res.ok) return;
+    renderQuotaLine(await res.json());
+  } catch (e) {
+    /* tyst: kvotraden är en upplysning, inte ett krav för att spela */
+  }
+}
+
+function renderQuotaLine(q) {
+  const line = $("quotaLine");
+  if (!line || !q || !q.limit) return;
+  const used = Number(q.used) || 0;
+  const limit = Number(q.limit) || 0;
+  const left = Math.max(0, Number(q.matches_left) || 0);
+  const perMatch = Number(q.calls_per_match) || 0;
+  const reset = q.reset_at ? new Date(q.reset_at) : null;
+  const when = reset
+    ? `${reset.toLocaleString("sv-SE", {
+        weekday: "long",
+        hour: "2-digit",
+        minute: "2-digit",
+      })} (om ${formatDuration(q.reset_in_seconds)})`
+    : "vid midnatt Stillahavstid";
+  const leftText = left
+    ? `räcker till ungefär ${left} ${left === 1 ? "match" : "matcher"} (${perMatch} anrop per match)`
+    : "inget kvar i dag";
+  let text =
+    `Dagskvot ${q.model}: ${used} av ${limit} anrop använda, ${leftText}. ` +
+    `Ny kvot ${when}.`;
+  if (q.exhausted_hint) {
+    text += ` Google uppgav vid 429: kvoten fylls på om ${q.exhausted_hint}.`;
+  }
+  line.hidden = false;
+  line.className = "hint quota-line" + (left ? "" : " warn");
+  line.textContent = text;
 }
 
 // -- Flik 5: analys mot insamlade matchprotokoll ---------------------------
