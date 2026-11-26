@@ -7,7 +7,7 @@ nätverkstrafik eller riktig GitHub-token behövs.
 from __future__ import annotations
 
 import subprocess
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -41,38 +41,61 @@ def log_repo(tmp_path: Path):
     return LogRepo(directory=work, token_path=token), remote, work
 
 
-def test_series_filename_is_a_bare_timestamp():
+def test_series_filename_is_a_bare_timestamp_in_utc():
+    """Filnamnet bär tiden i UTC, oavsett containerns tidszon.
+
+    En stämpel utan zon gick att läsa som lokal tid, och då blev etiketten i
+    gränssnittet två timmar fel. Namnet ska alltid vara UTC, då går det att
+    räkna om till läsarens tid.
+    """
     name = logrepo.series_filename(datetime(2026, 11, 12, 1, 48, 13))
     assert name == "2026-11-12-014813.jsonl"
 
+    # Samma ögonblick, angivet i en annan zon, ska ge samma namn.
+    stockholm = timezone(timedelta(hours=1))
+    name_local = logrepo.series_filename(
+        datetime(2026, 11, 12, 2, 48, 13, tzinfo=stockholm)
+    )
+    assert name_local == name
 
-def test_series_label_reads_date_and_time():
+
+def test_series_time_is_utc_aware():
+    """Tiden ur namnet ska bära UTC, inte vara naiv."""
+    when = logrepo.parse_series_time("2026-11-12-014813.jsonl")
+    assert when == datetime(2026, 11, 12, 1, 48, 13, tzinfo=timezone.utc)
+    assert when.tzinfo is not None
+
+
+def test_series_epoch_matches_the_stamp():
+    """Epoch-värdet ska vara samma ögonblick som stämpeln, i UTC."""
+    epoch = logrepo.series_epoch("2026-11-12-014813.jsonl")
+    assert datetime.fromtimestamp(epoch, timezone.utc) == datetime(
+        2026, 11, 12, 1, 48, 13, tzinfo=timezone.utc
+    )
+    assert logrepo.series_epoch("trasig.jsonl") is None
+
+
+def test_series_label_is_marked_as_utc():
     label = logrepo.series_label("2026-11-12-014813.jsonl")
-    assert label == "12 november 2026, 01:48:13"
+    assert label == "12 november 2026, 01:48:13 (UTC)"
 
 
 def test_series_label_handles_legacy_prefixed_name():
     """Gamla loggar med prefixet meier-matcher- ska fortsätta läsas."""
     label = logrepo.series_label("meier-matcher-2026-11-12-014813.jsonl")
-    assert label == "12 november 2026, 01:48:13"
+    assert label == "12 november 2026, 01:48:13 (UTC)"
     assert logrepo.parse_series_time("meier-matcher-2026-11-12-014813.jsonl") == datetime(
-        2026, 11, 12, 1, 48, 13
+        2026, 11, 12, 1, 48, 13, tzinfo=timezone.utc
     )
 
 
-def test_series_label_handles_legacy_minute_only_name():
+def test_series_label_handles_minute_only_name():
     label = logrepo.series_label("2026-11-12-0148.jsonl")
-    assert label == "12 november 2026, 01:48"
-    assert logrepo.parse_series_time("2026-11-12-0148.jsonl") == datetime(
-        2026, 11, 12, 1, 48
-    )
+    assert label == "12 november 2026, 01:48 (UTC)"
 
 
 def test_series_label_falls_back_to_the_name():
     assert logrepo.series_label("nagot-annat.jsonl") == "nagot-annat.jsonl"
-    assert logrepo.parse_series_time("2026-11-12-014813.jsonl") == datetime(
-        2026, 11, 12, 1, 48, 13
-    )
     assert logrepo.parse_series_time("trasig.jsonl") is None
 
 

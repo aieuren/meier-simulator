@@ -158,7 +158,10 @@ def test_analysis_lists_logs_from_repo(monkeypatch, tmp_path):
     assert data["ready"] is True
     assert [e["name"] for e in data["logs"]] == [name]
     assert data["logs"][0]["games"] == 2
-    assert data["logs"][0]["label"] == "1 januari 2026, 12:00:00"
+    # Tiden skickas som epoch så att gränssnittet kan formatera den i läsarens
+    # tidszon i stället för att visa serverns (ofta UTC) klockslag.
+    assert data["logs"][0]["started_at"] == 1767268800.0
+    assert data["logs"][0]["label"] == "1 januari 2026, 12:00:00 (UTC)"
     assert data["logs"][0]["loaded"] is False
 
 

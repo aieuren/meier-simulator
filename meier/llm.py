@@ -1,7 +1,14 @@
 """LLM-klient för Meier-agenterna.
 
-Klienten använder Google Gemini via ``GEMINI_API_KEY``, som talar
-OpenAI-liknande ``/v1/chat/completions`` på ``/v1beta/openai``.
+Klienten kan tala med två leverantörer:
+
+* **Anthropic (Claude)**, om ``ANTHROPIC_API_KEY`` finns. Anropet går till
+  ``/v1/messages`` med nyckeln i ``x-api-key``.
+* **Google Gemini**, om ``GEMINI_API_KEY`` finns. Gemini talar OpenAI-liknande
+  ``/v1/chat/completions`` på ``/v1beta/openai``.
+
+Anthropic väljs först när båda nycklarna finns, eftersom den som har ett
+Claude-konto vill använda det.
 
 Det finns **ingen** återfallsväg till OpenHands agent-server. Den proxyn är en
 shim som startar en hel OpenHands-konversation per anrop, vilket fyllde
@@ -163,7 +170,8 @@ def _fallback_models() -> tuple[str, ...]:
 class LLMConfig:
     """Konfiguration för en LLM-anslutning."""
 
-    provider: str  # alltid "gemini"
+    #: "anthropic" eller "gemini". Styr vilket API-format anropet använder.
+    provider: str
     model: str
     #: Modeller att falla tillbaka på när den primära svarar 503 (överbelastad).
     #: Googles flash-modeller slår i taket med jämna mellanrum; utan reserver
@@ -189,7 +197,9 @@ class LLMConfig:
     def from_env(cls) -> "LLMConfig":
         """Välj anslutning utifrån miljövariabler.
 
-        Bara Google Gemini stöds. Nyckeln läses från ``GEMINI_API_KEY`` eller
+        Anthropic väljs om ``ANTHROPIC_API_KEY`` finns, annars Google Gemini.
+        Nycklarna läses från miljön eller från nyckelfilerna i
+        ``MEIER_SECRETS_DIR``. Gemini-nyckeln läses från ``GEMINI_API_KEY`` eller
         ``GOOGLE_API_KEY``, annars från ``$MEIER_SECRETS_DIR/gemini.key``.
 
         Saknas nyckeln höjs ett fel. Det finns ingen återfallsväg till
@@ -208,6 +218,18 @@ class LLMConfig:
 
     @classmethod
     def _from_provider_env(cls) -> "LLMConfig":
+        # Anthropic först: den som har ett Claude-konto vill använda det.
+        # Nyckeln läses från ANTHROPIC_API_KEY eller $MEIER_SECRETS_DIR/anthropic.key.
+        anthropic_key = _read_secret("anthropic.key", ("ANTHROPIC_API_KEY",))
+        if anthropic_key:
+            return cls(
+                provider="anthropic",
+                model=os.environ.get("MEIER_MODEL", "claude-sonnet-4-5-20250929"),
+                fallback_models=_fallback_models(),
+                api_key=anthropic_key,
+                base_url=os.environ.get("MEIER_BASE_URL", "https://api.anthropic.com"),
+            )
+
         # Gemini talar OpenAI-format på /v1beta/openai.
         gemini_key = _read_secret("gemini.key", ("GEMINI_API_KEY", "GOOGLE_API_KEY"))
         if gemini_key:
@@ -223,10 +245,12 @@ class LLMConfig:
             )
 
         raise LLMError(
-            "Ingen LLM-nyckel hittades. Sätt GEMINI_API_KEY, eller lägg nyckeln i "
+            "Ingen LLM-nyckel hittades. Sätt ANTHROPIC_API_KEY för Claude, eller "
+            "GEMINI_API_KEY för Gemini. Nyckeln kan också ligga i "
             f"{os.environ.get('MEIER_SECRETS_DIR', '/workspace/meier-secrets')}"
-            "/gemini.key. Anrop mot OpenHands agent-server används medvetet inte: "
-            "varje anrop där startar en egen konversation."
+            "/anthropic.key respektive .../gemini.key. Anrop mot OpenHands "
+            "agent-server används medvetet inte: varje anrop där startar en egen "
+            "konversation."
         )
 
 
@@ -333,10 +357,13 @@ class LLMClient:
                 time.sleep(delay)
         raise LLMError(f"Kunde inte nå LLM efter {attempts} försök: {last}") from last
 
-    # -- Gemini via OpenAI-kompatibelt HTTP --------------------------------
+    # -- HTTP mot leverantören ---------------------------------------------
     def _complete_http(
         self, system: str, user: str, *, json_mode: bool, model: str | None = None
     ) -> str:
+        if self.config.provider == "anthropic":
+            return self._complete_anthropic(system, user, model=model)
+
         base = self.config.base_url.rstrip("/")
         if base.endswith("/v1"):
             url = f"{base}/chat/completions"
@@ -364,6 +391,46 @@ class LLMClient:
         except (KeyError, IndexError, TypeError) as exc:
             raise LLMError(f"Oväntat LLM-svar: {json.dumps(data)[:300]}") from exc
 
+    def _complete_anthropic(
+        self, system: str, user: str, *, model: str | None = None
+    ) -> str:
+        """Anrop mot Anthropic Messages API.
+
+        Anthropic har systemprompten som eget fält, inte som ett meddelande, och
+        nyckeln går i ``x-api-key`` i stället för ``Authorization``. Svaret är en
+        lista av innehållsblock, inte ``choices``.
+        """
+        base = self.config.base_url.rstrip("/") or "https://api.anthropic.com"
+        url = f"{base}/v1/messages"
+        payload: dict[str, Any] = {
+            "model": model or self.config.model,
+            "max_tokens": self.config.max_tokens,
+            "temperature": self.config.temperature,
+            "system": system,
+            "messages": [{"role": "user", "content": user}],
+        }
+        headers = {
+            "Content-Type": "application/json",
+            "x-api-key": self.config.api_key,
+            "anthropic-version": "2023-06-01",
+        }
+
+        resp = self._post(url, payload, headers)
+        data = resp.json()
+        usage = data.get("usage") or {}
+        self._record_usage(
+            {
+                "prompt_tokens": usage.get("input_tokens", 0),
+                "completion_tokens": usage.get("output_tokens", 0),
+            }
+        )
+        try:
+            blocks = data["content"]
+            text = "".join(b.get("text", "") for b in blocks if b.get("type") == "text")
+        except (KeyError, TypeError) as exc:
+            raise LLMError(f"Oväntat LLM-svar: {json.dumps(data)[:300]}") from exc
+        return text.strip()
+
     def _post(self, url: str, payload: dict, headers: dict) -> httpx.Response:
         try:
             resp = httpx.post(url, json=payload, headers=headers, timeout=self.config.timeout)
@@ -371,7 +438,8 @@ class LLMClient:
             return resp
         except httpx.HTTPStatusError as exc:
             status = exc.response.status_code
-            if status == 503:
+            # 529 är Anthropics "overloaded"; den betyder samma sak som 503.
+            if status in (503, 529):
                 raise _Overloaded(
                     f"Modellen är överbelastad (503): {exc.response.text[:200]}"
                 ) from exc

@@ -26,9 +26,14 @@ MEIER_LOG="${MEIER_LOG:-/tmp/meier_web.log}"
 # som inte alltid ligger på PATH.
 export PATH="$HOME/.local/bin:$PATH"
 
-# Plocka upp Gemini-nyckeln från en beständig fil om den inte redan är satt.
+# Plocka upp LLM-nyckeln från en beständig fil om den inte redan är satt.
 # /home nollställs vid omstart; /workspace ligger kvar. Se MEIER_SECRETS_DIR.
+# Claude har företräde: finns anthropic.key används den, annars gemini.key.
 MEIER_SECRETS_DIR="${MEIER_SECRETS_DIR:-/workspace/meier-secrets}"
+if [ -z "${ANTHROPIC_API_KEY:-}" ] && [ -r "$MEIER_SECRETS_DIR/anthropic.key" ]; then
+  ANTHROPIC_API_KEY="$(cat "$MEIER_SECRETS_DIR/anthropic.key")"
+  export ANTHROPIC_API_KEY
+fi
 if [ -z "${GEMINI_API_KEY:-}" ] && [ -r "$MEIER_SECRETS_DIR/gemini.key" ]; then
   GEMINI_API_KEY="$(cat "$MEIER_SECRETS_DIR/gemini.key")"
   export GEMINI_API_KEY
@@ -39,14 +44,22 @@ fi
 # om utan att blockera hela matchen. Kort timeout + fler försök med kvotvila.
 export MEIER_TIMEOUT="${MEIER_TIMEOUT:-30}"
 export MEIER_RETRIES="${MEIER_RETRIES:-6}"
-# En flash-modell svarar 503 ("high demand") med jämna mellanrum. Reservlistan
-# gör att ett beslut byter modell i stället för att tyst falla tillbaka på
-# baspolicyn, som saknar språkmodell. Aliaset pekar på samma lilla flash-modell
-# och följer Googles ompekningar.
-export MEIER_FALLBACK_MODELS="${MEIER_FALLBACK_MODELS:-gemini-flash-lite-latest,gemini-3.5-flash-lite}"
+# En modell kan svara "överbelastad" med jämna mellanrum. Reservlistan gör att
+# ett beslut byter modell i stället för att tyst falla tillbaka på baspolicyn,
+# som saknar språkmodell. Namnen måste höra till samma leverantör som nyckeln.
+if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+  export MEIER_FALLBACK_MODELS="${MEIER_FALLBACK_MODELS:-claude-haiku-4-5-20251001}"
+else
+  export MEIER_FALLBACK_MODELS="${MEIER_FALLBACK_MODELS:-gemini-flash-lite-latest,gemini-3.5-flash-lite}"
+fi
 # Håll anropen under kvottaket (anrop/minut). Standard 15 för Gemini; sätt 0
 # för att stänga av. Marginalen (1.15) gör att vi ligger strax under taket.
-export MEIER_MAX_RPM="${MEIER_MAX_RPM:-15}"
+# Claude har ett högre tak, så standarden höjs när anthropic.key används.
+if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+  export MEIER_MAX_RPM="${MEIER_MAX_RPM:-50}"
+else
+  export MEIER_MAX_RPM="${MEIER_MAX_RPM:-15}"
+fi
 
 MODE="foreground"
 case "${1:-}" in

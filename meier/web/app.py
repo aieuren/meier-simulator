@@ -754,6 +754,7 @@ def analysis_data() -> dict:
     return {
         **info,
         "source_labels": [logrepo.series_label(s) for s in info["sources"]],
+        "source_times": {s: logrepo.series_epoch(s) for s in info["sources"]},
         "digest": digest,
         "digest_text": analysis.render_digest_text(digest),
     }
@@ -796,6 +797,7 @@ def _local_log_files() -> list[dict]:
             {
                 "name": p.name,
                 "label": logrepo.series_label(p.name),
+                "started_at": logrepo.series_epoch(p.name),
                 "size": stat.st_size,
                 "modified": int(stat.st_mtime),
                 "local": True,

@@ -20,14 +20,19 @@ from pathlib import Path
 from typing import Any
 
 from .agents.roster import make_players
-from .legacy import upgrade_record
 from .llm import LLMClient
+from .rules import MEIER, rank
 from .session import LogEntry, Session
 
 #: Åtgärder som är spelarens eget påstående (spelaren säger ett värde).
 CLAIM_ACTIONS = ("påstå", "slå", "höja")
 #: Åtgärder där spelaren svarar på någon annans påstående.
 DECISION_ACTIONS = ("slå", "skicka", "syna")
+
+#: Protokollversion. Höjs när postens form ändras på ett sätt som gör att en
+#: äldre post inte längre kan läsas som en ny. Läsaren kräver ``format``, så en
+#: post utan fältet avvisas i stället för att tolkas tyst och fel.
+PROTOCOL_FORMAT = 2
 
 
 def _new_agents(role_keys: Iterable[str]):
@@ -132,7 +137,12 @@ def _player_stats(log: list[LogEntry], names: list[str]) -> dict[str, dict[str, 
 
 @dataclass
 class GameRecord:
-    """Ett strukturerat protokoll för en spelad match."""
+    """Ett strukturerat protokoll för en spelad match.
+
+    ``players`` bär varje spelares fyra förmågor (``params``), så att en serie
+    kan kopplas till den uppsättning som spelade. ``lives_per_player`` anger
+    startvillkoret, eftersom ``lives`` bara är vad som återstår vid slutet.
+    """
 
     game: int
     provider: str
@@ -149,11 +159,15 @@ class GameRecord:
     player_stats: dict[str, dict[str, Any]]
     usage: dict[str, Any] = field(default_factory=dict)
     started_at: float = field(default_factory=time.time)
+    finished_at: float | None = None
+    lives_per_player: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "format": PROTOCOL_FORMAT,
             "game": self.game,
             "started_at": self.started_at,
+            "finished_at": self.finished_at,
             "provider": self.provider,
             "model": self.model,
             "players": self.players,
@@ -163,6 +177,7 @@ class GameRecord:
             "winner_role": self.winner_role,
             "rounds": self.rounds,
             "lives": self.lives,
+            "lives_per_player": self.lives_per_player,
             "elimination_order": self.elimination_order,
             "player_stats": self.player_stats,
             "usage": self.usage,
@@ -217,8 +232,7 @@ def play_match(
         provider=provider,
         model=model,
         players=[
-            {"index": i, "role": agents[i].role.key, "name": agents[i].name}
-            for i in range(len(agents))
+            _player_entry(i, agents[i], lives) for i in range(len(agents))
         ],
         order=[session.name_of(i) for i in session.order],
         starter=session.name_of(session.order[0]),
@@ -230,7 +244,46 @@ def play_match(
         events=[e.to_dict() for e in session.log],
         player_stats=_player_stats(session.log, names),
         usage=_match_usage(agents),
+        lives_per_player=lives,
+        finished_at=time.time(),
     )
+
+
+def params_dict(agent: Any) -> dict[str, float] | None:
+    """Agentens fyra förmågor som tal, eller ``None`` för en agent utan profil.
+
+    Detta är postens viktigaste fält för efteranalys: utan det går det inte att
+    säga vilken uppsättning som spelade, och då kan två serier inte jämföras.
+    """
+    params = getattr(agent, "params", None)
+    if params is None:
+        return None
+    return {
+        "caution": round(params.caution, 3),
+        "statistics": round(params.statistics, 3),
+        "unpredictability": round(params.unpredictability, 3),
+        "reading": round(params.reading, 3),
+    }
+
+
+def _player_entry(index: int, agent: Any, lives: int) -> dict[str, Any]:
+    """En spelares rad i protokollet: namn, roll, förmågor och spelartyp.
+
+    ``uses_llm`` skiljer en LLM-spelare från en regelspelare, så att en serie
+    som blandar dem (Axel är alltid regelspelare) går att dela upp i analysen.
+    """
+    role = getattr(agent, "role", None)
+    client = getattr(agent, "llm", None)
+    return {
+        "index": index,
+        "role": getattr(role, "key", None),
+        "name": getattr(agent, "name", None),
+        "uses_llm": client is not None,
+        "model": getattr(getattr(client, "config", None), "model", None),
+        "style": getattr(role, "style", None),
+        "params": params_dict(agent),
+        "lives_at_start": lives,
+    }
 
 
 def _match_usage(agents: list) -> dict[str, Any]:
@@ -372,15 +425,16 @@ def write_jsonl(records: Iterable[GameRecord | FailedMatch], path: str | Path) -
 def read_jsonl(path: str | Path) -> list[dict[str, Any]]:
     """Läs tillbaka en JSONL-fil med matchprotokoll.
 
-    Protokoll skrivna före namnbytet (``bid``/``bud``) översätts vid inläsning,
-    så att äldre loggar går att analysera med nuvarande kod.
+    Filen läses som den är. Protokoll från före ``format``-fältet stöds inte:
+    de saknar spelarnas förmågor, och en analys på dem skulle se ut som en
+    analys av en serie med tomma profiler.
     """
     records: list[dict[str, Any]] = []
     with open(path, encoding="utf-8") as fh:
         for line in fh:
             line = line.strip()
             if line:
-                records.append(upgrade_record(json.loads(line)))
+                records.append(json.loads(line))
     return records
 
 
@@ -412,6 +466,7 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
     played = [rec for rec in records if not rec.get("failed")]
     failed = [rec for rec in records if rec.get("failed")]
     per_role: dict[str, dict[str, Any]] = {}
+    role_params: dict[str, set[tuple]] = {}
     total_games = len(played)
     total_rounds = 0
     winner_counts: dict[str, int] = {}
@@ -420,12 +475,15 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
     token_totals = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
     token_calls = 0
     model_calls: dict[str, int] = {}
+    lives_per_player: set[int] = set()
 
     for rec in played:
         total_rounds += rec.get("rounds", 0)
         winner_counts[rec["winner_role"]] = winner_counts.get(rec["winner_role"], 0) + 1
         if rec.get("starter") == rec.get("winner"):
             starter_wins += 1
+        if rec.get("lives_per_player"):
+            lives_per_player.add(int(rec["lives_per_player"]))
 
         usage = rec.get("usage") or {}
         for key in token_totals:
@@ -456,6 +514,13 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
                 },
             )
             bucket["games"] += 1
+            params = p.get("params")
+            if params:
+                role_params.setdefault(p["role"], set()).add(
+                    tuple(sorted((k, round(float(v), 3)) for k, v in params.items()))
+                )
+                bucket.setdefault("params", params)
+                bucket.setdefault("uses_llm", p.get("uses_llm"))
 
         for name, s in rec["player_stats"].items():
             role = next(p["role"] for p in rec["players"] if p["name"] == name)
@@ -510,6 +575,10 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
         "starter_win_rate": _rate(starter_wins, total_games),
         "call_outcomes": call_outcomes,
         "roles": per_role,
+        "tactics": _tactics(played),
+        "tactics_by_outcome": _tactics_by_outcome(played),
+        "abilities": _abilities(per_role),
+        "setup": _setup(per_role, role_params, lives_per_player, total_games),
         "tokens": {
             "total": token_totals,
             "calls": token_calls,
@@ -523,3 +592,283 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
             "models": model_calls,
         },
     }
+
+
+#: Förmågorna som seriesammanställningen grupperar på.
+ABILITY_KEYS = ("caution", "statistics", "unpredictability", "reading")
+
+
+def _steps(higher: int | None, lower: int | None) -> int | None:
+    """Hur många steg ``higher`` ligger över ``lower`` i ordningen.
+
+    Ordningen är en stege, inte tal: ``rules.rank`` ger 0 för Meier och 20 för
+    31. Skillnaden i rang är därför ett mått på hur stort ett kliv är, oavsett
+    vilka tärningar som visades.
+    """
+    if higher is None or lower is None:
+        return None
+    try:
+        return rank(lower) - rank(higher)
+    except ValueError:
+        return None
+
+
+def _new_tactics() -> dict[str, Any]:
+    """Räknare för en spelares spelsätt."""
+    return {
+        "claim_rows": 0,
+        "raise_rows": 0,
+        "raise_steps_total": 0,
+        "raise_steps_min": 0,
+        "bluff_rows": 0,
+        "bluff_margin_total": 0,
+        "understate_rows": 0,
+        "understate_margin_total": 0,
+        "meier_claims": 0,
+        "call_rows": 0,
+        "call_rank_total": 0,
+        "call_correct": 0,
+        "bluffs_called": 0,
+        "claims_upheld": 0,
+    }
+
+
+def _was_lie(event: dict[str, Any]) -> bool:
+    """Var påståendet i en synrad en lögn?
+
+    Räknas ur budet och tärningarna, inte ur ``truth``: på en synrad är
+    ``truth`` alltid False, eftersom den som synar inte påstår något.
+    """
+    claim = event.get("accepted_claim") or event.get("claim")
+    shown = event.get("shown")
+    if claim is None or shown is None:
+        return False
+    return claim != shown
+
+
+def _collect_tactics(
+    records: list[dict[str, Any]], key_of
+) -> dict[str, dict[str, Any]]:
+    """Räkna spelsättet, grupperat på ``key_of(record, role)``."""
+    buckets: dict[str, dict[str, Any]] = {}
+    for rec in records:
+        if rec.get("failed"):
+            continue
+        by_name = {p.get("name"): p.get("role") for p in rec.get("players", [])}
+        for event in rec.get("events", []):
+            role = by_name.get(event.get("player_name"))
+            if role is None:
+                continue
+            acc = buckets.setdefault(key_of(rec, role), _new_tactics())
+            action = event.get("action")
+            claim = event.get("claim")
+            # En rad utan bud är ingen påståenderad. Tärningsrader (kind "roll")
+            # bär utfallet men inget bud, och ska inte räknas som ett påstående.
+            if action in CLAIM_ACTIONS and claim is not None:
+                acc["claim_rows"] += 1
+                if claim == MEIER:
+                    acc["meier_claims"] += 1
+                steps = _steps(claim, event.get("accepted_claim"))
+                if steps is not None:
+                    acc["raise_rows"] += 1
+                    acc["raise_steps_total"] += steps
+                    if steps == 1:
+                        acc["raise_steps_min"] += 1
+                if event.get("unseen"):
+                    continue
+                if event.get("truth") is False:
+                    margin = _steps(claim, event.get("shown"))
+                    if margin is not None:
+                        acc["bluff_rows"] += 1
+                        acc["bluff_margin_total"] += margin
+                elif event.get("truth") and claim != event.get("shown"):
+                    margin = _steps(event.get("shown"), claim)
+                    if margin is not None:
+                        acc["understate_rows"] += 1
+                        acc["understate_margin_total"] += margin
+            elif action == "syna":
+                acc["call_rows"] += 1
+                try:
+                    acc["call_rank_total"] += rank(event.get("accepted_claim"))
+                except (TypeError, ValueError):
+                    pass
+                # Synraden sätter ``truth`` till False med flit: den som synar
+                # påstår inget. Om påståendet var en lögn avgörs av budet mot
+                # tärningarna, och det är samma villkor som reglerna dömer på.
+                if _was_lie(event):
+                    acc["call_correct"] += 1
+
+        # En synad bluff avgörs av synraden: vem höll påståendet, och var det
+        # sant? Det ger hur ofta ett påstående stod sig när det synades.
+        for event in rec.get("events", []):
+            if event.get("action") != "syna":
+                continue
+            holder_role = by_name.get(event.get("holder_name"))
+            if holder_role is None:
+                continue
+            acc = buckets.setdefault(key_of(rec, holder_role), _new_tactics())
+            if _was_lie(event):
+                acc["bluffs_called"] += 1
+            else:
+                acc["claims_upheld"] += 1
+
+    return {key: _tactic_rates(acc) for key, acc in buckets.items()}
+
+
+def _tactic_rates(acc: dict[str, Any]) -> dict[str, Any]:
+    """Vänd räknarna till andelar och snitt."""
+    claims = acc["claim_rows"]
+    raise_rows = acc["raise_rows"]
+    call_rows = acc["call_rows"]
+    challenged = acc["bluffs_called"] + acc["claims_upheld"]
+    return {
+        "claims": claims,
+        "raises": raise_rows,
+        "bluffs": acc["bluff_rows"],
+        "raise_steps": round(acc["raise_steps_total"] / (raise_rows or 1), 2),
+        "raise_min_share": _rate(acc["raise_steps_min"], raise_rows),
+        "bluff_margin": round(acc["bluff_margin_total"] / (acc["bluff_rows"] or 1), 2),
+        "understate_share": _rate(acc["understate_rows"], claims),
+        "understate_margin": round(
+            acc["understate_margin_total"] / (acc["understate_rows"] or 1), 2
+        ),
+        "meier_share": _rate(acc["meier_claims"], claims),
+        "calls": call_rows,
+        # Synar per påstående. Antalet synar i sig går inte att jämföra mellan
+        # vinnare och förlorare: den som överlever längre spelar fler rundor och
+        # hinner därför syna fler gånger. Kvoten normaliserar för det.
+        "calls_per_claim": round(call_rows / (claims or 1), 2),
+        "call_height": round(acc["call_rank_total"] / (call_rows or 1), 2),
+        "call_precision": _rate(acc["call_correct"], call_rows),
+        "claims_challenged": challenged,
+        "lies_revealed": acc["bluffs_called"],
+        "claims_upheld": _rate(acc["claims_upheld"], challenged),
+    }
+
+
+def _tactics(records: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Spelsätt per roll, mätt ur händelserna i varje match.
+
+    Förmågorna (``params``) säger hur en spelare är tänkt att spela. Det här
+    mäter hur spelet faktiskt blev, vilket är det som går att koppla till
+    vinster: hur stora kliv spelaren tar, hur djärva bluffarna är, om den säger
+    svagare än tärningarna, hur högt uppe den synar, och hur ofta synen träffar.
+
+    Alla mått räknas ur offentliga händelser i protokollet. Inget extra behöver
+    loggas.
+    """
+    return _collect_tactics(records, lambda rec, role: role)
+
+
+def _tactics_by_outcome(records: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Spelsätt uppdelat på om spelaren vann matchen eller inte.
+
+    Det här är den direkta jämförelsen mellan vinnande och förlorande spel:
+    tar vinnare större kliv? Synar de högre? Bluffar de försiktigare? Skillnaden
+    är en ledtråd, inte ett bevis — samma spelare bidrar till båda grupperna,
+    och tur avgör en enskild match. Med många matcher jämnas slumpen ut.
+    """
+    return _collect_tactics(
+        records,
+        lambda rec, role: "vann" if _role_won(rec, role) else "förlorade",
+    )
+
+
+def _role_won(rec: dict[str, Any], role: str) -> bool:
+    """Vann rollen matchen?"""
+    return rec.get("winner_role") == role
+
+
+def _setup(
+    per_role: dict[str, dict[str, Any]],
+    role_params: dict[str, set[tuple]],
+    lives_per_player: set[int],
+    total_games: int,
+) -> dict[str, Any]:
+    """Uppsättningen som spelade: roller, förmågor och startvillkor.
+
+    ``stable`` är falskt när samma roll spelat med olika förmågor i serien. Då
+    går rollens siffror inte att läsa som en egenskap hos just den profilen, och
+    det måste stå klart i underlaget i stället för att upptäckas i efterhand.
+    """
+    roles = {
+        role: {
+            "name": b["name"],
+            "params": b.get("params"),
+            "uses_llm": b.get("uses_llm"),
+            "params_variants": len(role_params.get(role, ())),
+        }
+        for role, b in per_role.items()
+    }
+    return {
+        "games": total_games,
+        "roles": sorted(per_role),
+        "player_count": len(per_role),
+        "lives_per_player": sorted(lives_per_player),
+        "stable": all(v["params_variants"] <= 1 for v in roles.values()),
+        "role_detail": roles,
+    }
+
+
+def _abilities(per_role: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """Vinst och beteende grupperat per förmåga, inte per spelare.
+
+    Detta är svaret på frågan serien finns för: vilka förmågor lönar sig. Varje
+    förmåga delas i nivåer (samma ord som spelarbeskrivningen använder), och
+    varje nivå får vinstfrekvens, snitt liv kvar och beteendemått. Med få
+    matcher per nivå är talen brusiga, därför redovisas ``games`` alltid.
+    """
+    from .agents.personality import level_name
+
+    out: dict[str, Any] = {}
+    for key in ABILITY_KEYS:
+        buckets: dict[str, dict[str, Any]] = {}
+        for b in per_role.values():
+            params = b.get("params")
+            if not params or key not in params:
+                continue
+            level = level_name(float(params[key]))
+            acc = buckets.setdefault(
+                level,
+                {
+                    "players": [],
+                    "games": 0,
+                    "wins": 0,
+                    "lives_lost": 0,
+                    "claims": 0,
+                    "bluffs": 0,
+                    "decisions": 0,
+                    "calls": 0,
+                    "calls_won": 0,
+                    "unseen": 0,
+                },
+            )
+            if b["name"] not in acc["players"]:
+                acc["players"].append(b["name"])
+            for field_name in (
+                "games",
+                "wins",
+                "lives_lost",
+                "claims",
+                "bluffs",
+                "decisions",
+                "calls",
+                "calls_won",
+                "unseen",
+            ):
+                acc[field_name] += b[field_name]
+        levels = {}
+        for level, acc in buckets.items():
+            levels[level] = {
+                "players": acc["players"],
+                "games": acc["games"],
+                "win_rate": _rate(acc["wins"], acc["games"]),
+                "avg_lives_lost": round(acc["lives_lost"] / (acc["games"] or 1), 3),
+                "bluff_rate": _rate(acc["bluffs"], acc["claims"]),
+                "call_rate": _rate(acc["calls"], acc["decisions"]),
+                "call_success_rate": _rate(acc["calls_won"], acc["calls"]),
+                "unseen_rate": _rate(acc["unseen"], acc["claims"]),
+            }
+        if levels:
+            out[key] = levels
+    return out

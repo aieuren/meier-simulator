@@ -385,11 +385,11 @@ saker avgör hur länge en körning får hålla på:
   klart. Ladda ner filen och fortsätt därifrån.
 
 Behöver du en körning som garanterat får ta mer än en timme, kör du den utanför
-Agent Canvas – koden är portabel. Sätt `GEMINI_API_KEY` och kör kommandoraden
-i en egen terminal (eller med `nohup`):
+Agent Canvas – koden är portabel. Sätt `ANTHROPIC_API_KEY` (eller
+`GEMINI_API_KEY`) och kör kommandoraden i en egen terminal (eller med `nohup`):
 
 ```bash
-export GEMINI_API_KEY=...
+export ANTHROPIC_API_KEY=...
 python -m meier.cli match --count 60 --workers 4 \
   --out matcher.jsonl
 ```
@@ -409,16 +409,28 @@ curl http://localhost:12000/api/matches/status
 
 ## LLM-konfiguration
 
-Agenterna använder Google Gemini. Sätt nyckeln och kör:
+Agenterna kan köra på Anthropic (Claude) eller Google Gemini. Claude väljs om
+en Claude-nyckel finns, annars Gemini.
 
 ```bash
-export GEMINI_API_KEY=...                # Google Gemini
+export ANTHROPIC_API_KEY=...             # Claude, används i första hand
+export MEIER_MODEL=claude-sonnet-4-5-20250929  # valfritt
+python -m uvicorn meier.web.app:app --port 12000
+```
+
+```bash
+export GEMINI_API_KEY=...                # Google Gemini, reservväg
 export MEIER_MODEL=gemini-3.1-flash-lite # valfritt
 python -m uvicorn meier.web.app:app --port 12000
 ```
 
-Nyckeln kan också ligga i en fil: `$MEIER_SECRETS_DIR/gemini.key` (standard
-`MEIER_SECRETS_DIR` är `/workspace/meier-secrets`). Det är så `run.sh` gör.
+Nyckeln kan också ligga i en fil: `$MEIER_SECRETS_DIR/anthropic.key` eller
+`$MEIER_SECRETS_DIR/gemini.key` (standard `MEIER_SECRETS_DIR` är
+`/workspace/meier-secrets`). Det är så `run.sh` gör.
+
+Anropen går till `/v1/messages` hos Anthropic och till det OpenAI-liknande
+`/v1/chat/completions` hos Gemini. Modellnamnen i `MEIER_FALLBACK_MODELS` måste
+höra till samma leverantör som nyckeln.
 
 Saknas nyckeln avbryts anropet med ett tydligt fel. Det finns ingen
 återfallsväg till OpenHands agent-servern: varje anrop där startar en egen
@@ -428,12 +440,13 @@ Miljövariabler:
 
 | Variabel | Betydelse |
 |---|---|
-| `GEMINI_API_KEY` / `GOOGLE_API_KEY` | Gemini-nyckel |
+| `ANTHROPIC_API_KEY` | Claude-nyckel. Används i första hand när den finns |
+| `GEMINI_API_KEY` / `GOOGLE_API_KEY` | Gemini-nyckel, används när Claude-nyckel saknas |
 | `MEIER_MODEL` | Modellnamn |
-| `MEIER_FALLBACK_MODELS` | Reservmodeller, kommaseparerade. Används när den primära svarar 503 (överbelastad). `run.sh` sätter `gemini-flash-lite-latest,gemini-3.5-flash-lite` |
-| `MEIER_BASE_URL` | Egen bas-URL för det OpenAI-kompatibla HTTP-anropet |
-| `MEIER_SECRETS_DIR` | Katalog med nyckelfilen `gemini.key` |
-| `MEIER_MAX_RPM` | Tak för anrop/minut (0 = av; standard 15) |
+| `MEIER_FALLBACK_MODELS` | Reservmodeller, kommaseparerade. Används när den primära svarar överbelastad (503/529). `run.sh` sätter `claude-haiku-4-5-20251001` för Claude och `gemini-flash-lite-latest,gemini-3.5-flash-lite` för Gemini |
+| `MEIER_BASE_URL` | Egen bas-URL för HTTP-anropet |
+| `MEIER_SECRETS_DIR` | Katalog med nyckelfilerna `anthropic.key` och `gemini.key` |
+| `MEIER_MAX_RPM` | Tak för anrop/minut (0 = av; standard 15 för Gemini, 50 för Claude) |
 
 > Obs (Agent Canvas): startas miljön om försvinner de globalt installerade
 > paketen – kör `pip install -r requirements.txt` igen.

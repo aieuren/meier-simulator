@@ -2,7 +2,7 @@
 
 import json
 
-from meier import match, rules
+from meier import analysis, match, rules
 from meier.agents.base import Role
 from meier.agents.player import MeierPlayerAgent
 
@@ -277,55 +277,194 @@ def test_an_unexpected_error_is_not_mistaken_for_an_llm_error(monkeypatch):
 # -- Gamla loggar (skrivna före namnbytet bid -> claim) ----------------------
 
 
-def _gammal_post() -> dict:
-    """En post i det gamla formatet: bid, bud och bids."""
-    return {
+def test_logg_utan_format_avvisas(tmp_path):
+    """En post utan ``format`` läses inte som ett protokoll.
+
+    Den skrevs före protokollversionen och saknar spelarnas förmågor. Att läsa
+    den som en ny post skulle göra en serie med tomma profiler, och då går det
+    inte att se skillnad på "spelade utan profil" och "loggades inte".
+    """
+    path = tmp_path / "gammal.jsonl"
+    post = {
         "players": [{"index": 0, "role": "axel", "name": "A"}],
-        "starter": 0,
-        "winner": "A",
         "winner_role": "axel",
+        "events": [],
+        "player_stats": {},
+    }
+    path.write_text(json.dumps(post, ensure_ascii=False) + "\n", encoding="utf-8")
+
+    raw = match.read_jsonl(path)
+    assert "format" not in raw[0]
+    records, skipped = analysis.parse_jsonl_text(path.read_text(encoding="utf-8"))
+    assert records == [] and skipped == 1
+
+
+# -- Protokollet bär spelarnas förmågor -------------------------------------
+
+
+def test_record_carries_player_params(monkeypatch):
+    """Protokollet ska räcka för att säga vilka förmågor som spelade."""
+    monkeypatch.setattr(match, "_new_agents", lambda keys: match._new_agents_no_llm(keys))
+    d = match.play_match(["axel", "berit"], game=1).to_dict()
+
+    assert d["format"] == match.PROTOCOL_FORMAT
+    assert d["lives_per_player"] == 3
+    for p in d["players"]:
+        assert set(p["params"]) == {
+            "caution",
+            "statistics",
+            "unpredictability",
+            "reading",
+        }
+        assert p["lives_at_start"] == 3
+
+
+def test_record_marks_rule_player_without_llm(monkeypatch):
+    """En regelspelare ska gå att skilja från en LLM-spelare."""
+    monkeypatch.setattr(match, "_new_agents", lambda keys: match._new_agents_no_llm(keys))
+    d = match.play_match(["axel", "berit"], game=1).to_dict()
+    axel = next(p for p in d["players"] if p["role"] == "axel")
+    assert axel["uses_llm"] is False
+    assert axel["params"]["reading"] == 0.0
+
+
+# -- Spelsätt: vad som faktiskt lönar sig -----------------------------------
+
+
+def _rec(events, winner_role="a", players=(("a", "A"), ("b", "B"))):
+    """En minimal matchpost med givna händelser."""
+    return {
+        "format": match.PROTOCOL_FORMAT,
+        "game": 1,
+        "winner_role": winner_role,
+        "winner": "A" if winner_role == "a" else "B",
+        "starter": "A",
         "rounds": 1,
-        "events": [
-            {
-                "kind": "action",
-                "action": "bud",
-                "bid": 52,
-                "bid_name": "52",
-                "accepted_bid": None,
-                "previous_bid": None,
-            }
+        "players": [
+            {"role": r, "name": n, "params": {"caution": 0.5}} for r, n in players
         ],
-        "player_stats": {
-            "A": {"bids": 3, "blinds": 1, "bluffs": 1, "truths": 2, "decisions": 2,
-                  "raises": 0, "passes": 1, "calls": 1, "calls_won": 1,
-                  "calls_lost": 0, "lives_lost": 0, "eliminated": False},
-        },
+        "events": list(events),
+        "player_stats": {},
+        "lives": {},
+        "lives_per_player": 3,
     }
 
 
-def test_gammal_logg_lases_som_ny(tmp_path):
-    """En logg med bid/bud ska gå att läsa utan att filen skrivs om."""
-    path = tmp_path / "gammal.jsonl"
-    path.write_text(json.dumps(_gammal_post(), ensure_ascii=False) + "\n", encoding="utf-8")
+def test_tactics_measures_raise_steps():
+    """Ett kliv mäts i steg i ordningen, inte i talens skillnad."""
+    rec = _rec(
+        [
+            {"action": "påstå", "player_name": "A", "claim": 52,
+             "shown": 52, "truth": True},
+            {"action": "slå", "player_name": "B", "claim": 62,
+             "shown": 62, "truth": True, "accepted_claim": 52},
+        ]
+    )
+    t = match.summarize([rec])["tactics"]
+    # 52 har rang 14 och 62 rang 10: fyra steg i stegen, inte i talen.
+    assert t["b"]["raise_steps"] == 4.0
+    assert t["b"]["raises"] == 1
+    assert t["a"]["raises"] == 0
 
-    post = match.read_jsonl(path)[0]
 
-    event = post["events"][0]
-    assert event["action"] == "påstå"
-    assert event["claim"] == 52
-    assert "bid" not in event and "bid_name" not in event
-    stat = post["player_stats"]["A"]
-    assert stat["claims"] == 3
-    assert stat["unseen"] == 1
-    assert "bids" not in stat
+def test_tactics_counts_understated_claims():
+    """Att säga lägre än tärningarna ska synas som ett eget mått."""
+    rec = _rec(
+        [{"action": "påstå", "player_name": "A", "claim": 52,
+          "shown": 66, "truth": True}]
+    )
+    t = match.summarize([rec])["tactics"]
+    assert t["a"]["understate_share"] == 1.0
+    assert t["a"]["understate_margin"] > 0
+    assert t["a"]["bluffs"] == 0
 
 
-def test_gammal_logg_kan_sammanfattas(tmp_path):
-    """Summeringen ska räkna gamla loggar som nya, inte tappa dem."""
-    path = tmp_path / "gammal.jsonl"
-    path.write_text(json.dumps(_gammal_post(), ensure_ascii=False) + "\n", encoding="utf-8")
+def test_call_precision_uses_dice_not_truth_flag():
+    """En synrad har alltid truth=False, så lögnen måste räknas ur tärningarna."""
+    lie = _rec(
+        [
+            {"action": "påstå", "player_name": "A", "claim": 52,
+             "shown": 31, "truth": False},
+            {"action": "syna", "player_name": "B", "accepted_claim": 52,
+             "claim": 52, "shown": 31, "truth": False, "holder_name": "A"},
+        ]
+    )
+    honest = _rec(
+        [
+            {"action": "påstå", "player_name": "A", "claim": 52,
+             "shown": 52, "truth": True},
+            {"action": "syna", "player_name": "B", "accepted_claim": 52,
+             "claim": 52, "shown": 52, "truth": False, "holder_name": "A"},
+        ]
+    )
 
-    stats = match.summarize(match.read_jsonl(path))
+    t_lie = match.summarize([lie])["tactics"]
+    assert t_lie["b"]["call_precision"] == 1.0
+    assert t_lie["a"]["lies_revealed"] == 1
+    assert t_lie["a"]["claims_upheld"] == 0.0
 
-    assert stats["games"] == 1
-    assert stats["roles"]["axel"]["claims"] == 3
+    t_honest = match.summarize([honest])["tactics"]
+    assert t_honest["b"]["call_precision"] == 0.0
+    assert t_honest["a"]["claims_upheld"] == 1.0
+
+
+def test_tactics_split_by_match_outcome():
+    """Spelsättet ska gå att jämföra mellan vunna och förlorade matcher."""
+    won = _rec(
+        [{"action": "påstå", "player_name": "A", "claim": 52,
+          "shown": 52, "truth": True}],
+        winner_role="a",
+    )
+    lost = _rec(
+        [{"action": "påstå", "player_name": "A", "claim": 52,
+          "shown": 52, "truth": True}],
+        winner_role="b",
+    )
+    split = match.summarize([won, lost])["tactics_by_outcome"]
+    assert set(split) == {"vann", "förlorade"}
+    assert split["vann"]["claims"] == 1
+    assert split["förlorade"]["claims"] == 1
+
+
+def test_roll_row_is_not_a_claim():
+    """Tärningsraden (kind "roll") bär inget bud och ska inte räknas som påstående."""
+    rec = _rec(
+        [
+            {"kind": "roll", "action": "slag", "player_name": "A",
+             "dice": (3, 4), "shown": 43, "claim": None},
+            {"kind": "roll", "action": "påstå", "player_name": "A",
+             "dice": (3, 4), "shown": 43, "claim": None},
+            {"action": "påstå", "player_name": "A", "claim": 43,
+             "shown": 43, "truth": True},
+        ]
+    )
+    t = match.summarize([rec])["tactics"]
+    assert t["a"]["claims"] == 1
+
+
+def test_calls_per_claim_normalises_call_count():
+    """Antal synar ska gå att jämföra även när spelarna spelar olika många drag."""
+    one = _rec(
+        [
+            {"action": "påstå", "player_name": "A", "claim": 31,
+             "shown": 31, "truth": True},
+            {"action": "syna", "player_name": "B", "accepted_claim": 31,
+             "claim": 31, "shown": 31, "truth": False, "holder_name": "A"},
+        ]
+    )
+    t = match.summarize([one])["tactics"]
+    assert t["b"]["calls"] == 1
+    assert t["b"]["calls_per_claim"] == 1.0
+    # En spelare utan påståenden ska få 0, inte division med noll.
+    assert t["a"]["calls_per_claim"] == 0.0
+
+
+def test_summary_setup_reports_abilities():
+    """Uppsättningen ska visa förmågorna och om de var stabila i serien."""
+    rec = _rec([])
+    summary = match.summarize([rec])
+    assert summary["setup"]["player_count"] == 2
+    assert summary["setup"]["lives_per_player"] == [3]
+    assert summary["setup"]["stable"] is True
+    # Bara en förmåga loggad, så nivågrupperingen ska finnas för den.
+    assert "caution" in summary["abilities"]

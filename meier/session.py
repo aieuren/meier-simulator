@@ -230,12 +230,17 @@ class Session:
         )
 
     def _log_roll(self, *, player: str, dice: tuple[int, int], shown: int) -> LogEntry:
-        """Logga ett tärningsutfall som en egen rad (indata till spelaren)."""
+        """Logga ett tärningsutfall som en egen rad (indata till spelaren).
+
+        ``action`` sätts till ``"slag"`` med flit. Standardvärdet är ``"påstå"``,
+        och då räknades rena tärningsrader som påståenden i analysen.
+        """
         entry = LogEntry(
             kind="roll",
             round=self.round,
             dice=dice,
             shown=shown,
+            action="slag",
             player_name=player,
         )
         self.log.append(entry)

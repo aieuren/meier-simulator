@@ -21,14 +21,20 @@ lower claim). Multiple agents with distinct roles can also play full games.
   `FACE_WEIGHTS`, so changing the die shape moves all of them. See
   `docs/agent-model.md` §3.0. Odd and even stay equally likely, since 1/2 sit
   on the ends (one odd, one even).
-- `meier/llm.py` – LLM client, Gemini only. Key via
+- `meier/llm.py` – LLM client with two providers: Anthropic (Claude) and
+  Google Gemini. Claude wins when both keys exist, since a user with a Claude
+  account wants that. Key via `ANTHROPIC_API_KEY` (or
+  `$MEIER_SECRETS_DIR/anthropic.key`); Gemini via
   `GEMINI_API_KEY`/`GOOGLE_API_KEY` (or `$MEIER_SECRETS_DIR/gemini.key`).
-  This is the only provider; do not add another one.
-  There is no fallback to the OpenHands agent-server. Gemini uses the
-  OpenAI-compatible endpoint
+  Anthropic uses `/v1/messages` with `x-api-key` and `anthropic-version`; the
+  system prompt is a top-level field and the reply is a list of text blocks.
+  529 means overloaded, same as 503, so it switches model without retrying.
+  Gemini uses the OpenAI-compatible endpoint
   `https://generativelanguage.googleapis.com/v1beta/openai`.
   `LLMClient.last_usage` holds the token count from the last call. Without a
-  key, `LLMConfig.from_env()` raises `LLMError`.
+  key, `LLMConfig.from_env()` raises `LLMError`. There is no fallback to the
+  OpenHands agent-server. Keep `MEIER_FALLBACK_MODELS` names in the same
+  provider family as the key; `run.sh` sets them per provider.
 - `meier/game.py` – multi-agent game engine. Keeps each agent isolated; no agent
   sees another's secret dice.
 - `meier/session.py` – interactive session: full flow to a call (roll → raise
@@ -309,12 +315,12 @@ Earlier the app could fall back to the local agent-server proxy
 (`http://127.0.0.1:60000/v1/chat/completions`, model `openhands_<profile>`).
 That path is deleted. Every request there started a whole OpenHands
 conversation, so a match filled `/var/openhands/conversations` with hundreds of
-conversations. `LLMConfig._from_provider_env()` now accepts only `gemini` and
+conversations. `LLMConfig._from_provider_env()` now accepts `anthropic` and `gemini` and
 raises `LLMError` when no key exists.
 
 Consequences to keep in mind:
 
-- There is no proxy fallback. Without `GEMINI_API_KEY`
+- There is no proxy fallback. Without `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`
   (or the key files) the app fails fast with a clear message instead of quietly
   spending a conversation per call.
 - The self-healing profile logic (`_MissingProfile`, `_ensure_profile`,

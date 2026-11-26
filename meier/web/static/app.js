@@ -769,6 +769,7 @@ function renderMatchSummary(summary, data) {
       Startspelaren vinner ${pct(summary.starter_win_rate)} av matcherna.
     </p>
     ${failLine}
+    ${setupLine(summary.setup)}
     <table class="stat-table">
       <thead>
         <tr>
@@ -778,11 +779,130 @@ function renderMatchSummary(summary, data) {
       </thead>
       <tbody>${rows}</tbody>
     </table>
+    ${tacticsTable(summary.tactics, "Spelsätt: vad spelarna faktiskt gjorde")}
+    ${outcomeTable(summary.tactics_by_outcome)}
+    ${abilityTables(summary.abilities)}
     ${tokenLine}
     ${modelLine}
   `;
   $("matchSummary").hidden = false;
   showMatchDownload();
+}
+
+// Uppsättningen som spelade: liver och om profilerna var desamma i hela serien.
+function setupLine(setup) {
+  if (!setup) return "";
+  const lives = (setup.lives_per_player || []).join(", ");
+  const stable = setup.stable
+    ? ""
+    : `<p class="hint warn">
+         Samma roll spelade med olika förmågor i den här serien. Då går
+         rollsiffrorna inte att läsa som en egenskap hos en profil.
+       </p>`;
+  return `<p class="hint">
+      ${setup.player_count} spelare, ${lives} liv var.
+      Förmågorna var desamma i hela serien: ${setup.stable ? "ja" : "nej"}.
+    </p>${stable}`;
+}
+
+const num = (v, digits = 2) =>
+  v == null || Number.isNaN(v) ? "–" : Number(v).toFixed(digits);
+
+// Spelsättet per spelare, mätt ur händelserna. Det här är måtten som säger
+// något om hur en spelare spelar, inte bara hur det gick.
+function tacticsTable(tactics, title) {
+  const keys = Object.keys(tactics || {});
+  if (!keys.length) return "";
+  const rows = keys
+    .map((role) => {
+      const t = tactics[role];
+      return (
+        `<tr>` +
+        `<td>${role}</td>` +
+        `<td>${t.claims}</td>` +
+        `<td>${num(t.raise_steps)}</td>` +
+        `<td>${pct(t.raise_min_share)}</td>` +
+        `<td>${num(t.bluff_margin)}</td>` +
+        `<td>${pct(t.understate_share)}</td>` +
+        `<td>${pct(t.meier_share)}</td>` +
+        `<td>${t.calls}</td>` +
+        `<td>${num(t.call_height, 1)}</td>` +
+        `<td>${pct(t.call_precision)}</td>` +
+        `<td>${pct(t.claims_upheld)}</td>` +
+        `</tr>`
+      );
+    })
+    .join("");
+  return `
+    <h4 class="stat-title">${title}</h4>
+    <p class="hint">
+      Kliv = hur många steg över förra budet ett påstående låg (stegen i
+      ordningen, inte talen). Bluffmarginal = hur många steg en bluff låg över
+      tärningarna. Under = andel påståenden som var lägre än de egna tärningarna.
+      Synhöjd = hur långt ner i ordningen synen låg (0 = Mejer).
+    </p>
+    <table class="stat-table">
+      <thead><tr>
+        <th>Spelare</th><th>Påståenden</th><th>Kliv</th><th>Minsta kliv</th>
+        <th>Bluffmarginal</th><th>Under</th><th>Mejer</th><th>Synar</th>
+        <th>Synhöjd</th><th>Syn träffar</th><th>Bud höll</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+// Vann mot förlorade: samma mått, delat på matchutfall.
+function outcomeTable(split) {
+  const data = split || {};
+  if (!Object.keys(data).length) return "";
+  return tacticsTable(data, "Vann mot förlorade matcher");
+}
+
+// Vinstfrekvens per förmågenivå. Grupperat på nivå, inte på spelare, så att
+// serien svarar på vilka förmågor som lönar sig.
+function abilityTables(abilities) {
+  const keys = Object.keys(abilities || {});
+  if (!keys.length) return "";
+  const blocks = keys
+    .map((ability) => {
+      const levels = abilities[ability];
+      const rows = Object.keys(levels)
+        .map((level) => {
+          const b = levels[level];
+          return (
+            `<tr>` +
+            `<td>${level}</td>` +
+            `<td>${b.players.join(", ")}</td>` +
+            `<td>${b.games}</td>` +
+            `<td>${pct(b.win_rate)}</td>` +
+            `<td>${num(b.avg_lives_lost)}</td>` +
+            `<td>${pct(b.bluff_rate)}</td>` +
+            `<td>${pct(b.call_rate)}</td>` +
+            `<td>${pct(b.call_success_rate)}</td>` +
+            `</tr>`
+          );
+        })
+        .join("");
+      return `
+        <table class="stat-table">
+          <thead><tr>
+            <th>${ability}</th><th>Spelare</th><th>Matcher</th><th>Vinst%</th>
+            <th>Snitt liv −</th><th>Bluff%</th><th>Syn%</th><th>Syn träffar</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+    })
+    .join("");
+  return `
+    <h4 class="stat-title">Förmåga mot utfall</h4>
+    <p class="hint">
+      Varje förmåga delas i nivåer. Läs raderna mot varandra: skiljer sig
+      vinstfrekvensen mellan nivåerna? Med få matcher per nivå är talen brusiga,
+      så väg alltid in antalet matcher.
+    </p>
+    ${blocks}
+  `;
 }
 
 // Start- och sluttid för serien, när de finns i statusraden.
@@ -1093,7 +1213,10 @@ function renderAnalysisLogs(data) {
     cb.onchange = syncSelectedLogs;
     const name = document.createElement("span");
     name.className = "analysis-log-name";
-    name.textContent = log.label || log.name;
+    // Tiden formateras i webbläsarens tidszon, så att etiketten visar samma
+    // klockslag som resten av appen. Servern skickar epoch.
+    name.textContent =
+      log.started_at != null ? formatTime(log.started_at) : log.label || log.name;
     name.title = log.local ? `Lokal fil: ${log.name}` : log.name;
     const meta = document.createElement("span");
     meta.className = "analysis-log-meta";

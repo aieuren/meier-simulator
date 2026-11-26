@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import os
 import subprocess
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 DEFAULT_DIR = "/workspace/meier-logs"
@@ -69,9 +69,14 @@ _SERIES_PREFIX = "meier-matcher-"
 
 
 def series_filename(now: datetime | None = None) -> str:
-    """Filnamn för en serie: ÅÅÅÅ-MM-DD-TTMMSS.jsonl."""
-    stamp = (now or datetime.now()).strftime(_SERIES_STAMP)
-    return f"{stamp}.jsonl"
+    """Filnamn för en serie: ÅÅÅÅ-MM-DD-TTMMSS.jsonl, alltid i UTC.
+
+    Tidsstämpeln skrivs i UTC med flit. Containern kan stå i en annan tidszon än
+    den som läser loggen, och en stämpel utan zon är då omöjlig att tolka. Med
+    UTC i namnet går den alltid att räkna om till läsarens tid.
+    """
+    stamp = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    return f"{stamp.strftime(_SERIES_STAMP)}.jsonl"
 
 
 #: Svenska månadsnamn för läsbara etiketter.
@@ -82,10 +87,10 @@ _MONTHS = (
 
 
 def _parse_stamp(stamp: str) -> tuple[datetime, bool] | None:
-    """Tidpunkt och om namnet har sekunder, ur en tidsstämpel."""
+    """Tidpunkt (i UTC) och om namnet har sekunder, ur en tidsstämpel."""
     for fmt, has_seconds in ((_SERIES_STAMP_LEGACY, False), (_SERIES_STAMP, True)):
         try:
-            return datetime.strptime(stamp, fmt), has_seconds
+            return datetime.strptime(stamp, fmt).replace(tzinfo=timezone.utc), has_seconds
         except ValueError:
             continue
     return None
@@ -102,11 +107,11 @@ def _series_stamp(name: str) -> str | None:
 
 
 def parse_series_time(name: str) -> datetime | None:
-    """Tidpunkten ur ett seriefilnamn, eller None om namnet inte matchar.
+    """Tidpunkten ur ett seriefilnamn, som en zonmedveten UTC-tid.
 
-    Accepterar både det nya namnet (bara tidsstämpel) och det äldre med
-    prefixet ``meier-matcher-``, samt äldre stämplar utan sekunder, så att
-    loggar från tidigare körningar får rätt etikett.
+    Zonen sätts med flit. Filnamnet bär ingen zon, och ett naivt datetime skulle
+    tolkas som lokal tid av den som läser det — vilket är precis hur etiketten
+    och gränssnittet hamnade två timmar ifrån varandra.
     """
     stamp = _series_stamp(name)
     if stamp is None:
@@ -115,11 +120,22 @@ def parse_series_time(name: str) -> datetime | None:
     return parsed[0] if parsed else None
 
 
-def series_label(name: str) -> str:
-    """Läsbar etikett ur filnamnet: "12 november 2026, 02:46:13".
+def series_epoch(name: str) -> float | None:
+    """Seriens starttid som epoch-sekunder, eller None om namnet inte går att läsa.
 
-    Äldre namn utan sekunder visar bara timme och minut. Faller tillbaka på
-    själva filnamnet om det inte går att tolka.
+    Gränssnittet formaterar epoch i läsarens egen tidszon, så att loggens
+    etikett och övriga klockslag i appen alltid visar samma tid.
+    """
+    when = parse_series_time(name)
+    return when.timestamp() if when is not None else None
+
+
+def series_label(name: str) -> str:
+    """Läsbar etikett ur filnamnet: "12 november 2026, 01:48:13" (i UTC).
+
+    Används bara som reserv när tiden inte kan skickas som epoch till
+    gränssnittet. Nya vyer ska formatera :func:`series_epoch` i läsarens tidszon
+    i stället, så att etiketten stämmer med resten av appen.
     """
     stamp = _series_stamp(name)
     if stamp is None:
@@ -129,7 +145,7 @@ def series_label(name: str) -> str:
         return name
     when, has_seconds = parsed
     clock = f"{when:%H:%M:%S}" if has_seconds else f"{when:%H:%M}"
-    return f"{when.day} {_MONTHS[when.month - 1]} {when.year}, {clock}"
+    return f"{when.day} {_MONTHS[when.month - 1]} {when.year}, {clock} (UTC)"
 
 
 class LogRepo:
@@ -235,6 +251,7 @@ class LogRepo:
             out.append({
                 "name": p.name,
                 "label": series_label(p.name),
+                "started_at": series_epoch(p.name),
                 "size": stat.st_size,
                 "modified": int(stat.st_mtime),
             })

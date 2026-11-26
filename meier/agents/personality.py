@@ -21,9 +21,19 @@ from ..policy import AgentParams
 _LEVELS: tuple[str, ...] = ("mycket låg", "låg", "medel", "hög", "mycket hög")
 
 
-def _level(value: float) -> str:
+def level_name(value: float) -> str:
+    """Den grova nivån för ett parametervärde, som ett ord.
+
+    Används både i beskrivningen till modellen och när en serie ska gruppera
+    spelare efter förmåga. Samma indelning på båda ställena, annars kan texten
+    säga "hög" om en spelare som statistiken kallar "medel".
+    """
     idx = min(len(_LEVELS) - 1, int(value * len(_LEVELS)))
     return _LEVELS[idx]
+
+
+def _level(value: float) -> str:
+    return level_name(value)
 
 
 def _scale(value: float) -> str:

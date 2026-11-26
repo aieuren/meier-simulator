@@ -14,12 +14,14 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from .legacy import upgrade_record
 from .llm import LLMClient, LLMConfig, LLMError, parse_json_object
-from .match import summarize
+from .match import PROTOCOL_FORMAT, summarize
 
 #: Fält som måste finnas i en post för att den ska räknas som ett protokoll.
-_REQUIRED = ("players", "events", "player_stats", "winner_role")
+#: ``format`` krävs med flit: en post som skrevs före protokollversionen saknar
+#: spelarnas förmågor, och den går inte att skilja från en serie med tomma
+#: profiler. Att avvisa den är ärligare än att analysera den som om den vore ny.
+_REQUIRED = ("format", "players", "events", "player_stats", "winner_role")
 
 #: Hur många av de vanligaste värdena som tas med per fördelning.
 _TOP_N = 12
@@ -34,7 +36,15 @@ def normalize_record(obj: Any) -> dict[str, Any] | None:
         return None
     if not all(key in obj for key in _REQUIRED):
         return None
+    # En post från en nyare version kan innehålla fält vi inte känner igen. Den
+    # läses ändå, men flaggas, så att en blandad serie syns i sammanställningen.
     return obj
+
+
+def record_format(obj: dict[str, Any]) -> int | None:
+    """Protokollversionen som ett tal, eller None om fältet saknas."""
+    value = obj.get("format")
+    return value if isinstance(value, int) else None
 
 
 def parse_jsonl_text(text: str) -> tuple[list[dict[str, Any]], int]:
@@ -50,7 +60,7 @@ def parse_jsonl_text(text: str) -> tuple[list[dict[str, Any]], int]:
         except json.JSONDecodeError:
             skipped += 1
             continue
-        rec = normalize_record(upgrade_record(obj))
+        rec = normalize_record(obj)
         if rec is None:
             skipped += 1
             continue
@@ -107,6 +117,10 @@ def build_digest(records: list[dict[str, Any]]) -> dict[str, Any]:
         "avg_rounds": summary.get("avg_rounds", 0.0),
         "starter_win_rate": summary.get("starter_win_rate", 0.0),
         "roles": summary.get("roles", {}),
+        "tactics": summary.get("tactics", {}),
+        "tactics_by_outcome": summary.get("tactics_by_outcome", {}),
+        "abilities": summary.get("abilities", {}),
+        "setup": summary.get("setup", {}),
         "call_outcomes": calls,
         "actions": _top(actions),
         "claims": _top(claims),
@@ -169,6 +183,54 @@ def render_digest_text(digest: dict[str, Any]) -> str:
             )
         if digest.get("games_series_truncated"):
             lines.append(f"(endast de första {_MAX_SERIES} matcherna visas)")
+
+    lines.append("")
+    lines.append("SPELSÄTT PER ROLL (mätt ur händelserna)")
+    tactics = digest.get("tactics", {})
+    for role, t in tactics.items():
+        lines.append(
+            "- {role}: {claims} påståenden. Kliv över förra budet {raise_steps} steg "
+            "i snitt, {raise_min_share} av höjningarna var minsta möjliga kliv. "
+            "Bluffar låg {bluff_margin} steg över tärningarna i snitt. "
+            "Sa svagare än tärningarna i {understate_share} av påståendena "
+            "({understate_margin} steg under). Mejer {meier_share} av påståendena. "
+            "{calls} synar, i snitt {call_height} steg ner i ordningen, "
+            "träffade {call_precision}. Av {claims_challenged} synade påståenden "
+            "fälldes {lies_revealed} som lögn.".format(role=role, **t)
+        )
+
+    lines.append("")
+    lines.append("SPELSÄTT: VANN MOT FÖRLORADE (samma mått, delat på matchutfall)")
+    for key, t in (digest.get("tactics_by_outcome") or {}).items():
+        lines.append(
+            "- {key}: {claims} påståenden, kliv {raise_steps} steg, "
+            "bluffmarginal {bluff_margin} steg, svagare än tärningarna {understate_share}, "
+            "Mejer {meier_share}, {calls} synar på höjd {call_height} "
+            "(träff {call_precision}), påståenden som höll vid syn {claims_upheld}".format(
+                key=key, **t
+            )
+        )
+
+    lines.append("FÖRMÅGA MOT UTFALL (vinstfrekvens per nivå)")
+    abilities = digest.get("abilities", {})
+    for key, levels in abilities.items():
+        for level, b in levels.items():
+            lines.append(
+                f"- {key} {level}: {b['games']} matcher, vinst {b['win_rate']}, "
+                f"snitt liv förlorade {b['avg_lives_lost']}, bluff {b['bluff_rate']}, "
+                f"syn {b['call_rate']} (träff {b['call_success_rate']}), "
+                f"spelare: {', '.join(b['players'])}"
+            )
+
+    setup = digest.get("setup") or {}
+    if setup:
+        lines.append("")
+        lines.append(
+            f"Uppsättning: {setup.get('player_count')} spelare, "
+            f"{', '.join(setup.get('roles') or [])}, "
+            f"liv per spelare {setup.get('lives_per_player')}, "
+            f"profiler oförändrade i serien: {'ja' if setup.get('stable') else 'nej'}"
+        )
 
     lines.append("")
     lines.append("VAD SAMMANSTÄLLNINGEN INTE INNEHÅLLER")

@@ -464,6 +464,10 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 .stat-table th:first-child, .stat-table td:first-child { text-align: left; }
 .stat-table th { color: var(--muted); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.5px; }
 .stat-table tbody tr:hover { background: var(--panel-2); }
+/* Flera tabeller staplas i sammanfattningen. Rubriken skiljer dem åt, och
+   tabellerna scrollar i sidled i stället för att trycka ut sidan på mobil. */
+.stat-title { margin: 1.6rem 0 0.2rem; font-size: 0.95rem; color: var(--text); }
+.match-summary .stat-table { display: block; overflow-x: auto; white-space: nowrap; }
 
 .match-list { display: grid; gap: 0.5rem; }
 .match-row {

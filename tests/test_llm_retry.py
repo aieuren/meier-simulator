@@ -224,3 +224,117 @@ def test_fallback_models_default_to_empty(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "nyckel")
     monkeypatch.delenv("MEIER_FALLBACK_MODELS", raising=False)
     assert LLMConfig.from_env().fallback_models == ()
+
+
+# -- Claude (Anthropic) ------------------------------------------------------
+
+
+def _anthropic_client() -> LLMClient:
+    return LLMClient(
+        LLMConfig(
+            provider="anthropic",
+            model="claude-sonnet-4-5-20250929",
+            api_key="sk-ant-test",
+            max_retries=1,
+            retry_backoff=0.0,
+        )
+    )
+
+
+def test_anthropic_uses_messages_api_shape(monkeypatch):
+    """Claude ska anropas med systemfält, x-api-key och innehållsblock."""
+    seen: dict = {}
+
+    def fake_post(url, json=None, headers=None, **kwargs):
+        seen["url"] = url
+        seen["json"] = json
+        seen["headers"] = headers
+        return _FakeResponse(
+            {
+                "content": [{"type": "text", "text": '{"claim": 52}'}],
+                "usage": {"input_tokens": 11, "output_tokens": 5},
+            }
+        )
+
+    monkeypatch.setattr("meier.llm.httpx.post", fake_post)
+    client = _anthropic_client()
+    assert client.complete("du är en spelare", "vad bjuder du?") == '{"claim": 52}'
+
+    assert seen["url"] == "https://api.anthropic.com/v1/messages"
+    assert seen["json"]["system"] == "du är en spelare"
+    assert seen["json"]["messages"] == [
+        {"role": "user", "content": "vad bjuder du?"}
+    ]
+    assert seen["headers"]["x-api-key"] == "sk-ant-test"
+    assert "anthropic-version" in seen["headers"]
+    # Nyckeln får inte hamna i Authorization för Anthropic.
+    assert "Authorization" not in seen["headers"]
+
+
+def test_anthropic_usage_is_counted(monkeypatch):
+    """Anthropics input/output-tokens ska in i samma räkning som Geminis."""
+
+    def fake_post(url, json=None, **kwargs):
+        return _FakeResponse(
+            {
+                "content": [{"type": "text", "text": "svar"}],
+                "usage": {"input_tokens": 20, "output_tokens": 7},
+            }
+        )
+
+    monkeypatch.setattr("meier.llm.httpx.post", fake_post)
+    client = _anthropic_client()
+    client.complete("s", "u")
+    assert client.total_usage["prompt_tokens"] == 20
+    assert client.total_usage["completion_tokens"] == 7
+    assert client.total_usage["total_tokens"] == 27
+
+
+def test_anthropic_multiple_text_blocks_are_joined(monkeypatch):
+    """Svaret kan delas i flera textblock och ska sättas ihop till en sträng."""
+
+    def fake_post(url, json=None, **kwargs):
+        return _FakeResponse(
+            {
+                "content": [
+                    {"type": "text", "text": '{"claim":'},
+                    {"type": "text", "text": " 52}"},
+                ],
+                "usage": {"input_tokens": 1, "output_tokens": 1},
+            }
+        )
+
+    monkeypatch.setattr("meier.llm.httpx.post", fake_post)
+    assert _anthropic_client().complete("s", "u") == '{"claim": 52}'
+
+
+def test_anthropic_overloaded_529_falls_back_to_next_model(monkeypatch):
+    """529 betyder överbelastad, samma som 503, och ska byta modell direkt."""
+    models: list[str] = []
+
+    def fake_post(url, json=None, **kwargs):
+        models.append(json["model"])
+        if json["model"] == "primär":
+            request = httpx.Request("POST", "https://api.anthropic.com")
+            response = httpx.Response(529, request=request, json={"error": "overloaded"})
+            raise httpx.HTTPStatusError("529", request=request, response=response)
+        return _FakeResponse(
+            {
+                "content": [{"type": "text", "text": "reservsvar"}],
+                "usage": {"input_tokens": 1, "output_tokens": 1},
+            }
+        )
+
+    monkeypatch.setattr("meier.llm.httpx.post", fake_post)
+    client = LLMClient(
+        LLMConfig(
+            provider="anthropic",
+            model="primär",
+            fallback_models=("reserv",),
+            api_key="sk-ant-test",
+            max_retries=3,
+            retry_backoff=0.0,
+        )
+    )
+    assert client.complete("s", "u") == "reservsvar"
+    assert models == ["primär", "reserv"]
