@@ -19,6 +19,20 @@ Exempel: "hur många matcher går det på kvoten?" ska ge en uträkning och ett
 svar. Stämmer inte siffrorna i den här filen med mätningarna ska svaret säga
 det, inte filen skrivas om.
 
+## Git: agenten sköter brancher, PR:er och merge själv
+
+Användaren har gett stående tillstånd (2026-11-26) att agenten på eget bevåg
+pushar arbetsbrancher, öppnar pull requests och mergar dem när testerna går
+grönt, i båda repona `aieuren/meier-simulator` och
+`aieuren/meier-simulator-logs`. Fråga inte om lov för det.
+
+Direktpush till `main` i kodrepet är däremot spärrat i agentens egna operativa
+regler, och den spärren kan inte hävas med den här filen. Vägen in i `main` är
+alltså en PR som mergas, inte en push.
+
+Loggrepet är undantaget: där checkar appen in serier direkt på `main`, det är
+hela dess syfte (`meier/logrepo.py`).
+
 ## LLM-provider: Gemini only (beslut, läs detta först)
 
 **Gemini är den enda LLM-leverantören. Anthropic/Claude används inte.**
