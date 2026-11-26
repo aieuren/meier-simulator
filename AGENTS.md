@@ -795,12 +795,17 @@ Watch the two traps when touching this:
   SessionStart-kroken och Canvas-panelen använder svaret som "appen kör"-signal;
   en 500 vid saknad nyckel fick dem att starta om en frisk app.
 - Long runs / sandbox lifetime: the runtime pauses an idle environment
-  (`OH_RUNTIME_IDLE_TIMEOUT_SECONDS`, 1200s = 20 min in Canvas). LLM traffic and
-  the client's 3s status polling keep it awake. A match series runs in a
-  background thread, so closing the tab does not stop it, and the JSONL is
-  appended as matches finish — a pause mid-series does not lose finished games.
-  For runs that must exceed the idle window, run the CLI outside Canvas with a
-  real `GEMINI_API_KEY` (optionally `nohup`).
+  (`OH_RUNTIME_IDLE_TIMEOUT_SECONDS`, 1200s = 20 min in Canvas). Only activity in
+  the conversation resets the timer — `idle_time` in `GET /server_info`, measured
+  2026-11-26: the app's LLM calls and the client's 3s status polling do **not**
+  count. A series running while nobody writes in the chat is therefore killed
+  mid-match (2026-11-26: two of five matches finished, then the sandbox stopped).
+  A match series runs in a background thread, so closing the tab does not stop
+  it, and finished matches are committed as they complete — a pause mid-series
+  does not lose finished games. Keep long series under the idle window (a match
+  with LLM takes 8–11 min) or stay in the conversation while it runs. A series
+  longer than the window needs the CLI on your own machine with a real
+  `GEMINI_API_KEY`; inside the sandbox the process dies with the container.
 - The analysis tab keeps loaded protocols in memory (`web.app._store`),
   so they are lost on restart. Tests clear the store to stay isolated.
 - Git remote: `https://github.com/aieuren/mejer-simulator.git` (branch `main`).
