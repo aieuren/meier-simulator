@@ -54,8 +54,10 @@ hjälper ingen väntan på minuter. Google skriver själv hur länge det är kva
 `_QuotaExhausted` gör inga omförsök, och feltexten säger "Kvoten fylls på om
 5 tim 38 min". Ser du det meddelandet är det bara att vänta.
 
-Räkna med att en match med språkmodell gör ca 20 anrop. 500 anrop per dygn
-räcker alltså till ungefär 25 matcher, så en längre serie tar slut. Kör då
+Räkna med att en match med språkmodell gör **ca 80 anrop** (mätt i loggarna:
+76, 80 och 88 anrop för 11–12 rundor med fyra LLM-spelare, ~97 000 tokens per
+match). 500 anrop per dygn räcker alltså till ungefär **6 matcher**. Den äldre
+siffran "ca 20 anrop per match" var per spelare, inte per match. Kör då
 `--no-llm` (snabb, deterministisk, ingen kvot) eller färre matcher. Samma val
 finns i webbgränssnittet som kryssrutan "Använd språkmodellen" i Matchserie
 (`with_llm` i `MatchRequest`), så appen går att använda även när kvoten är slut.
@@ -515,8 +517,8 @@ states the exact value):
 - RPM = 15 (`GenerateRequestsPerMinutePerProjectPerModel-FreeTier`). Quotas
   are per project, not per API key, so every client shares one budget.
 - RPD and TPM are not shown without signing in to AI Studio. The free tier
-  typically allows ~1 000 requests/day, which is ~10 matches at ~100 calls
-  each.
+  allows 500 requests/day per model for `gemini-3.1-flash-lite`, which is
+  ~6 matches at ~80 calls each (see the top of this file).
 
 We stay under the limit instead of only reacting to 429s:
 
@@ -531,6 +533,28 @@ We stay under the limit instead of only reacting to 429s:
 
 A match of ~100 calls at ~13/min takes ~8 minutes of pacing, plus the model's
 own latency. Lower `MEIER_MAX_RPM` if other projects share the same key.
+
+## Kvotraden i Matchserie (meier/quota.py)
+
+Google redovisar aldrig återstående dygnskvot i något API, så appen räknar
+sina egna anrop och visar en uppskattning i stället för en tom rad.
+
+- `meier/quota.py` räknar ett anrop per lyckat LLM-svar, per modell och dygn,
+  i `quota.json` under `MEIER_LOCAL_LOG_DIR` (eller `MEIER_QUOTA_FILE`).
+  Räkningen får aldrig kasta vidare: en trasig kvotfil ska inte stoppa en match.
+- Gränsen är `MEIER_DAILY_CALLS` (standard 500, fri nivå) och uppskattningen
+  använder `MEIER_CALLS_PER_MATCH` (standard 80, uppmätt). Ändra den senare om
+  matchlängden ändras, annars blir "matcher kvar" fel.
+- Dygnskvoten fylls på vid midnatt i Stillahavstid (`America/Los_Angeles`), och
+  det är den tiden som visas. När ett 429 säger att dygnstaket är nått sparas
+  Googles egen väntetid (`Please retry in 5h38m11s`) och visas i stället.
+- `GET /api/quota` ger `used`, `remaining`, `matches_left`, `reset_at`,
+  `reset_in_seconds` och `exhausted_hint`. Fliken Matchserie visar raden,
+  uppdaterar den varje minut, när fliken öppnas och när en serie tar slut.
+- Siffrorna gäller den primära modellen, eftersom en serie avbryts när just
+  dess tak tar slut. Reservmodellerna har egna tak men används bara vid 503.
+- Räkningen ser bara den här appens anrop. Kör något annat mot samma projekt
+  (AI Studio, en annan maskin) blir uppskattningen för optimistisk.
 
 ## Environment restarts wipe global packages
 

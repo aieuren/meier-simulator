@@ -27,6 +27,8 @@ from typing import Any
 
 import httpx
 
+from . import quota
+
 
 class LLMError(RuntimeError):
     """Fel vid anrop mot språkmodellen."""
@@ -271,7 +273,7 @@ class LLMClient:
     #: Modellen som senast svarade. Går först i kön vid nästa anrop.
     _active_model: str = field(default="", init=False, repr=False)
 
-    def _record_usage(self, usage: dict[str, Any]) -> None:
+    def _record_usage(self, usage: dict[str, Any], model: str | None = None) -> None:
         """Spara senaste anropets räkning och lägg den till summan."""
         self.last_usage = {
             k: int(v) for k, v in usage.items() if isinstance(v, (int, float))
@@ -283,6 +285,7 @@ class LLMClient:
         self.calls += 1
         for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
             self.total_usage[key] += self.last_usage.get(key, 0)
+        quota.record_call(model or self.config.model)
 
     def complete(self, system: str, user: str, *, json_mode: bool = False) -> str:
         errors: list[str] = []
@@ -380,7 +383,7 @@ class LLMClient:
 
         resp = self._post(url, payload, headers)
         data = resp.json()
-        self._record_usage(data.get("usage") or {})
+        self._record_usage(data.get("usage") or {}, model=model or self.config.model)
         try:
             return data["choices"][0]["message"]["content"].strip()
         except (KeyError, IndexError, TypeError) as exc:
@@ -401,6 +404,7 @@ class LLMClient:
                 body = exc.response.text
                 if status == 429 and _is_daily_quota(body):
                     hint = _retry_hint(body)
+                    quota.note_exhausted(hint)
                     when = f" Kvoten fylls på om {hint}." if hint else ""
                     raise _QuotaExhausted(
                         "Dygnskvoten för Gemini är slut (429, free tier)."
