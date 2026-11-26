@@ -1038,9 +1038,11 @@ gone — replaced by four neutral-named players in `meier/agents/roster.py`:
   every reading player the same tracker (one shared view of the table).
 - Monkeypatch seam: `play_match` builds agents through `match._new_agents`
   (LLM on) or `match._new_agents_no_llm` (LLM off). Tests patch `_new_agents`.
-- Provider: Gemini only, via `GEMINI_API_KEY` or
-  `$MEIER_SECRETS_DIR/gemini.key`. `LLMConfig.from_env()` raises `LLMError`
-  without a key.
+- Provider: Anthropic (Claude) or Gemini. Claude wins when
+  `ANTHROPIC_API_KEY` (or `$MEIER_SECRETS_DIR/anthropic.key`) is set, otherwise
+  Gemini via `GEMINI_API_KEY` or `$MEIER_SECRETS_DIR/gemini.key`.
+  `LLMConfig.from_env()` raises `LLMError` without a key. `/api/health` reports
+  which provider and model is in use, so check it before a long series.
 - The Gemini proxy hits a 429 quota. When it does, `LLMError` surfaces after
   three retries and a full LLM round can hang for many minutes. Do not use a live
   session to verify model wiring while the quota is exhausted — a session-level
