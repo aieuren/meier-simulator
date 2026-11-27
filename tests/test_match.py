@@ -185,6 +185,40 @@ def test_progress_reports_each_round(monkeypatch):
     assert [r for _, r in seen] == sorted(r for _, r in seen)
 
 
+def test_on_match_done_runs_when_a_match_is_finished(monkeypatch):
+    """on_match_done ska komma när matchen är slut, även om den föll bort.
+
+    Statusraden visar pågående matcher ur den kroken. En match som spelats klart
+    men ännu inte skrivits får inte stå kvar som pågående.
+    """
+    from meier.llm import LLMError
+
+    def flaky(role_keys, *, game=1, lives=3, with_llm=True, on_progress=None):
+        if game == 2:
+            raise LLMError("Modellen är överbelastad (503)")
+        return match.GameRecord(
+            game=game,
+            provider="test",
+            model="test",
+            players=[],
+            order=[],
+            starter="",
+            winner="",
+            winner_role="",
+            rounds=0,
+            lives={},
+            elimination_order=[],
+            events=[],
+            player_stats={},
+        )
+
+    done: list[int] = []
+    monkeypatch.setattr(match, "play_match", flaky)
+    list(match.run_matches(["a", "b"], 3, on_match_done=done.append))
+
+    assert done == [1, 2, 3]
+
+
 def test_play_match_calls_on_progress_when_a_round_ends(monkeypatch):
     """on_progress ska anropas från play_match, med runda och antal kvar."""
     monkeypatch.setattr(match, "_new_agents", make_agents)

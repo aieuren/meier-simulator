@@ -534,6 +534,16 @@ We stay under the limit instead of only reacting to 429s:
 A match of ~100 calls at ~13/min takes ~8 minutes of pacing, plus the model's
 own latency. Lower `MEIER_MAX_RPM` if other projects share the same key.
 
+## Statusraden i Matchserie visar bara matcher som spelas
+
+`_MatchJob.live` fylls av `on_match_progress` och töms av `on_match_done`; båda
+anropas från tråden som spelar matchen (`run_matches` i `meier/match.py`).
+Rensningen får inte ligga i skrivloopen: den checkar in varje match i loggrepet
+och kan ligga dussintals matcher efter en snabb serie. När rensningen låg där
+listade parentesen i "X av Y matcher klara" alla färdiga men ännu oskrivna
+matcher, så en serie på 100 matcher gav en mycket lång rad. Med rensningen i
+speltråden står bara de matcher som faktiskt spelar där.
+
 ## Kvotraden i Matchserie (meier/quota.py)
 
 Google redovisar aldrig återstående dygnskvot i något API, så appen räknar
