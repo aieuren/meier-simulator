@@ -189,13 +189,33 @@ select {
 .player-card {
   background: var(--panel-2);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--line);
+  border-left: 4px solid var(--good);
   border-radius: 11px;
   padding: 0.9rem 1rem;
 }
+.player-card.off { opacity: 0.55; border-left-color: var(--line); }
+.player-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+.player-check {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.player-check input { accent-color: var(--good); cursor: pointer; }
 .player-name { font-weight: 700; font-size: 1.05rem; margin-bottom: 0.15rem; }
 .player-desc { color: var(--muted); font-size: 0.85rem; margin-bottom: 0.5rem; }
 .player-style { color: var(--muted); font-size: 0.88rem; line-height: 1.45; margin: 0; }
+.active-line { margin: 1rem 0 0; font-size: 0.95rem; }
+.active-line.warn { color: var(--bad); }
 
 button {
   background: var(--panel-2);

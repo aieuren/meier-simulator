@@ -556,6 +556,25 @@ sina egna anrop och visar en uppskattning i stället för en tom rad.
 - Räkningen ser bara den här appens anrop. Kör något annat mot samma projekt
   (AI Studio, en annan maskin) blir uppskattningen för optimistisk.
 
+## Spelarvalet (fliken Spelarna)
+
+Fliken Spelarna (hette Rollerna) har en kryssruta per spelare. Valet gäller
+hela simulatorn och ligger i processminnet:
+
+- `GET /api/players` ger `{"active": [...], "all": [...], "min": 2}`.
+  `PUT /api/players` med `{"roles": [...]}` sätter urvalet. Ordningen följer
+  registret, okända nycklar ger 400 och färre än två avvisas.
+- `GET /api/roles` märker varje roll med `active`, så frontend klarar sig med
+  en hämtning vid start.
+- `/api/session/new` och `/api/matches/run` använder urvalet när `roles`
+  utelämnas; skickas `roles` gäller de.
+- Fliken Enskild spelare visar bara de aktiva spelarna.
+- `app._active` (`ActivePlayers`) nollställs vid omstart, så alla fem är med
+  igen efter en container-vila. Det är avsiktligt: ett gammalt urval som
+  plötsligt styr en serie är svårare att förstå än att välja om.
+- Simulatorn är fortfarande byggd för spelarna i registret. Att skala upp till
+  godtyckligt antal profiler är ett eget steg, inte gjort här.
+
 ## Environment restarts wipe global packages
 
 Dependencies are installed globally (no venv). After a container restart,

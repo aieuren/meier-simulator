@@ -41,6 +41,38 @@ app = FastAPI(title="Meier-agenten", version="2.0.0")
 # En agent per roll, skapade på begäran så att LLM-klienten återanvänds.
 _agents: dict[str, object] = {}
 
+
+class ActivePlayers:
+    """Vilka spelare som är med, i registrets ordning.
+
+    Valet i fliken Spelarna gäller hela appen: enskilda anrop, sessioner och
+    matchserier. Det ligger i processminnet med flit – efter en omstart är alla
+    fem med igen, vilket är lättare att förstå än att en serie plötsligt spelar
+    med ett urval som valdes förra veckan.
+    """
+
+    def __init__(self) -> None:
+        self._keys: list[str] = role_keys()
+
+    def keys(self) -> list[str]:
+        return list(self._keys)
+
+    def set(self, keys: list[str]) -> None:
+        unknown = [k for k in keys if k not in ROSTER]
+        if unknown:
+            raise HTTPException(
+                status_code=400, detail=f"Okänd spelare: {', '.join(unknown)}"
+            )
+        chosen = [k for k in role_keys() if k in set(keys)]
+        if len(chosen) < 2:
+            raise HTTPException(
+                status_code=400, detail="Minst två spelare måste vara med"
+            )
+        self._keys = chosen
+
+
+_active = ActivePlayers()
+
 # Den aktiva interaktiva sessionen (en åt gången).
 _session: Session | None = None
 
@@ -215,6 +247,7 @@ class NoCacheStaticFiles(StaticFiles):
 
 @app.get("/api/roles")
 def list_roles() -> dict:
+    active = _active.keys()
     return {
         "roles": [
             {
@@ -222,6 +255,7 @@ def list_roles() -> dict:
                 "name": p.name,
                 "description": p.description,
                 "uses_llm": p.uses_llm,
+                "active": p.key in active,
                 "params": {
                     "caution": p.params.caution,
                     "statistics": p.params.statistics,
@@ -238,7 +272,27 @@ def list_roles() -> dict:
             for p in ROSTER.values()
         ],
         "ranking": [{"value": v, "name": rules.name(v)} for v in rules.RANKING],
+        "active": active,
     }
+
+
+class ActivePlayersRequest(BaseModel):
+    roles: list[str] = Field(
+        default_factory=list, description="Spelarna som ska vara med"
+    )
+
+
+@app.get("/api/players")
+def players_get() -> dict:
+    """Vilka spelare som är med. Valet gäller alla flikar och matchserier."""
+    return {"active": _active.keys(), "all": role_keys(), "min": 2}
+
+
+@app.put("/api/players")
+def players_put(req: ActivePlayersRequest) -> dict:
+    """Sätt vilka spelare som är med. Minst två krävs, okända avvisas."""
+    _active.set(req.roles)
+    return {"active": _active.keys(), "all": role_keys(), "min": 2}
 
 
 @app.post("/api/announce")
@@ -342,9 +396,9 @@ def health() -> dict:
 
 
 class NewSessionRequest(BaseModel):
-    roles: list[str] = Field(
-        default_factory=role_keys,
-        description="Roller som spelar. Standard: alla fem.",
+    roles: list[str] | None = Field(
+        default=None,
+        description="Roller som spelar. Standard: spelarna som är aktiva.",
     )
 
 
@@ -358,7 +412,7 @@ def _require_session() -> Session:
 def session_new(req: NewSessionRequest) -> dict:
     """Skapa en ny session: slumpad ordning och första tärningsslag."""
     global _session
-    roles = req.roles or role_keys()
+    roles = req.roles if req.roles is not None else _active.keys()
     for key in roles:
         if key not in ROSTER:
             raise HTTPException(status_code=400, detail=f"Okänd roll: {key}")
@@ -448,9 +502,9 @@ def session_stop() -> dict:
 
 
 class MatchRequest(BaseModel):
-    roles: list[str] = Field(
-        default_factory=role_keys,
-        description="Roller som spelar. Standard: alla fyra.",
+    roles: list[str] | None = Field(
+        default=None,
+        description="Roller som spelar. Standard: spelarna som är aktiva.",
     )
     count: int = Field(5, ge=1, le=200, description="Antal matcher")
     lives: int = Field(3, ge=1, le=10)
@@ -639,7 +693,7 @@ _match_job: _MatchJob | None = None
 def matches_run(req: MatchRequest) -> dict:
     """Starta en serie matcher i bakgrunden. Följ den med /api/matches/status."""
     global _match_job
-    roles = req.roles or role_keys()
+    roles = req.roles if req.roles is not None else _active.keys()
     for key in roles:
         if key not in ROSTER:
             raise HTTPException(status_code=400, detail=f"Okänd roll: {key}")
