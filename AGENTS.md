@@ -965,6 +965,12 @@ Watch the two traps when touching this:
 
 ## Autostart efter container-vila (self-service)
 
+Adressen till appen utifrån: `https://work-1-ahyxnirhxezwpjrb.prod-runtime.all-hands.dev/`
+(port 12000). Reserv: samma värdnamn med `work-2` (port 12001), som bara används
+när en testinstans startas vid sidan om. Värdnamnet har en slumpdel per sandlåda,
+så det står också i konversationens miljöinformation. Snabbkoll:
+`curl -s https://work-1-.../api/health`.
+
 Sandlådan stängs av efter 20 minuters inaktivitet
 (`OH_RUNTIME_IDLE_TIMEOUT_SECONDS=1200`). Vid nästa besök startar containern om,
 men webbappen gör det inte — och den installeras under `~/.openhands`, som
