@@ -1,6 +1,6 @@
 const $ = (id) => document.getElementById(id);
 
-let state = { role: "cecilia", ranking: [] };
+let state = { role: "cecilia", ranking: [], active: [], rolesData: null };
 
 async function boot() {
   setupTabs();
@@ -20,22 +20,11 @@ async function boot() {
   const res = await fetch("/api/roles");
   const data = await res.json();
   state.ranking = data.ranking;
+  state.rolesData = data;
+  state.active = data.active || (data.roles || []).filter((r) => r.active).map((r) => r.key);
 
   renderPlayers(data);
-
-  // Rollkort
-  const list = $("roleList");
-  data.roles.forEach((r) => {
-    const div = document.createElement("div");
-    div.className = "role" + (r.key === state.role ? " active" : "");
-    div.dataset.key = r.key;
-    div.innerHTML = `<span class="rname">${r.name}</span><span class="rdesc">${r.description}</span>`;
-    div.onclick = () => {
-      state.role = r.key;
-      document.querySelectorAll(".role").forEach((el) => el.classList.toggle("active", el.dataset.key === r.key));
-    };
-    list.appendChild(div);
-  });
+  renderRoleCards(data);
 
   // Tidigare påstående + motståndarens påstående. Meier går inte att höja,
   // så det erbjuds inte som tidigare påstående.
@@ -106,7 +95,9 @@ function setupTabs() {
 
 function playerCard(r) {
   const div = document.createElement("div");
-  div.className = "player-card";
+  const on = state.active.includes(r.key);
+  div.className = "player-card" + (on ? "" : " off");
+  div.dataset.key = r.key;
   const p = r.params || {};
   const numbers = [
     `försiktighet ${Math.round((p.caution ?? 0) * 100)} %`,
@@ -117,23 +108,33 @@ function playerCard(r) {
   const style = r.style_text || numbers;
   const kind = r.uses_llm ? "" : " · basmodell utan språkmodell";
   div.innerHTML = `
-    <div class="player-name">${r.name}</div>
+    <div class="player-head">
+      <div class="player-name">${r.name}</div>
+      <label class="player-check">
+        <input type="checkbox" ${on ? "checked" : ""} />
+        <span>Spelar</span>
+      </label>
+    </div>
     <div class="player-desc">${r.description}</div>
     <p class="player-style">${style}${kind}</p>
   `;
+  const box = div.querySelector("input");
+  box.onchange = () => togglePlayer(r.key, box.checked, box);
   return div;
 }
 
 function renderPlayers(data) {
   const list = $("playerList");
   if (!list) return;
+  state.rolesData = data;
   list.innerHTML = "";
   const roles = data.roles || [];
   roles.forEach((r) => list.appendChild(playerCard(r)));
 
-  const llm = roles.filter((r) => r.uses_llm).length;
+  const active = roles.filter((r) => state.active.includes(r.key));
+  const llm = active.filter((r) => r.uses_llm).length;
   const heading = $("playersHeading");
-  if (heading) heading.textContent = `De ${roles.length} rollerna`;
+  if (heading) heading.textContent = "Spelarna";
   const intro = $("playersIntro");
   if (intro) {
     const modelText = llm === 0
@@ -142,13 +143,88 @@ function renderPlayers(data) {
         ? "En av dem fattar sina beslut med en språkmodell"
         : `${llm} av dem fattar sina beslut med en språkmodell`;
     intro.textContent =
-      `${roles.length} oberoende AI-agenter spelar mot varandra. Var och en har sin egen ` +
-      `profil och spelstil, och ser bara den information en riktig spelare skulle ha. ` +
-      `${modelText}; resten är grundtaktik. Repliken byggs alltid lokalt ur draget. ` +
-      `Rollerna är desamma i alla flikar.`;
+      `${active.length} av ${roles.length} spelare är med. Kryssa för vilka som ska ` +
+      `spela – valet gäller hela simulatorn, både sessioner och matchserier. ` +
+      `${modelText}; resten är grundtaktik. Varje spelare ser bara den information ` +
+      `en riktig spelare skulle ha, och repliken byggs lokalt ur draget.`;
   }
   const sessionHeading = $("sessionHeading");
-  if (sessionHeading) sessionHeading.textContent = `De ${roles.length} spelarna möter varandra`;
+  if (sessionHeading) {
+    sessionHeading.textContent = `De ${active.length} spelarna möter varandra`;
+  }
+  renderActiveLine();
+}
+
+// Rollistan i fliken Enskild spelare visar bara dem som är med.
+function renderRoleCards(data) {
+  const list = $("roleList");
+  if (!list) return;
+  list.innerHTML = "";
+  const roles = (data.roles || []).filter((r) => state.active.includes(r.key));
+  if (!roles.some((r) => r.key === state.role)) {
+    state.role = roles.length ? roles[0].key : null;
+  }
+  roles.forEach((r) => {
+    const div = document.createElement("div");
+    div.className = "role" + (r.key === state.role ? " active" : "");
+    div.dataset.key = r.key;
+    div.innerHTML = `<span class="rname">${r.name}</span><span class="rdesc">${r.description}</span>`;
+    div.onclick = () => {
+      state.role = r.key;
+      document.querySelectorAll(".role").forEach((el) => el.classList.toggle("active", el.dataset.key === r.key));
+    };
+    list.appendChild(div);
+  });
+}
+
+// Raden längst ner i fliken Spelarna: vilka som är med just nu.
+function renderActiveLine() {
+  const line = $("activePlayersLine");
+  if (!line || !state.rolesData) return;
+  const names = (state.rolesData.roles || [])
+    .filter((r) => state.active.includes(r.key))
+    .map((r) => r.name);
+  line.className = "active-line";
+  if (!names.length) {
+    line.textContent = "";
+    return;
+  }
+  const head = names.slice(0, -1).join(", ");
+  line.textContent = `Aktiva spelare: ${head ? `${head} och ` : ""}${names[names.length - 1]}.`;
+}
+
+// Fel om valet inte går att spara, ovanför korten där blicken redan är.
+function showActiveError(msg) {
+  const box = $("playersError");
+  if (!box) return;
+  box.hidden = !msg;
+  box.textContent = msg || "";
+}
+
+async function togglePlayer(key, on, box) {
+  const next = on ? [...state.active, key] : state.active.filter((k) => k !== key);
+  if (next.length < 2) {
+    box.checked = true;
+    showActiveError("Minst två spelare måste vara med.");
+    return;
+  }
+  try {
+    const res = await fetch("/api/players", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ roles: next }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Fel");
+    state.active = data.active;
+  } catch (err) {
+    box.checked = !on;
+    showActiveError(`Kunde inte spara valet: ${err.message}`);
+    return;
+  }
+  showActiveError("");
+  renderPlayers(state.rolesData);
+  renderRoleCards(state.rolesData);
 }
 
 function readDice(a, b) {
@@ -286,7 +362,7 @@ async function newSession() {
     const res = await fetch("/api/session/new", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ roles: ["axel", "berit", "cecilia", "david", "elsa"] }),
+      body: JSON.stringify({}),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || "Fel");

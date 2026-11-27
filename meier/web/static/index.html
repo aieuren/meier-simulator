@@ -14,7 +14,7 @@
 </header>
 
 <nav class="tabs" role="tablist" aria-label="Flikar">
-  <button class="tab active" data-tab="tab-spelarna" role="tab" aria-selected="true">Rollerna</button>
+  <button class="tab active" data-tab="tab-spelarna" role="tab" aria-selected="true">Spelarna</button>
   <button class="tab" data-tab="tab-spelare" role="tab" aria-selected="false">Enskild spelare</button>
   <button class="tab" data-tab="tab-agenter" role="tab" aria-selected="false">Spelarna möter varandra</button>
   <button class="tab" data-tab="tab-spel" role="tab" aria-selected="false">Matchserie</button>
@@ -25,15 +25,17 @@
   <!-- Flik 1: spelarna och deras profiler -->
   <div class="tab-panel" id="tab-spelarna">
     <section class="card">
-      <h2 id="playersHeading">Rollerna</h2>
+      <h2 id="playersHeading">Spelarna</h2>
       <p class="hint" id="playersIntro">
         Oberoende AI-agenter spelar mot varandra. Var och en har sin egen
         profil och spelstil, och ser bara den information en riktig spelare
-        skulle ha. De flesta fattar sina beslut med en språkmodell; Axel är
-        grundtaktiken. Repliken byggs alltid lokalt ur draget. Rollerna är
-        desamma i alla flikar.
+        skulle ha. Kryssa för vilka som ska vara med – valet gäller hela
+        simulatorn, både sessioner och matchserier. Repliken byggs alltid
+        lokalt ur draget.
       </p>
+      <p class="active-line warn" id="playersError" hidden></p>
       <div id="playerList" class="players"></div>
+      <p class="active-line" id="activePlayersLine"></p>
     </section>
   </div>
 
@@ -236,7 +238,7 @@
 </main>
 
 <footer>
-  <p>Meier spelas med två tärningar. 21 (Meier) är högst, 31 lägst. Meier kostar dubbelt.</p>
+  <p>Meier spelas med två lite avlånga tärningar.</p>
 </footer>
 
 <script src="/static/app.js"></script>
