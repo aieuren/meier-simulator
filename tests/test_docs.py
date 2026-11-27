@@ -898,3 +898,22 @@ def test_agents_md_states_the_provider_decision():
     assert "endast" in text or "only" in text
     # Beslutet ska ligga högt upp, inte begravt i historiken.
     assert text.index("Gemini only") < 3000
+
+
+def test_code_docs_do_not_claim_the_policy_makes_the_decisions():
+    """Samma sak i kodens docstrings: med LLM är det modellen som väljer.
+
+    ``policy.py`` och ``match.py`` beskrev länge en äldre arkitektur där policyn
+    alltid ägde draget och LLM:en bara fick föreslå. Den som läste koden fick då
+    en bild som inte stämde med vad som spelas.
+    """
+    stale = (
+        "draget som spelas ägs av policyn",
+        "draget ägs ändå av policyn",
+        "tyst återgång till baspolicyn",
+    )
+    meier = README.parent / "meier"
+    for path in sorted(meier.rglob("*.py")):
+        flat = " ".join(path.read_text(encoding="utf-8").split()).lower()
+        for claim in stale:
+            assert claim not in flat, f"{path.relative_to(meier.parent)} påstår {claim!r}."
