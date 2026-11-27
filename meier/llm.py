@@ -185,8 +185,9 @@ class LLMConfig:
     provider: str
     model: str
     #: Modeller att falla tillbaka på när den primära svarar 503 (överbelastad).
-    #: Googles flash-modeller slår i taket med jämna mellanrum; utan reserver
-    #: blir varje beslut en tyst återgång till baspolicyn.
+    #: Googles flash-modeller slår i taket med jämna mellanrum. Utan reserver
+    #: avbryts matchen vid första 503:an i stället för att spelas klart — det
+    #: finns ingen tyst återgång till regelspelaren.
     fallback_models: tuple[str, ...] = ()
     api_key: str = ""
     base_url: str = ""

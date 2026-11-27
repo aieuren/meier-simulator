@@ -197,10 +197,11 @@ def play_match(
 ) -> GameRecord:
     """Spela en hel match mellan rollerna och returnera protokollet.
 
-    ``with_llm`` styr om spelarna får en LLM-klient för replikerna. Draget ägs
-    ändå av policyn, så med ``with_llm=False`` blir matchen mekanisk och går på
-    millisekunder — det är läget för utvärdering och statistik. En profil med
-    ``unpredictability`` över noll varierar sig ändå.
+    ``with_llm`` avgör vem som fattar besluten. Utan LLM-klient är spelaren en
+    regelspelare som väljer enligt :class:`~meier.policy.BasePolicy`; matchen går
+    då på millisekunder i stället för minuter, vilket är läget för utvärdering
+    och statistik. Med LLM-klient är det modellen som väljer draget. En profil
+    med ``unpredictability`` över noll varierar sig ändå.
 
     ``on_progress(runda, kvar)`` anropas när en ny runda börjar. En match tar
     minuter, så utan den står en statusrad still utan att något är fel.
@@ -366,9 +367,11 @@ def run_matches(
     som en :class:`FailedMatch`, så att de matcher som redan spelats och de som
     återstår behåller sitt värde.
 
-    ``with_llm=False`` stänger av LLM-anropen helt (bara mekaniska repliker).
-    Draget ägs ändå av policyn, så resultatet blir detsamma — men en serie går
-    från minuter till millisekunder. Det är läget för utvärdering.
+    ``with_llm=False`` stänger av LLM-anropen helt: spelarna blir regelspelare
+    som väljer enligt :class:`~meier.policy.BasePolicy`. Det är läget för
+    utvärdering, och en serie går från minuter till millisekunder. Resultatet
+    blir inte detsamma som med modellen påslagen, eftersom det är modellen som
+    väljer draget när den finns.
 
     ``on_match_progress(match, runda, kvar)`` anropas när en match byter runda.
     Statusraden kan då visa vad som händer medan matchen spelas.

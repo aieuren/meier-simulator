@@ -1,11 +1,16 @@
 """Regelstyrd policy-kärna för Meier.
 
-Den här modulen är ryggraden i agentmodellen (se ``docs/agent-model.md``).
-Den räknar fram ett drag ur speltillståndet och agentens parametrar. Den är
-medvetet **frikopplad från LLM:en**: LLM:en får föreslå och motivera, men
-draget som spelas ägs av policyn. Annars går det inte att avgöra om en profil
-vinner på grund av sina parametrar, på promptformuleringen eller på slumpen.
-Slumpen i sig är liten och styrs av ``unpredictability``.
+Den här modulen är ryggraden i regelspelaren (se ``docs/agent-model.md``).
+Den räknar fram ett drag ur speltillståndet och agentens parametrar.
+
+Policyn styr bara när ingen språkmodell finns: ``axel`` spelar alltid så, och
+alla roller spelar så när en serie körs med ``with_llm=False``. Finns en
+LLM-klient är det modellen som fattar besluten
+(:class:`~meier.agents.strategic.StrategicAgent`), och då anropas policyn inte
+alls. Profilens parametrar följer ändå med: de beskrivs som personlighet i
+systemprompten, och ``reading`` styr hur motståndarhistoriken vägs in.
+
+Slumpen i spelarens egna val är liten och styrs av ``unpredictability``.
 
 Tre delar:
 
