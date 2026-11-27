@@ -930,6 +930,27 @@ Watch the two traps when touching this:
   Symptom: `Invalid username or token` or `403` even though `GITHUB_PUSH_TOKEN`
   is fine. Fix: `git remote set-url origin https://github.com/aieuren/meier-simulator.git`
   (no credentials in the URL), then push and let the helper inject the token.
+  Update (2026-11-27): the push token now lives on disk at
+  `/workspace/meier-secrets/github.token` (mode 600, same idea as
+  `logs.token`), and `~/.gitconfig` reads it:
+  `credential.https://github.com.helper = "!f() { echo \"username=x-access-token\";
+  echo \"password=$(cat /workspace/meier-secrets/github.token)\"; }; f"`.
+  With that in place plain `git push` works and no `GITHUB_PUSH_TOKEN` export is
+  needed (the variable is not set in this sandbox any more). Verify with
+  `git ls-remote origin`.
+  Gotcha (2026-11-27): `gh auth setup-git` overwrites the helper with
+  `gh auth git-credential`, which uses `$GITHUB_TOKEN` — a token with read-only
+  access to this repo. Every push then fails with
+  `403 Permission to aieuren/meier-simulator.git denied to aieuren`, and the same
+  goes for `POST /repos/.../pulls` and the `create_pr` tool ("Resource not
+  accessible by integration"). Do not run `gh auth setup-git` here; if it has
+  been run, clear the list and re-add the file-reading helper above.
+  The same read-only result comes from `~/.openhands/git-credential-helper`
+  (the global helper that exchanges `~/.openhands/git-credentials/github.token`),
+  so it must not win the lookup.
+  Opening the pull request: with `$GITHUB_TOKEN` read-only, `create_pr` returns
+  403. Use the API with the file token instead:
+  `curl -X POST -H "Authorization: Bearer $(cat /workspace/meier-secrets/github.token)" .../pulls`.
 - The user has delegated version control: from now on, commit and push to
   `main` yourself when the work is green and complete — no need to ask first.
 - The variable is spelled `GITHUB_PUSH_TOKEN`. Typos like `GITHUB_PUSH_TKEN` or
