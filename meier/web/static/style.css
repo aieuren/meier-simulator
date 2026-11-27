@@ -517,8 +517,52 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 .stat-table tbody tr:hover { background: var(--panel-2); }
 /* Flera tabeller staplas i sammanfattningen. Rubriken skiljer dem åt, och
    tabellerna scrollar i sidled i stället för att trycka ut sidan på mobil. */
-.stat-title { margin: 1.6rem 0 0.2rem; font-size: 0.95rem; color: var(--text); }
 .match-summary .stat-table { display: block; overflow-x: auto; white-space: nowrap; }
+
+/* Utfällbara avsnitt: rubriken är summary, så både matcherlistan och varje
+   tabell kan fällas ihop. Samma typografi som de tidigare h3/h4-rubrikerna. */
+.match-fold,
+.stat-fold {
+  margin-top: 1.2rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.1rem 0.9rem;
+}
+.match-fold > summary,
+.stat-fold > summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0;
+}
+.match-fold > summary::-webkit-details-marker,
+.stat-fold > summary::-webkit-details-marker { display: none; }
+.match-fold > summary { font-size: 0.95rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+.stat-fold > summary { font-size: 0.95rem; color: var(--text); font-weight: 600; }
+.match-fold .match-list { margin-bottom: 0.7rem; }
+.stat-fold .fold-body { padding-bottom: 0.7rem; }
+/* Triangel som pekar höger när avsnittet är ihopfällt och ner när det är
+   utfällt; utan den syns det inte att rubriken går att klicka på. */
+.match-fold > summary::before,
+.stat-fold > summary::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+}
+.match-fold[open] > summary::before,
+.stat-fold[open] > summary::before {
+  transform: rotate(45deg);
+  border-color: var(--accent-2);
+}
+.match-fold > summary:hover::before,
+.stat-fold > summary:hover::before { border-color: var(--text); }
 
 .match-list { display: grid; gap: 0.5rem; }
 .match-row {

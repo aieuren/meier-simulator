@@ -544,6 +544,18 @@ listade parentesen i "X av Y matcher klara" alla färdiga men ännu oskrivna
 matcher, så en serie på 100 matcher gav en mycket lång rad. Med rensningen i
 speltråden står bara de matcher som faktiskt spelar där.
 
+## Utfällbara avsnitt i Matchserie
+
+Matcherlistan ligger först i fliken, ihopfälld, med rubriken "Matcher (antal)".
+Den byggs först när den fälls upp (`loadMatchList` hämtar färsk status då), för
+hundra matcher med en händelselista i varje rad är dyrt att bygga och syns inte
+när raden är stängd. Tabellerna i sammanställningen är också `<details>`, med
+rubriken som `summary`; `_foldOpen` minns vilka som är utfällda mellan
+omritningarna, eftersom sammanställningen ritas om när en match blir klar.
+
+Raderna per spelare i en match säger "utan titt" (inte "unseen"), samma ord som
+kolumnen "Utan titt%" i tabellen.
+
 ## Bedömningen under vinsttabellen (meier/significance.py)
 
 Under tabellen med vinster per spelare står en mening om skillnaden i antal

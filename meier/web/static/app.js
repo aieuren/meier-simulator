@@ -63,6 +63,7 @@ async function boot() {
   $("matchRunBtn").onclick = runMatchSeries;
 
   // Om en matchserie redan kör i servern (t.ex. efter omladdning): visa och följ.
+  setupMatchListSection();
   resumeMatchSeries();
 
 
@@ -775,7 +776,7 @@ function matchRow(rec, source) {
         `<span class="ms-name">${p.name}</span>` +
         `<span class="ms-cell">påståenden ${s.claims || 0}</span>` +
         `<span class="ms-cell">bluff ${s.bluffs || 0}</span>` +
-        `<span class="ms-cell">unseen ${s.unseen || 0}</span>` +
+        `<span class="ms-cell">utan titt ${s.unseen || 0}</span>` +
         `<span class="ms-cell">syn ${s.calls || 0}</span>` +
         `<span class="ms-cell">liv −${s.lives_lost || 0}</span>` +
         `<span class="ms-cell">${s.eliminated ? "ute" : (p.name === rec.winner ? "vinnare" : "kvar")}</span>` +
@@ -1129,17 +1130,21 @@ function renderMatchSummary(summary, data) {
     </p>
     ${failLine}
     ${setupLine(summary.setup)}
-    <table class="stat-table">
-      <thead>
-        <tr>
-          <th>Spelare</th><th>Vinster</th><th>Vinst%</th>
-          <th>Bluff%</th><th>Utan titt%</th><th>Höj%</th><th>Syn%</th><th>Syn lyckas</th><th>Snitt liv −</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
-    ${winVerdictLine(summary.win_difference)}
-    ${tacticsTable(summary.tactics, "Spelsätt: vad spelarna faktiskt gjorde")}
+    ${fold(
+      "vinster",
+      "Vinster per spelare",
+      `<table class="stat-table">
+        <thead>
+          <tr>
+            <th>Spelare</th><th>Vinster</th><th>Vinst%</th>
+            <th>Bluff%</th><th>Utan titt%</th><th>Höj%</th><th>Syn%</th><th>Syn lyckas</th><th>Snitt liv −</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      ${winVerdictLine(summary.win_difference)}`,
+    )}
+    ${tacticsTable(summary.tactics, "Spelsätt: vad spelarna faktiskt gjorde", "spelsatt")}
     ${outcomeTable(summary.tactics_by_outcome)}
     ${abilityTables(summary.abilities)}
     ${tokenLine}
@@ -1148,6 +1153,32 @@ function renderMatchSummary(summary, data) {
   $("matchSummary").hidden = false;
   showMatchDownload();
 }
+
+// Utfällbara avsnitt i sammanställningen. Rubriken är summary, så tabellen
+// kan fällas ihop när man bara vill se siffrorna. Läget sparas mellan
+// omritningarna: serien ritas om när en match blir klar, och en tabell man
+// fällt upp ska inte slå igen då.
+const _foldOpen = {};
+
+function fold(id, title, body) {
+  const open = _foldOpen[id] !== false;
+  return `<details class="stat-fold" data-fold="${id}"${open ? " open" : ""}>
+      <summary>${title}</summary>
+      <div class="fold-body">${body}</div>
+    </details>`;
+}
+
+// "toggle" skickas på elementet utan att bubbla, men fångstfasen når hit.
+document.addEventListener(
+  "toggle",
+  (e) => {
+    const el = e.target;
+    if (el instanceof HTMLDetailsElement && el.dataset.fold) {
+      _foldOpen[el.dataset.fold] = el.open;
+    }
+  },
+  true,
+);
 
 // Om skillnaden i antal vinster mest ser ut som slump eller som spelstil.
 // Zonen kommer färdig från servern; färgen sitter i klassnamnet.
@@ -1177,7 +1208,7 @@ const num = (v, digits = 2) =>
 
 // Spelsättet per spelare, mätt ur händelserna. Det här är måtten som säger
 // något om hur en spelare spelar, inte bara hur det gick.
-function tacticsTable(tactics, title) {
+function tacticsTable(tactics, title, id) {
   const keys = Object.keys(tactics || {});
   if (!keys.length) return "";
   const rows = keys
@@ -1200,9 +1231,10 @@ function tacticsTable(tactics, title) {
       );
     })
     .join("");
-  return `
-    <h4 class="stat-title">${title}</h4>
-    <p class="hint">
+  return fold(
+    id,
+    title,
+    `<p class="hint">
       Kliv = hur många steg över förra budet ett påstående låg (stegen i
       ordningen, inte talen). Bluffmarginal = hur många steg en bluff låg över
       tärningarna. Under = andel påståenden som var lägre än de egna tärningarna.
@@ -1215,15 +1247,15 @@ function tacticsTable(tactics, title) {
         <th>Synhöjd</th><th>Syn träffar</th><th>Bud höll</th>
       </tr></thead>
       <tbody>${rows}</tbody>
-    </table>
-  `;
+    </table>`,
+  );
 }
 
 // Vann mot förlorade: samma mått, delat på matchutfall.
 function outcomeTable(split) {
   const data = split || {};
   if (!Object.keys(data).length) return "";
-  return tacticsTable(data, "Vann mot förlorade matcher");
+  return tacticsTable(data, "Vann mot förlorade matcher", "utfall");
 }
 
 // Vinstfrekvens per förmågenivå. Grupperat på nivå, inte på spelare, så att
@@ -1261,15 +1293,16 @@ function abilityTables(abilities) {
         </table>`;
     })
     .join("");
-  return `
-    <h4 class="stat-title">Förmåga mot utfall</h4>
-    <p class="hint">
+  return fold(
+    "formaga",
+    "Förmåga mot utfall",
+    `<p class="hint">
       Varje förmåga delas i nivåer. Läs raderna mot varandra: skiljer sig
       vinstfrekvensen mellan nivåerna? Med få matcher per nivå är talen brusiga,
       så väg alltid in antalet matcher.
     </p>
-    ${blocks}
-  `;
+    ${blocks}`,
+  );
 }
 
 // Start- och sluttid för serien, när de finns i statusraden.
@@ -1324,6 +1357,8 @@ function clearMatchSummary() {
   if (dl) dl.hidden = true;
   _renderedGames = -1;
   _renderedSummaryKey = "";
+  _matchStatus = null;
+  $("matchCountLabel").textContent = "0";
 }
 
 async function runMatchSeries() {
@@ -1338,6 +1373,7 @@ async function runMatchSeries() {
   // står kvar och ser ut att gälla den nya serien.
   clearMatchSummary();
   $("matchList").innerHTML = `<p class="hint">Matcherna listas här när de är klara.</p>`;
+  $("matchCountLabel").textContent = "0";
   const status = $("matchStatus");
   status.className = "session-status";
   status.hidden = false;
@@ -1410,14 +1446,27 @@ function liveMatchText(data) {
 // upp. Vi ritar bara när något faktiskt har ändrats.
 let _renderedGames = -1;
 let _renderedSummaryKey = "";
+//: Senaste status från pollningen, så att listan kan ritas utan ett nytt anrop.
+let _matchStatus = null;
 
-function renderMatchList(data) {
-  const records = data.records || [];
-  const games = records.length;
-  if (games === _renderedGames) return;
-  _renderedGames = games;
+function matchListOpen() {
+  const section = $("matchListSection");
+  return !!section && section.open;
+}
+
+// Listan med matcher är ihopfälld från början och byggs först när den fälls
+// upp. Hundra matcher med en händelselista i varje rad är dyrt att bygga, och
+// ihopfälld syns den inte.
+function renderMatchList(data, { force = false } = {}) {
+  if (data) _matchStatus = data;
+  const status = _matchStatus || {};
+  const records = status.records || [];
+  $("matchCountLabel").textContent = records.length;
+  if (!matchListOpen()) return;
+  if (!force && records.length === _renderedGames) return;
+  _renderedGames = records.length;
   const list = $("matchList");
-  if (!games) {
+  if (!records.length) {
     list.innerHTML = `<p class="hint">Matcherna listas här när de är klara.</p>`;
     return;
   }
@@ -1426,7 +1475,27 @@ function renderMatchList(data) {
   // matchnummer, inte i den ordning de råkade bli färdiga.
   [...records]
     .sort((a, b) => (a.game || 0) - (b.game || 0))
-    .forEach((rec) => list.appendChild(matchRow(rec, data.source)));
+    .forEach((rec) => list.appendChild(matchRow(rec, status.source)));
+}
+
+// Färsk status när raden fälls upp: serien kan ha spelat klart medan listan låg
+// ihopfälld, och då ska den inte visa gamla siffror.
+async function loadMatchList() {
+  try {
+    const res = await fetch("/api/matches/status");
+    if (res.ok) _matchStatus = await res.json();
+  } catch (e) {
+    /* tyst: listan ritas då ur senaste status i stället */
+  }
+  renderMatchList(null, { force: true });
+}
+
+function setupMatchListSection() {
+  const section = $("matchListSection");
+  if (!section) return;
+  section.addEventListener("toggle", () => {
+    if (section.open) loadMatchList();
+  });
 }
 
 function summaryKey(summary) {
