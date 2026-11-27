@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import subprocess
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -571,3 +572,71 @@ def test_restored_records_are_sorted(monkeypatch, tmp_path):
 
     data = client.get("/api/matches/status").json()
     assert [r["game"] for r in data["records"]] == [1, 2, 3]
+
+
+def _empty_record(game: int) -> match.GameRecord:
+    return match.GameRecord(
+        game=game,
+        provider="test",
+        model="test",
+        players=[],
+        order=[],
+        starter="",
+        winner="",
+        winner_role="",
+        rounds=0,
+        lives={},
+        elimination_order=[],
+        events=[],
+        player_stats={},
+    )
+
+
+def test_live_lists_only_matches_that_are_playing(monkeypatch, tmp_path):
+    """En match som spelats klart ska lämna live-listan direkt.
+
+    Skrivloopen checkar in varje match i loggrepet och kan ligga långt efter en
+    snabb serie. Låg rensningen där, stod dussintals färdiga matcher kvar som
+    pågående — det var så en serie på 100 matcher fyllde parentesen i
+    statusraden.
+    """
+    played: list[int] = []
+    lock = threading.Lock()
+
+    def instant(role_keys, *, game=1, lives=3, with_llm=True, on_progress=None):
+        if on_progress is not None:
+            on_progress(1, len(role_keys))
+        with lock:
+            played.append(game)
+        return _empty_record(game)
+
+    class SlowRepo:
+        """Incheckningen tar tid, som ett git-anrop gör."""
+
+        def commit_and_push(self, path, msg):
+            time.sleep(0.15)
+            return "incheckad"
+
+    monkeypatch.setattr(match, "play_match", instant)
+    monkeypatch.setattr(
+        web_app._MatchJob,
+        "_open_log",
+        lambda self: (tmp_path / "serie.jsonl", SlowRepo()),
+    )
+
+    job = web_app._MatchJob(["axel", "berit"], 4, 3, 2, with_llm=False)
+    job.thread.start()
+    try:
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            with lock:
+                if len(played) == 4:
+                    break
+            time.sleep(0.01)
+
+        status = job.status()
+        # Alla fyra är färdigspelade, men skrivloopen har bara hunnit skriva en.
+        assert status["done"] < 4
+        assert status["live"] == []
+    finally:
+        job.thread.join(timeout=10)

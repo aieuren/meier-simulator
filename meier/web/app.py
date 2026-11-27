@@ -616,6 +616,7 @@ class _MatchJob:
                     workers=self.workers,
                     with_llm=self.with_llm,
                     on_match_progress=self._on_match_progress,
+                    on_match_done=self._on_match_done,
                 ):
                     data = rec.to_dict()
                     with self.lock:
@@ -624,7 +625,6 @@ class _MatchJob:
                         else:
                             self.records.append(rec)
                         self.done += 1
-                        self.live.pop(data.get("game") or 0, None)
                     fh.write(json.dumps(data, ensure_ascii=False) + "\n")
                     fh.flush()
                     if repo is not None and not data.get("failed"):
@@ -642,6 +642,16 @@ class _MatchJob:
         """En match har bytt runda. Spara läget så statusraden kan visa det."""
         with self.lock:
             self.live[game] = {"game": game, "round": round_no, "alive": alive}
+
+    def _on_match_done(self, game: int) -> None:
+        """Matchen är slut och ska bort ur live-listan direkt.
+
+        Anropas från tråden som spelade matchen. Skrivloopen nedan kan ligga
+        efter — den checkar in varje match i loggrepet — och fick tidigare
+        färdiga matcher att stå kvar som pågående.
+        """
+        with self.lock:
+            self.live.pop(game, None)
 
     def _check_in(self, repo: logrepo.LogRepo, rec: GameRecord) -> None:
         """Commit + push efter en färdig match. Får aldrig fälla körningen."""

@@ -353,6 +353,7 @@ def run_matches(
     with_llm: bool = True,
     progress: "callable[[int, int], None] | None" = None,
     on_match_progress: "callable[[int, int, int], None] | None" = None,
+    on_match_done: "callable[[int], None] | None" = None,
 ) -> Iterator[GameRecord | FailedMatch]:
     """Spela ``count`` matcher och ge protokollen efter hand.
 
@@ -370,6 +371,10 @@ def run_matches(
 
     ``on_match_progress(match, runda, kvar)`` anropas när en match byter runda.
     Statusraden kan då visa vad som händer medan matchen spelas.
+    ``on_match_done(match)`` anropas i tråden som spelade matchen, direkt när
+    den är slut (även om den föll bort). Den som visar pågående matcher ska
+    lyssna på den i stället för att vänta på protokollet: skrivloopen kan ligga
+    efter, och då ser färdiga matcher ut att spela ännu.
     """
 
     def _play(i: int) -> GameRecord | FailedMatch:
@@ -391,6 +396,9 @@ def run_matches(
                 error=f"{type(exc).__name__}: {exc}",
                 kind="llm" if _is_llm_error(exc) else "oväntat",
             )
+        finally:
+            if on_match_done is not None:
+                on_match_done(i + 1)
 
     if workers <= 1:
         for i in range(count):
