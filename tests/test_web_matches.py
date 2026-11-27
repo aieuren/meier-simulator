@@ -613,8 +613,11 @@ def test_live_lists_only_matches_that_are_playing(monkeypatch, tmp_path):
     class SlowRepo:
         """Incheckningen tar tid, som ett git-anrop gör."""
 
-        def commit_and_push(self, path, msg):
+        def commit_and_push(self, path, msg, push=True):
             time.sleep(0.15)
+            return "incheckad"
+
+        def push_pending(self):
             return "incheckad"
 
     monkeypatch.setattr(match, "play_match", instant)
@@ -640,3 +643,87 @@ def test_live_lists_only_matches_that_are_playing(monkeypatch, tmp_path):
         assert status["live"] == []
     finally:
         job.thread.join(timeout=10)
+
+
+def test_status_can_leave_out_the_match_list(monkeypatch):
+    """Pollningen ska kunna hämta läget utan matcherna.
+
+    Varje matchpost bär hela händelselistan, så en serie på 1000 matcher blir
+    tiotals megabyte. Klienten frågar efter matcherna bara när listan är
+    utfälld.
+    """
+    client = _client(monkeypatch)
+    client.post("/api/matches/run", json={"count": 2, "with_llm": False})
+    _wait_done(client)
+
+    light = client.get("/api/matches/status?records=0").json()
+    assert "records" not in light
+    assert light["games"] == 2
+    assert light["summary"]["games"] == 2
+
+    full = client.get("/api/matches/status").json()
+    assert len(full["records"]) == 2
+
+
+def test_match_list_has_rows_without_events(monkeypatch):
+    """Matchlistan ska räcka för att rita raderna, utan händelserna."""
+    client = _client(monkeypatch)
+    client.post("/api/matches/run", json={"count": 3, "with_llm": False})
+    _wait_done(client)
+
+    data = client.get("/api/matches/list").json()
+    assert data["games"] == 3
+    assert [rec["game"] for rec in data["records"]] == [1, 2, 3]
+    for rec in data["records"]:
+        assert "events" not in rec
+        assert rec["winner"] and rec["player_stats"]
+
+
+def test_series_accepts_a_thousand_matches(monkeypatch):
+    """Taket ska rymma en serie på 1000 matcher, men inte oändligt många."""
+    client = _client(monkeypatch)
+    too_many = client.post("/api/matches/run", json={"count": 2001})
+    assert too_many.status_code == 422
+
+    # 1000 ska gå igenom valideringen. Serien avbryts direkt: vi prövar taket,
+    # inte speltiden.
+    job = web_app._MatchJob(["axel", "berit"], 1000, 3, with_llm=False)
+    assert job.count == 1000
+    assert web_app.MatchRequest(count=1000).count == 1000
+
+
+def test_long_series_pushes_only_every_nth_match(monkeypatch, tmp_path):
+    """En serie på 1000 matcher ska inte göra 1000 anrop mot GitHub."""
+    pushed: list[bool] = []
+
+    class FakeRepo:
+        def commit_and_push(self, path, msg, push=True):
+            pushed.append(push)
+            return "Incheckat och pushat." if push else "Incheckat lokalt."
+
+        def push_pending(self):
+            pushed.append(True)
+            return "Incheckat och pushat."
+
+    def instant(role_keys, *, game=1, lives=3, with_llm=True, on_progress=None):
+        return _empty_record(game)
+
+    monkeypatch.setattr(match, "play_match", instant)
+    monkeypatch.setattr(
+        web_app._MatchJob,
+        "_open_log",
+        lambda self: (tmp_path / "serie.jsonl", FakeRepo()),
+    )
+
+    count = web_app.PUSH_EVERY + 2
+    job = web_app._MatchJob(["axel", "berit"], count, 3, with_llm=False)
+    job.thread.start()
+    deadline = time.time() + 10
+    while job.running and time.time() < deadline:
+        time.sleep(0.05)
+    assert job.done == count
+
+    pushes = [i + 1 for i, push in enumerate(pushed) if push]
+    assert web_app.PUSH_EVERY in pushes
+    assert count in pushes
+    assert len(pushes) < count

@@ -37,8 +37,10 @@ def test_three_hundred_matches_indicate_a_difference():
     assert v["p_value"] < 0.001
     assert "300 matcher" in v["text"]
     assert "3 spelare" in v["text"]
-    assert "Spelare A har vunnit 150 av 300 matcher" in v["text"]
-    assert "50 %" in v["text"]
+    assert "rent statistiskt" in v["text"]
+    # Siffrorna står i tabellen ovanför, inte i meningen.
+    assert "har vunnit" not in v["text"]
+    assert "bevis" not in v["text"].lower()
 
 
 def test_even_split_is_likely_random():
@@ -80,7 +82,10 @@ def test_shared_lead_is_named_neutrally():
     v = win_difference([("Axel", 40), ("Berit", 40), ("Cecilia", 20)], 100)
     assert v["zone"] == "likely_difference"
     assert v["leaders"] == ["Axel", "Berit"]
-    assert "Axel och Berit har vunnit 40 av 100 matcher var" in v["text"]
+    assert v["text"] == (
+        "Med 100 matcher spelade och 3 spelare pekar skillnaden i antal vinster rent "
+        "statistiskt på att deras olika spelstilar spelar roll för vinstfördelningen."
+    )
 
 
 def test_matches_are_counted_from_the_wins():

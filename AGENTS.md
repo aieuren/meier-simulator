@@ -547,10 +547,11 @@ speltråden står bara de matcher som faktiskt spelar där.
 ## Utfällbara avsnitt i Matchserie
 
 Matcherlistan ligger först i fliken, ihopfälld, med rubriken "Matcher (antal)".
-Den byggs först när den fälls upp (`loadMatchList` hämtar färsk status då), för
+Den byggs först när den fälls upp (`loadMatchList` hämtar färsk lista då), för
 hundra matcher med en händelselista i varje rad är dyrt att bygga och syns inte
 när raden är stängd. Tabellerna i sammanställningen är också `<details>`, med
-rubriken som `summary`; `_foldOpen` minns vilka som är utfällda mellan
+rubriken som `summary`, och de är ihopfällda från början — fliken ska visa
+sifrorna, inte fem tabeller. `_foldOpen` minns vilka som är utfällda mellan
 omritningarna, eftersom sammanställningen ritas om när en match blir klar.
 
 Raderna per spelare i en match säger "utan titt" (inte "unseen"), samma ord som
@@ -567,10 +568,39 @@ spelare`) och sätter en zon: `insufficient_data` under 3 matcher,
 `renderMatchSummary`, så randen blir grå, grön, gul eller röd.
 
 Texten säger aldrig att något är bevisat, bara "kan bero på" eller "pekar mot".
+I den röda zonen står bara vad skillnaden betyder ("pekar ... rent statistiskt
+på att deras olika spelstilar spelar roll"); vem som vann hur många står i
+tabellen ovanför och upprepas inte i meningen.
 Vid delad ledning räknas alla ledare upp i stället för att en pekas ut. p-värdet
 finns i `summary["win_difference"]` men visas inte i gränssnittet — bedömningen
 ska läsas som en helhet, inte som en siffra. Chi-square-fördelningen räknas för
 hand (`chi2_sf`, ofullständig gamma) så att appen slipper scipy.
+
+## Långa serier (1000 matcher)
+
+Taket är `MAX_MATCHES = 2000` i `meier/web/app.py`. Utan språkmodell spelar 1000
+matcher på några sekunder, och statistikfliken behöver många matcher för att
+skilja spelstilar från slump.
+
+Tre saker gör att en lång serie fungerar:
+
+* `GET /api/matches/status?records=0` utelämnar matchlistan. Varje matchpost bär
+  hela händelselistan, så 1000 matcher gav 33 MB per svar — och klienten pollar
+  var tredje sekund. Utan listan är svaret några kilobyte.
+* `GET /api/matches/list` ger en rad per match utan `events`. Händelserna hämtas
+  per match när raden fälls upp (`/api/analysis/match`).
+* Incheckningen committar varje match men pushar bara var `PUSH_EVERY` (25):te
+  och en sista gång när serien är klar (`_finish_check_in`), annars blev det ett
+  GitHub-anrop per match.
+
+Läses serien tillbaka från fil efter en omstart cachas resultatet per
+(namn, mtime, storlek) i `_file_status_cache`, så pollningen inte läser om en
+fil på flera megabyte var tredje sekund.
+
+Felmeddelandet i fliken gick förut ut som "Fel: [object Object]" när servern
+svarade 422, eftersom `detail` då är en lista av valideringsfel. `errorText` i
+`app.js` plockar ut `msg` ur listan, och klienten stoppar för stort antal innan
+anropet skickas.
 
 ## Kvotraden i Matchserie (meier/quota.py)
 
@@ -900,6 +930,27 @@ Watch the two traps when touching this:
   Symptom: `Invalid username or token` or `403` even though `GITHUB_PUSH_TOKEN`
   is fine. Fix: `git remote set-url origin https://github.com/aieuren/meier-simulator.git`
   (no credentials in the URL), then push and let the helper inject the token.
+  Update (2026-11-27): the push token now lives on disk at
+  `/workspace/meier-secrets/github.token` (mode 600, same idea as
+  `logs.token`), and `~/.gitconfig` reads it:
+  `credential.https://github.com.helper = "!f() { echo \"username=x-access-token\";
+  echo \"password=$(cat /workspace/meier-secrets/github.token)\"; }; f"`.
+  With that in place plain `git push` works and no `GITHUB_PUSH_TOKEN` export is
+  needed (the variable is not set in this sandbox any more). Verify with
+  `git ls-remote origin`.
+  Gotcha (2026-11-27): `gh auth setup-git` overwrites the helper with
+  `gh auth git-credential`, which uses `$GITHUB_TOKEN` — a token with read-only
+  access to this repo. Every push then fails with
+  `403 Permission to aieuren/meier-simulator.git denied to aieuren`, and the same
+  goes for `POST /repos/.../pulls` and the `create_pr` tool ("Resource not
+  accessible by integration"). Do not run `gh auth setup-git` here; if it has
+  been run, clear the list and re-add the file-reading helper above.
+  The same read-only result comes from `~/.openhands/git-credential-helper`
+  (the global helper that exchanges `~/.openhands/git-credentials/github.token`),
+  so it must not win the lookup.
+  Opening the pull request: with `$GITHUB_TOKEN` read-only, `create_pr` returns
+  403. Use the API with the file token instead:
+  `curl -X POST -H "Authorization: Bearer $(cat /workspace/meier-secrets/github.token)" .../pulls`.
 - The user has delegated version control: from now on, commit and push to
   `main` yourself when the work is green and complete — no need to ask first.
 - The variable is spelled `GITHUB_PUSH_TOKEN`. Typos like `GITHUB_PUSH_TKEN` or

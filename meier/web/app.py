@@ -38,6 +38,16 @@ RULES_PDF = Path(__file__).resolve().parents[2] / "docs" / "regler" / "meier-reg
 
 app = FastAPI(title="Meier-agenten", version="2.0.0")
 
+#: Högsta antal matcher i en serie. Utan språkmodell går 1000 matcher på en
+#: kvart, och statistikfliken behöver många matcher för att skilja spelstilar
+#: från slump. Taket finns för att en felskrivning inte ska fylla disken.
+MAX_MATCHES = 2000
+
+#: Checka in varje match, men pusha bara var N:te. Annars blir en serie på 1000
+#: matcher 1000 anrop mot GitHub. Commits ligger kvar lokalt och följer med
+#: nästa push; sista matchen pushar alltid.
+PUSH_EVERY = 25
+
 # En agent per roll, skapade på begäran så att LLM-klienten återanvänds.
 _agents: dict[str, object] = {}
 
@@ -506,7 +516,12 @@ class MatchRequest(BaseModel):
         default=None,
         description="Roller som spelar. Standard: spelarna som är aktiva.",
     )
-    count: int = Field(5, ge=1, le=200, description="Antal matcher")
+    count: int = Field(
+        5,
+        ge=1,
+        le=MAX_MATCHES,
+        description=f"Antal matcher (högst {MAX_MATCHES})",
+    )
     lives: int = Field(3, ge=1, le=10)
     workers: int = Field(
         3, ge=1, le=8, description="Antal matcher som spelas samtidigt"
@@ -604,6 +619,7 @@ class _MatchJob:
         return path, repo
 
     def _run(self) -> None:
+        repo: logrepo.LogRepo | None = None
         try:
             path, repo = self._open_log()
             # Skriv protokollet radvis medan serien spelas, så att nedladdningen
@@ -636,6 +652,8 @@ class _MatchJob:
                 self.finished_at = time.time()
                 self.live.clear()
             _remember_series_end(self.finished_at)
+            if repo is not None:
+                self._finish_check_in(repo)
             self.running = False
 
     def _on_match_progress(self, game: int, round_no: int, alive: int) -> None:
@@ -654,10 +672,12 @@ class _MatchJob:
             self.live.pop(game, None)
 
     def _check_in(self, repo: logrepo.LogRepo, rec: GameRecord) -> None:
-        """Commit + push efter en färdig match. Får aldrig fälla körningen."""
+        """Commit efter en färdig match, och push var PUSH_EVERY:te. Får aldrig
+        fälla körningen."""
         winner = rec.winner_role or rec.winner
         msg = f"Meier: match {self.done}/{self.count} klar (vinnare {winner})"
-        status = repo.commit_and_push(self.file, msg)
+        push = self.done % PUSH_EVERY == 0 or self.done >= self.count
+        status = repo.commit_and_push(self.file, msg, push=push)
         if not status.startswith(("Incheckat", "Inga ändringar")):
             # Datan ligger kvar i den lokala klonen. Säg det, så att ett
             # misslyckat push inte ser ut som en förlorad serie.
@@ -665,7 +685,32 @@ class _MatchJob:
         with self.lock:
             self.push_status = status
 
-    def status(self) -> dict:
+    def _finish_check_in(self, repo: logrepo.LogRepo) -> None:
+        """Se till att hela serien ligger på fjärren när den är klar.
+
+        Pusharna går var PUSH_EVERY:te match, så de sista matcherna kan ligga
+        kvar som lokala commits. Committa det som återstår och pusha en sista
+        gång, även om serien avbröts i förtid.
+        """
+        if self.file is None:
+            return
+        msg = f"Meier: serien klar ({self.done}/{self.count})"
+        try:
+            status = repo.commit_and_push(self.file, msg, push=True)
+            if status.startswith("Inga ändringar"):
+                status = repo.push_pending()
+        except Exception as exc:  # pragma: no cover - skyddsnät
+            # Får aldrig fälla tråden: då blir serien stående som pågående.
+            status = f"Sista incheckningen misslyckades: {exc}"
+        with self.lock:
+            self.push_status = status
+
+    def status(self, include_records: bool = True) -> dict:
+        """Läget för serien. ``include_records=False`` utelämnar matchlistan.
+
+        Statuspollningen går var tredje sekund. För en serie på 1000 matcher är
+        listan den tunga delen, och den behövs bara när någon fäller upp den.
+        """
         with self.lock:
             # Matcherna spelas parallellt och blir klara i olika ordning.
             # Visa dem i matchnummer, så att listan blir läsbar.
@@ -675,7 +720,7 @@ class _MatchJob:
             started_at = self.started_at
             finished_at = self.finished_at
         summary = summarize(snapshot + failures) if snapshot or failures else None
-        return {
+        data = {
             "running": self.running,
             "done": self.done,
             "count": self.count,
@@ -684,7 +729,6 @@ class _MatchJob:
             "file": self.file.name,
             "games": len(snapshot),
             "failures": failures,
-            "records": snapshot,
             "summary": summary,
             "live": live,
             "started_at": started_at,
@@ -694,6 +738,9 @@ class _MatchJob:
             # att få alla 1800 händelser i varje statuspoll.
             "source": self.file.name,
         }
+        if include_records:
+            data["records"] = snapshot
+        return data
 
 
 _match_job: _MatchJob | None = None
@@ -722,23 +769,45 @@ def matches_run(req: MatchRequest) -> dict:
 
 
 @app.get("/api/matches/status")
-def matches_status() -> dict:
+def matches_status(records: bool = True) -> dict:
     """Läget för den senaste (eller pågående) matchserien.
 
     Efter en omstart finns inget jobb i minnet. Då läses serien tillbaka från
     filen i stället, så att status, nedladdning och sammanfattning fortsätter
     fungera. Tidigare gavs 404 och serien såg förlorad ut fast den låg kvar.
+
+    ``records=false`` ger bara läget och sammanfattningen. Klienten pollar var
+    tredje sekund och hämtar matchlistan för sig (/api/matches/list) när den
+    behövs, så att en serie på 1000 matcher inte skickar tiotals megabyte i
+    varje poll.
     """
     if _match_job is None:
-        return _status_from_file()
-    return _match_job.status()
+        return _status_from_file(include_records=records)
+    return _match_job.status(include_records=records)
 
 
-def _status_from_file() -> dict:
+#: En serie på tusentals matcher läses annars om vid varje poll. Filen ändras
+#: bara medan serien spelas, så resultatet sparas per (namn, mtime, storlek).
+_file_status_cache: tuple[tuple, dict] | None = None
+
+
+def _status_from_file(include_records: bool = True) -> dict:
     """Bygg en statusrad ur den senaste seriefilen, för visning efter omstart."""
+    global _file_status_cache
     path = _match_file()
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Ingen matchserie startad.")
+    stat = path.stat()
+    key = (path.name, stat.st_mtime_ns, stat.st_size)
+    if _file_status_cache is None or _file_status_cache[0] != key:
+        _file_status_cache = (key, _read_status(path))
+    data = dict(_file_status_cache[1])
+    if not include_records:
+        data.pop("records", None)
+    return data
+
+
+def _read_status(path: Path) -> dict:
     records: list[dict] = []
     failures: list[dict] = []
     for rec in read_jsonl(path):
@@ -764,7 +833,9 @@ def _status_from_file() -> dict:
         "file": path.name,
         "games": len(records),
         "failures": failures,
-        "records": records,
+        # Händelserna hämtas per match när raden fälls upp. Utan det här blir
+        # en serie på 1000 matcher ~70 MB i varje svar.
+        "records": [_list_row(rec) for rec in records],
         "summary": summarize(records + failures) if records or failures else None,
         "live": [],
         "started_at": started_at,
@@ -772,6 +843,32 @@ def _status_from_file() -> dict:
         "download_url": "/api/matches/download",
         "restored": True,
         "source": path.name,
+    }
+
+
+#: Fält som bara hör hemma i protokollet, inte i matchningslistan.
+_LIST_OMIT = ("events",)
+
+
+def _list_row(rec: dict) -> dict:
+    return {k: v for k, v in rec.items() if k not in _LIST_OMIT}
+
+
+@app.get("/api/matches/list")
+def matches_list() -> dict:
+    """Matcherna i serien, en rad per match, utan händelselistan.
+
+    Listan i fliken behöver bara vinnare, rundor och spelarsiffror; händelserna
+    hämtas per match när raden fälls upp (/api/analysis/match). Skickas allt
+    blir en serie på 1000 matcher omkring 70 MB, och webbläsaren orkar inte
+    bygga listan.
+    """
+    data = matches_status(records=True)
+    return {
+        "source": data.get("source"),
+        "count": data.get("count"),
+        "games": data.get("games"),
+        "records": [_list_row(rec) for rec in data.get("records") or []],
     }
 
 
