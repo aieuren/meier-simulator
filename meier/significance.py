@@ -135,13 +135,12 @@ def win_difference(
         )
     else:
         zone = "likely_difference"
-        share = f"{100 * top / matches:.0f}"
-        each = "" if len(leaders) == 1 else " var"
+        # Ingen uppräkning av vem som vann hur många: tabellen ovanför visar
+        # siffrorna, och meningen ska bara säga vad de betyder.
         text = (
             f"Med {matches} matcher spelade och {players} spelare pekar skillnaden i antal "
-            "vinster att deras olika spelstilar spelar roll för vinstfördelningen. "
-            f"{_names(leaders)} har vunnit {top} av {matches} matcher{each}, "
-            f"motsvarande {share} %."
+            "vinster rent statistiskt på att deras olika spelstilar spelar roll för "
+            "vinstfördelningen."
         )
 
     return {

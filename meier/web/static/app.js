@@ -1,5 +1,26 @@
 const $ = (id) => document.getElementById(id);
 
+//: Samma tak som servern (MAX_MATCHES i meier/web/app.py).
+const MAX_MATCHES = 2000;
+
+// FastAPI svarar med en lista av valideringsfel i ``detail`` när ett fält är
+// fel. Skrivs den ut rakt av blir meddelandet "[object Object]".
+function errorText(err) {
+  const detail = err && err.detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail.map((d) => fieldError(d)).join("; ");
+  }
+  if (detail && typeof detail === "object") return detail.msg || JSON.stringify(detail);
+  return "";
+}
+
+function fieldError(d) {
+  if (typeof d === "string") return d;
+  if (d && (d.msg || d.detail)) return d.msg || d.detail;
+  return JSON.stringify(d);
+}
+
 let state = { role: "cecilia", ranking: [], active: [], rolesData: null };
 
 async function boot() {
@@ -216,7 +237,7 @@ async function togglePlayer(key, on, box) {
       body: JSON.stringify({ roles: next }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "Fel");
+    if (!res.ok) throw new Error(errorText(data) || "Fel");
     state.active = data.active;
   } catch (err) {
     box.checked = !on;
@@ -266,7 +287,7 @@ async function doAnnounce() {
       body: JSON.stringify(body),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "Fel");
+    if (!res.ok) throw new Error(errorText(data) || "Fel");
     renderAnnounce(data);
   } catch (err) {
     $("verdict").textContent = "Fel: " + err.message;
@@ -327,7 +348,7 @@ async function doDecide() {
       body: JSON.stringify({ claim: +$("oppClaim").value, role: state.role, lives: 3 }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "Fel");
+    if (!res.ok) throw new Error(errorText(data) || "Fel");
     let text = `Spelaren väljer: ${data.action.toUpperCase()}`;
     if (data.claim_name) text += ` → ${data.claim_name}`;
     if (data.line) text += `  “${data.line}”`;
@@ -366,7 +387,7 @@ async function newSession() {
       body: JSON.stringify({}),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "Fel");
+    if (!res.ok) throw new Error(errorText(data) || "Fel");
     renderSession(data);
   } catch (err) {
     $("log").innerHTML = `<p class="error">Fel: ${err.message}</p>`;
@@ -383,7 +404,7 @@ async function advanceSession() {
   try {
     const res = await fetch("/api/session/advance", { method: "POST" });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "Fel");
+    if (!res.ok) throw new Error(errorText(data) || "Fel");
     renderSession(data);
   } catch (err) {
     $("log").insertAdjacentHTML("afterbegin", `<p class="error">Fel: ${err.message}</p>`);
@@ -401,7 +422,7 @@ async function runSession(path, btnId, busyLabel, idleLabel) {
   try {
     const res = await fetch(path, { method: "POST" });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "Fel");
+    if (!res.ok) throw new Error(errorText(data) || "Fel");
     renderSession(data);
   } catch (err) {
     $("log").insertAdjacentHTML("afterbegin", `<p class="error">Fel: ${err.message}</p>`);
@@ -862,7 +883,7 @@ async function drillFetch(key, url) {
   const promise = (async () => {
     const res = await fetch(url);
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+    if (!res.ok) throw new Error(errorText(data) || `HTTP ${res.status}`);
     return data;
   })();
   _drillCache.set(key, promise);
@@ -1161,7 +1182,8 @@ function renderMatchSummary(summary, data) {
 const _foldOpen = {};
 
 function fold(id, title, body) {
-  const open = _foldOpen[id] !== false;
+  // Ihopfällda från början: fliken ska visa siffrorna, inte fem tabeller.
+  const open = _foldOpen[id] === true;
   return `<details class="stat-fold" data-fold="${id}"${open ? " open" : ""}>
       <summary>${title}</summary>
       <div class="fold-body">${body}</div>
@@ -1357,7 +1379,6 @@ function clearMatchSummary() {
   if (dl) dl.hidden = true;
   _renderedGames = -1;
   _renderedSummaryKey = "";
-  _matchStatus = null;
   $("matchCountLabel").textContent = "0";
 }
 
@@ -1368,13 +1389,20 @@ async function runMatchSeries() {
   const workers = parseInt($("matchWorkers").value, 10) || 1;
   const withLlm = $("matchWithLlm").checked;
 
+  const status = $("matchStatus");
+  if (count > MAX_MATCHES) {
+    status.className = "session-status warn";
+    status.hidden = false;
+    status.textContent = `Högst ${MAX_MATCHES} matcher per serie.`;
+    return;
+  }
+
   btn.disabled = true;
   // Ny serie: nollställ allt från förra körningen, så inga gamla siffror
   // står kvar och ser ut att gälla den nya serien.
   clearMatchSummary();
   $("matchList").innerHTML = `<p class="hint">Matcherna listas här när de är klara.</p>`;
   $("matchCountLabel").textContent = "0";
-  const status = $("matchStatus");
   status.className = "session-status";
   status.hidden = false;
   status.textContent = `Startar serien (${count} matcher)…`;
@@ -1387,7 +1415,7 @@ async function runMatchSeries() {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `HTTP ${res.status}`);
+      throw new Error(errorText(err) || `HTTP ${res.status}`);
     }
     await pollMatchSeries();
   } catch (e) {
@@ -1407,7 +1435,7 @@ async function resumeMatchSeries() {
   } catch (e) {
     return;
   }
-  renderMatchList(data);
+  updateMatchCount(data);
   if (data.summary) {
     _renderedSummaryKey = summaryKey(data.summary);
     renderMatchSummary(data.summary, data);
@@ -1446,22 +1474,24 @@ function liveMatchText(data) {
 // upp. Vi ritar bara när något faktiskt har ändrats.
 let _renderedGames = -1;
 let _renderedSummaryKey = "";
-//: Senaste status från pollningen, så att listan kan ritas utan ett nytt anrop.
-let _matchStatus = null;
 
 function matchListOpen() {
   const section = $("matchListSection");
   return !!section && section.open;
 }
 
-// Listan med matcher är ihopfälld från början och byggs först när den fälls
-// upp. Hundra matcher med en händelselista i varje rad är dyrt att bygga, och
-// ihopfälld syns den inte.
-function renderMatchList(data, { force = false } = {}) {
-  if (data) _matchStatus = data;
-  const status = _matchStatus || {};
+// Antalet i rubriken. Statuspollningen skickar inga matcher (records=false),
+// så antalet tas från games/done. Listan hämtas för sig när den behövs.
+function updateMatchCount(status) {
   const records = status.records || [];
-  $("matchCountLabel").textContent = records.length;
+  const count = records.length || status.games || status.done || 0;
+  $("matchCountLabel").textContent = count;
+}
+
+// Listan är ihopfälld från början och byggs först när den fälls upp. Hundra
+// matcher med en händelselista i varje rad är dyrt att bygga, och ihopfälld
+// syns den inte.
+function renderMatchList(records, source, { force = false } = {}) {
   if (!matchListOpen()) return;
   if (!force && records.length === _renderedGames) return;
   _renderedGames = records.length;
@@ -1475,19 +1505,23 @@ function renderMatchList(data, { force = false } = {}) {
   // matchnummer, inte i den ordning de råkade bli färdiga.
   [...records]
     .sort((a, b) => (a.game || 0) - (b.game || 0))
-    .forEach((rec) => list.appendChild(matchRow(rec, status.source)));
+    .forEach((rec) => list.appendChild(matchRow(rec, source)));
 }
 
-// Färsk status när raden fälls upp: serien kan ha spelat klart medan listan låg
-// ihopfälld, och då ska den inte visa gamla siffror.
+// Färsk lista när raden fälls upp: serien kan ha spelat klart medan listan låg
+// ihopfälld, och då ska den inte visa gamla rader. Listan har inga händelser;
+// de hämtas per match när man fäller upp den.
 async function loadMatchList() {
+  let data = null;
   try {
-    const res = await fetch("/api/matches/status");
-    if (res.ok) _matchStatus = await res.json();
+    const res = await fetch("/api/matches/list");
+    if (res.ok) data = await res.json();
   } catch (e) {
-    /* tyst: listan ritas då ur senaste status i stället */
+    /* tyst: listan fylls vid nästa poll */
   }
-  renderMatchList(null, { force: true });
+  if (!data) return;
+  updateMatchCount(data);
+  renderMatchList(data.records || [], data.source, { force: true });
 }
 
 function setupMatchListSection() {
@@ -1521,7 +1555,8 @@ async function pollMatchSeries() {
     await new Promise((r) => setTimeout(r, 3000));
     let data;
     try {
-      const res = await fetch("/api/matches/status");
+      // Utan matchlistan: den är tung och behövs bara när raden är utfälld.
+      const res = await fetch("/api/matches/status?records=0");
       if (res.status === 404) {
         // Servern känner inte igen någon serie. Loggfilen ligger kvar i
         // /workspace och syns i Analys-fliken, så säg det i stället för att
@@ -1553,7 +1588,9 @@ async function pollMatchSeries() {
       return;
     }
 
-    renderMatchList(data);
+    updateMatchCount(data);
+    // Listan ritas bara om den är utfälld, och bara när antalet matcher ändrats.
+    if (matchListOpen() && (data.games || 0) !== _renderedGames) loadMatchList();
     const key = summaryKey(data.summary);
     if (data.summary && key !== _renderedSummaryKey) {
       _renderedSummaryKey = key;
@@ -1670,7 +1707,7 @@ async function refreshAnalysisLogs() {
   try {
     const res = await fetch("/api/analysis/logs");
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "Fel");
+    if (!res.ok) throw new Error(errorText(data) || "Fel");
     renderAnalysisLogs(data);
   } catch (e) {
     box.innerHTML = `<p class="error">Kunde inte hämta loggar: ${e.message}</p>`;
@@ -1778,7 +1815,7 @@ async function syncSelectedLogs() {
       body: JSON.stringify({ names }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "Fel");
+    if (!res.ok) throw new Error(errorText(data) || "Fel");
     await refreshAnalysisData();
   } catch (e) {
     $("analysisLogList").innerHTML =
@@ -1791,7 +1828,7 @@ async function refreshAnalysisData() {
   try {
     const res = await fetch("/api/analysis/data");
     data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "Fel");
+    if (!res.ok) throw new Error(errorText(data) || "Fel");
   } catch (e) {
     return;
   }
@@ -1819,7 +1856,7 @@ async function askAnalysis() {
       body: JSON.stringify({ question: q }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "Fel");
+    if (!res.ok) throw new Error(errorText(data) || "Fel");
     renderAnalysisResult(data);
   } catch (e) {
     $("analysisAnswer").innerHTML = `<p class="error">Fel: ${e.message}</p>`;

@@ -547,10 +547,11 @@ speltråden står bara de matcher som faktiskt spelar där.
 ## Utfällbara avsnitt i Matchserie
 
 Matcherlistan ligger först i fliken, ihopfälld, med rubriken "Matcher (antal)".
-Den byggs först när den fälls upp (`loadMatchList` hämtar färsk status då), för
+Den byggs först när den fälls upp (`loadMatchList` hämtar färsk lista då), för
 hundra matcher med en händelselista i varje rad är dyrt att bygga och syns inte
 när raden är stängd. Tabellerna i sammanställningen är också `<details>`, med
-rubriken som `summary`; `_foldOpen` minns vilka som är utfällda mellan
+rubriken som `summary`, och de är ihopfällda från början — fliken ska visa
+sifrorna, inte fem tabeller. `_foldOpen` minns vilka som är utfällda mellan
 omritningarna, eftersom sammanställningen ritas om när en match blir klar.
 
 Raderna per spelare i en match säger "utan titt" (inte "unseen"), samma ord som
@@ -567,10 +568,39 @@ spelare`) och sätter en zon: `insufficient_data` under 3 matcher,
 `renderMatchSummary`, så randen blir grå, grön, gul eller röd.
 
 Texten säger aldrig att något är bevisat, bara "kan bero på" eller "pekar mot".
+I den röda zonen står bara vad skillnaden betyder ("pekar ... rent statistiskt
+på att deras olika spelstilar spelar roll"); vem som vann hur många står i
+tabellen ovanför och upprepas inte i meningen.
 Vid delad ledning räknas alla ledare upp i stället för att en pekas ut. p-värdet
 finns i `summary["win_difference"]` men visas inte i gränssnittet — bedömningen
 ska läsas som en helhet, inte som en siffra. Chi-square-fördelningen räknas för
 hand (`chi2_sf`, ofullständig gamma) så att appen slipper scipy.
+
+## Långa serier (1000 matcher)
+
+Taket är `MAX_MATCHES = 2000` i `meier/web/app.py`. Utan språkmodell spelar 1000
+matcher på några sekunder, och statistikfliken behöver många matcher för att
+skilja spelstilar från slump.
+
+Tre saker gör att en lång serie fungerar:
+
+* `GET /api/matches/status?records=0` utelämnar matchlistan. Varje matchpost bär
+  hela händelselistan, så 1000 matcher gav 33 MB per svar — och klienten pollar
+  var tredje sekund. Utan listan är svaret några kilobyte.
+* `GET /api/matches/list` ger en rad per match utan `events`. Händelserna hämtas
+  per match när raden fälls upp (`/api/analysis/match`).
+* Incheckningen committar varje match men pushar bara var `PUSH_EVERY` (25):te
+  och en sista gång när serien är klar (`_finish_check_in`), annars blev det ett
+  GitHub-anrop per match.
+
+Läses serien tillbaka från fil efter en omstart cachas resultatet per
+(namn, mtime, storlek) i `_file_status_cache`, så pollningen inte läser om en
+fil på flera megabyte var tredje sekund.
+
+Felmeddelandet i fliken gick förut ut som "Fel: [object Object]" när servern
+svarade 422, eftersom `detail` då är en lista av valideringsfel. `errorText` i
+`app.js` plockar ut `msg` ur listan, och klienten stoppar för stort antal innan
+anropet skickas.
 
 ## Kvotraden i Matchserie (meier/quota.py)
 

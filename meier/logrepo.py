@@ -268,8 +268,12 @@ class LogRepo:
         return path
 
     # -- commit och push ---------------------------------------------------
-    def commit_and_push(self, path: Path, message: str) -> str:
-        """Checka in ``path`` och pusha. Returnerar en statusrad (fel kastas ej)."""
+    def commit_and_push(self, path: Path, message: str, push: bool = True) -> str:
+        """Checka in ``path`` och pusha. Returnerar en statusrad (fel kastas ej).
+
+        ``push=False`` checkar bara in lokalt. Långa serier använder det för att
+        inte göra ett GitHub-anrop per match; commits följer med nästa push.
+        """
         try:
             self._git("add", "--", str(path))
             staged = self._git("diff", "--cached", "--quiet", check=False)
@@ -281,6 +285,12 @@ class LogRepo:
             )
         except LogRepoError as exc:
             return f"Incheckning misslyckades: {exc}"
+        if not push:
+            return "Incheckat lokalt (pushas med nästa)."
+        return self._push_with_retry()
+
+    def push_pending(self) -> str:
+        """Pusha det som redan ligger i lokala commits."""
         return self._push_with_retry()
 
     def _push_with_retry(self) -> str:
