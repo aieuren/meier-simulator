@@ -938,6 +938,11 @@ Watch the two traps when touching this:
   With that in place plain `git push` works and no `GITHUB_PUSH_TOKEN` export is
   needed (the variable is not set in this sandbox any more). Verify with
   `git ls-remote origin`.
+  Gotcha (2026-11-27): `~/.gitconfig` lives on the overlay filesystem and is
+  wiped when the container restarts, so the helper has to be re-added in a new
+  session — one line:
+  `git config --global --add credential.https://github.com.helper "" && git config --global --add credential.https://github.com.helper '!f() { echo "username=x-access-token"; echo "password=$(cat /workspace/meier-secrets/github.token)"; }; f'`.
+  The token file itself is in `/workspace`, so it survives.
   Gotcha (2026-11-27): `gh auth setup-git` overwrites the helper with
   `gh auth git-credential`, which uses `$GITHUB_TOKEN` — a token with read-only
   access to this repo. Every push then fails with
