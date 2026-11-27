@@ -544,6 +544,22 @@ listade parentesen i "X av Y matcher klara" alla färdiga men ännu oskrivna
 matcher, så en serie på 100 matcher gav en mycket lång rad. Med rensningen i
 speltråden står bara de matcher som faktiskt spelar där.
 
+## Bedömningen under vinsttabellen (meier/significance.py)
+
+Under tabellen med vinster per spelare står en mening om skillnaden i antal
+vinster mest ser ut som slump eller som spelstil. `win_difference()` räknar ett
+chi-square goodness-of-fit-test mot att alla vinner lika ofta (`1 / antal
+spelare`) och sätter en zon: `insufficient_data` under 3 matcher,
+`likely_random` vid p >= 0,20, `uncertain` vid 0,05 <= p < 0,20 och
+`likely_difference` under 0,05. Zonen blir ett CSS-klassnamn i
+`renderMatchSummary`, så randen blir grå, grön, gul eller röd.
+
+Texten säger aldrig att något är bevisat, bara "kan bero på" eller "pekar mot".
+Vid delad ledning räknas alla ledare upp i stället för att en pekas ut. p-värdet
+finns i `summary["win_difference"]` men visas inte i gränssnittet — bedömningen
+ska läsas som en helhet, inte som en siffra. Chi-square-fördelningen räknas för
+hand (`chi2_sf`, ofullständig gamma) så att appen slipper scipy.
+
 ## Kvotraden i Matchserie (meier/quota.py)
 
 Google redovisar aldrig återstående dygnskvot i något API, så appen räknar

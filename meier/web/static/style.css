@@ -9,6 +9,7 @@
   --accent-2: #8f9cb5;
   --good: #6fae8a;
   --bad: #cf8378;
+  --caution: #c9973f;
   --radius: 14px;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
 }
@@ -214,6 +215,19 @@ select {
 .player-name { font-weight: 700; font-size: 1.05rem; margin-bottom: 0.15rem; }
 .player-desc { color: var(--muted); font-size: 0.85rem; margin-bottom: 0.5rem; }
 .player-style { color: var(--muted); font-size: 0.88rem; line-height: 1.45; margin: 0; }
+/* Bedömningen under vinsttabellen: grå, grön, gul eller röd rand. */
+.win-verdict {
+  margin: 0.9rem 0 0;
+  padding: 0.55rem 0.8rem;
+  border-left: 4px solid var(--line);
+  background: var(--panel-2);
+  border-radius: 0 9px 9px 0;
+  font-size: 0.93rem;
+}
+.win-verdict.likely_random { border-left-color: var(--good); }
+.win-verdict.uncertain { border-left-color: var(--caution); }
+.win-verdict.likely_difference { border-left-color: var(--bad); }
+
 .active-line { margin: 1rem 0 0; font-size: 0.95rem; }
 .active-line.warn { color: var(--bad); }
 

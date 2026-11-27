@@ -1138,6 +1138,7 @@ function renderMatchSummary(summary, data) {
       </thead>
       <tbody>${rows}</tbody>
     </table>
+    ${winVerdictLine(summary.win_difference)}
     ${tacticsTable(summary.tactics, "Spelsätt: vad spelarna faktiskt gjorde")}
     ${outcomeTable(summary.tactics_by_outcome)}
     ${abilityTables(summary.abilities)}
@@ -1146,6 +1147,13 @@ function renderMatchSummary(summary, data) {
   `;
   $("matchSummary").hidden = false;
   showMatchDownload();
+}
+
+// Om skillnaden i antal vinster mest ser ut som slump eller som spelstil.
+// Zonen kommer färdig från servern; färgen sitter i klassnamnet.
+function winVerdictLine(v) {
+  if (!v || !v.text) return "";
+  return `<p class="win-verdict ${escapeHtml(v.zone || "")}">${escapeHtml(v.text)}</p>`;
 }
 
 // Uppsättningen som spelade: liver och om profilerna var desamma i hela serien.
