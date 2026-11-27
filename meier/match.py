@@ -24,6 +24,7 @@ from .legacy import upgrade_record
 from .llm import LLMClient
 from .rules import MEIER, is_true_claim, rank, read_dice
 from .session import LogEntry, Session
+from .significance import win_difference
 
 #: Åtgärder som är spelarens eget påstående (spelaren säger ett värde).
 CLAIM_ACTIONS = ("påstå", "slå", "höja")
@@ -706,6 +707,10 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
         },
         "avg_rounds": round(total_rounds / total_games, 3) if total_games else 0.0,
         "winner_counts": winner_counts,
+        # Liten eller stor skillnad i vinster? Bara en indikation, aldrig ett bevis.
+        "win_difference": win_difference(
+            [(b["name"], b["wins"]) for b in per_role.values()], total_games
+        ),
         "starter_win_rate": _rate(starter_wins, total_games),
         "call_outcomes": call_outcomes,
         "roles": per_role,
