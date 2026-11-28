@@ -255,6 +255,11 @@ serien visas en sammanställning per spelare: vinster, vinstprocent, bluffrekven
 höjningar, synar och hur ofta synen lyckas. Under sammanställningen listas varje
 match (klicka för detaljer) och hela protokollet kan laddas ner som JSONL.
 
+Kryssrutan Använd språkmodellen är av som standard. Serien spelas då med
+spelarnas grundtaktik och statistik, utan anrop och utan kvotförbrukning, vilket
+går fort och blir reproducerbart. Kryssa i rutan när du vill att agenterna ska
+motivera sina drag med språkmodellen; det kostar ungefär 80 anrop per match.
+
 Protokollet är byggt för efteranalys. Varje match innehåller:
 
 - spelarna med roll och namn, spelordningen och vem som började,

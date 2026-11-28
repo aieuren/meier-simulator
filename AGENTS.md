@@ -60,7 +60,10 @@ match). 500 anrop per dygn räcker alltså till ungefär **6 matcher**. Den äld
 siffran "ca 20 anrop per match" var per spelare, inte per match. Kör då
 `--no-llm` (snabb, deterministisk, ingen kvot) eller färre matcher. Samma val
 finns i webbgränssnittet som kryssrutan "Använd språkmodellen" i Matchserie
-(`with_llm` i `MatchRequest`), så appen går att använda även när kvoten är slut.
+(`with_llm` i `MatchRequest`). Rutan är **av som standard** (2026-11-28): vägen
+framåt är de icke-LLM-spelarna, och serien ska gå att köra utan kvot. API:t har
+kvar `with_llm=True` som default för uttryckliga anropare; gränssnittet skickar
+alltid ett explicit värde.
 
 Etiketten för `slå` är "slår om och säger", inte "slår". Att slå är att skaka
 bägaren på nytt och säga ett högre påstående; "slår 64" läses som att spelaren slog

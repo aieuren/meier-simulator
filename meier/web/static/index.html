@@ -161,14 +161,15 @@
           <input type="number" id="matchWorkers" min="1" max="8" value="3" />
         </label>
         <label class="check">
-          <input type="checkbox" id="matchWithLlm" checked />
+          <input type="checkbox" id="matchWithLlm" />
           Använd språkmodellen
         </label>
         <button id="matchRunBtn" class="primary">Spela serien</button>
       </div>
       <p class="hint" id="matchLlmHint">
-        Utan språkmodellen spelas serien direkt, utan kvotförbrukning.
-        Replikerna blir mekaniska.
+        Rutan är av som standard: serien spelas då direkt, utan kvotförbrukning,
+        och replikerna blir mekaniska. Kryssa i den om agenterna ska motivera
+        sina drag med språkmodellen.
       </p>
       <p class="hint quota-line" id="quotaLine" hidden></p>
       <div id="matchStatus" class="session-status" hidden></div>

@@ -82,6 +82,11 @@ async function boot() {
   $("runBtn").onclick = () => runSession("/api/session/run", "runBtn", "Spelar…", "Till syn");
   $("endBtn").onclick = () => runSession("/api/session/end", "endBtn", "Spelar klart…", "Hela matchen");
   $("matchRunBtn").onclick = runMatchSeries;
+  // Kvotraden gäller bara när serien använder språkmodellen, och rutan är av
+  // som standard. Kryssar man i den ska raden komma tillbaka direkt.
+  $("matchWithLlm").onchange = () => {
+    if (_quota) renderQuotaLine(_quota);
+  };
 
   // Om en matchserie redan kör i servern (t.ex. efter omladdning): visa och följ.
   setupMatchListSection();
@@ -1674,13 +1679,17 @@ async function setupLogRepo() {
 // anrop per dygn (meier/quota.py) och jämför med gränsen för fri nivå, så
 // siffrorna här är en uppskattning och inte ett kvitto från Google.
 
+//: Senast hämtade kvotsvaret, så att raden kan ritas om utan nytt anrop.
+let _quota = null;
+
 async function setupQuota() {
   const line = $("quotaLine");
   if (!line) return;
   try {
     const res = await fetch("/api/quota");
     if (!res.ok) return;
-    renderQuotaLine(await res.json());
+    _quota = await res.json();
+    renderQuotaLine(_quota);
   } catch (e) {
     /* tyst: kvotraden är en upplysning, inte ett krav för att spela */
   }
@@ -1710,7 +1719,8 @@ function renderQuotaLine(q) {
   if (q.exhausted_hint) {
     text += ` Google uppgav vid 429: kvoten fylls på om ${q.exhausted_hint}.`;
   }
-  line.hidden = false;
+  // Utan språkmodellen förbrukas ingen kvot, så då är raden bara brus.
+  line.hidden = !$("matchWithLlm").checked;
   line.className = "hint quota-line" + (left ? "" : " warn");
   line.textContent = text;
 }
