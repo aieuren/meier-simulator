@@ -147,3 +147,51 @@ def test_ensure_clone_without_token_raises(tmp_path: Path):
     repo = LogRepo(directory=tmp_path / "ny", token_path=tmp_path / "ingen-token")
     with pytest.raises(logrepo.LogRepoError):
         repo.ensure_clone()
+
+
+def test_delete_logs_removes_the_file_from_the_remote(log_repo):
+    """Borttagningen ska gå till fjärren, inte bara till disk."""
+    repo, remote, work = log_repo
+    path = work / "2026-11-12-014813.jsonl"
+    path.write_text('{"game": 1}\n', encoding="utf-8")
+    repo.commit_and_push(path, "Meier: 1 match")
+
+    status = repo.delete_logs(["2026-11-12-014813.jsonl"], "Meier: tar bort 1 logg")
+
+    assert "pushat" in status.lower()
+    assert not path.exists()
+    names = _git("--git-dir", str(remote), "ls-tree", "-r", "--name-only", "HEAD").stdout
+    assert "2026-11-12-014813.jsonl" not in names
+    log = _git("--git-dir", str(remote), "log", "--oneline", "HEAD").stdout
+    assert "tar bort 1 logg" in log
+
+
+def test_delete_logs_handles_a_file_that_was_never_committed(log_repo):
+    """En olokaliserad fil i klonen ska gå att ta bort utan att git klagar."""
+    repo, remote, work = log_repo
+    path = work / "2026-11-12-020000.jsonl"
+    path.write_text('{"game": 2}\n', encoding="utf-8")
+
+    status = repo.delete_logs(["2026-11-12-020000.jsonl"], "städar")
+
+    assert not path.exists()
+    assert "inga ändringar" in status.lower()
+
+
+def test_delete_logs_rejects_names_outside_the_clone(log_repo):
+    repo, _remote, work = log_repo
+    with pytest.raises(logrepo.LogRepoError):
+        repo.delete_logs(["../rymmer.jsonl"], "städar")
+    assert not (work.parent / "rymmer.jsonl").exists()
+
+
+def test_delete_logs_reports_push_failure(log_repo):
+    repo, remote, work = log_repo
+    path = work / "2026-11-12-030000.jsonl"
+    path.write_text('{"game": 3}\n', encoding="utf-8")
+    repo.commit_and_push(path, "Meier: 1 match")
+    subprocess.run(["rm", "-rf", str(remote)], check=True)
+
+    status = repo.delete_logs(["2026-11-12-030000.jsonl"], "städar")
+
+    assert "misslyckades" in status.lower()

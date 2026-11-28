@@ -264,7 +264,13 @@ Protokollet är byggt för efteranalys. Varje match innehåller:
   livsställning och rundnummer,
 - `player_stats`: per spelare antal påståenden, slag utan att titta (det valda
   undantaget), bluffar, sanningar, synar,
-  höjningar, förlorade liv och om spelaren slogs ut.
+  höjningar, förlorade liv och om spelaren slogs ut,
+- `reads`: vad spelarna trodde om varandra när matchen var slut. En rad per
+  läsande spelare, med en profil per motståndare: benägenhet att syna och
+  bluffa, förutsägbarhet, kort etikett, säkerhet och om bilden kom från
+  språkmodellen eller från statistik. Bilder utan underlag sparas inte, och
+  spelare som inte läser motståndare (Axel) får ingen rad. Klartexten byggs ur
+  talen när matchen visas, så loggen bär bara siffrorna.
 
 Med ett fast basfrö blir en serie reproducerbar. JSONL-formatet (en match per rad)
 gör att stora serier kan läsas och analyseras rad för rad utan att allt hålls i
@@ -307,10 +313,18 @@ efter varje färdig match. Se avsnittet om loggrepet ovan.
 
 Fliken Analys låter dig borra vidare i insamlat material. Under
 Välj datakällor markerar du de matchloggar som redan checkats in i
-loggrepet. En markerad logg läses in direkt, och avmarkerar du den tas den bort
-igen. Varje rad visar datum och tid samt antal matcher. Knappen Uppdatera
-listan hämtar nya loggar från fjärren. Flera loggar sammanställs tillsammans,
-så att du kan bygga en stor datamängd över tid, från flera körningar.
+loggrepet. En markerad logg läses in direkt, och avmarkerar du den tas den ur
+analysen igen. Varje rad visar datum och tid samt antal matcher. Knappen
+Uppdatera listan hämtar nya loggar från fjärren. Flera loggar sammanställs
+tillsammans, så att du kan bygga en stor datamängd över tid, från flera
+körningar.
+
+Varje rad har också en egen kryssruta, ta bort, som markerar loggen för
+radering. Knappen Ta bort markerade frågar en gång extra och raderar sedan
+filen på riktigt: den tas bort ur loggrepet, checkas in och pushas, alltså även
+på GitHub. Borttagningen går inte att ångra. En lokal serie (som aldrig kom in i
+loggrepet) raderas bara från disk. Serien som fliken Matchserie pekar på släpps
+samtidigt, så att fliken inte letar efter en fil som är borta.
 
 Därefter ställer du frågor i fritext under Ställ frågor. Svaret
 bygger på en kompakt sammanställning av materialet – aggregerade mått per roll,
@@ -355,7 +369,8 @@ Tre saker är värda att veta:
 | GET | `/api/matches/logrepo` | Om loggrepet är redo för automatisk incheckning |
 | GET | `/api/analysis/data` | Inläst material: antal matcher, källor och sammanställning |
 | GET | `/api/analysis/logs` | Lista loggar i loggrepet (med `games` och `loaded`) |
-| POST | `/api/analysis/select` | Sätt inlästa loggar: valda läses in, övriga tas bort (`names`) |
+| POST | `/api/analysis/select` | Sätt inlästa loggar: valda läses in, övriga tas ur analysen (`names`) |
+| POST | `/api/analysis/delete` | Ta bort loggar helt: ur loggrepet (commit + push) och från disk (`names`) |
 | POST | `/api/analysis/ask` | Ställ en fråga mot materialet (svar + ev. diagram) |
 
 En match är hundratals LLM-anrop och tar minuter, så en serie körs i en

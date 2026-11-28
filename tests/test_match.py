@@ -540,3 +540,56 @@ def test_summary_setup_reports_abilities():
     assert summary["setup"]["stable"] is True
     # Bara en förmåga loggad, så nivågrupperingen ska finnas för den.
     assert "caution" in summary["abilities"]
+
+
+def test_record_carries_what_the_players_thought_of_each_other():
+    """Protokollet ska visa spelarnas bild av varandra, inte bara dragen.
+
+    Bilderna byggdes under matchen men sparades bara i sessionens vy. Efter en
+    serie fanns de därför inte kvar någonstans, och gick inte att analysera i
+    efterhand.
+    """
+    rec = match.play_match(["axel", "berit", "cecilia", "david"], with_llm=False)
+    d = rec.to_dict()
+
+    assert d["reads"], "minst en läsande spelare ska ha en bild"
+    # Axel läser ingen och får därför aldrig någon bild.
+    assert all(v["agent"] != "Axel" for v in d["reads"])
+    names = {p["name"] for p in d["players"]}
+    fields = {
+        "call_tendency", "bluff_tendency", "predictability",
+        "kind", "confidence", "source",
+    }
+    for view in d["reads"]:
+        assert view["agent"] in names
+        assert view["role"]
+        assert view["profiles"]
+        for row in view["profiles"]:
+            assert row["opponent"] in names and row["opponent"] != view["agent"]
+            assert set(row["profile"]) == fields
+            # Bilder utan underlag sparas inte: de säger inget om motståndaren.
+            assert row["profile"]["source"] != "population"
+            # Klartexten är härledd ur talen och sparas därför inte i loggen.
+            assert "text" not in row
+
+
+def test_a_player_without_reading_logs_no_pictures(monkeypatch):
+    monkeypatch.setattr(match, "_new_agents", make_agents)
+    assert match.play_match(["a", "b"]).to_dict()["reads"] == []
+
+
+def test_match_detail_adds_the_text_back_to_the_pictures():
+    """Detaljvyn ska kunna visa bilderna i klartext utan att loggen bär orden."""
+    rec = match.play_match(["axel", "berit", "cecilia", "david"], with_llm=False)
+    detail = match.match_detail(rec.to_dict())
+
+    rows = [row for view in detail["reads"] for row in view["profiles"]]
+    assert rows, "detaljvyn ska ha minst en bild"
+    for row in rows:
+        assert row["text"], "bilden ska ha en klartext"
+        assert "text" not in row["profile"]
+
+
+def test_an_older_record_without_reads_still_opens():
+    rec = {"game": 1, "events": [], "player_stats": {}, "winner": "Axel"}
+    assert match.match_detail(rec)["reads"] == []

@@ -727,3 +727,40 @@ def test_long_series_pushes_only_every_nth_match(monkeypatch, tmp_path):
     assert web_app.PUSH_EVERY in pushes
     assert count in pushes
     assert len(pushes) < count
+
+
+def test_pictures_of_the_others_are_logged_and_shown_per_match(monkeypatch):
+    """Motståndarbilderna ska hamna i protokollet och i matchdetaljen.
+
+    De byggs under matchen, så protokollet är enda stället de finns kvar på när
+    serien är klar. Listan ska inte bära dem (den ska förbli lätt), men
+    detaljvyn ska visa dem i klartext.
+    """
+    client = _client(monkeypatch)
+    client.post(
+        "/api/matches/run",
+        json={
+            "count": 1,
+            "check_in": False,
+            "with_llm": False,
+            "roles": ["axel", "berit", "cecilia", "david"],
+        },
+    )
+    done = _wait_done(client)
+    assert done["error"] is None
+
+    # Protokollet på disk bär bilderna.
+    log = Path(web_app._match_file())
+    rec = json.loads(log.read_text(encoding="utf-8").splitlines()[0])
+    assert rec["reads"], "matchen ska ha minst en motståndarbild"
+    assert all("text" not in row for v in rec["reads"] for row in v["profiles"])
+
+    # Listan i fliken ska inte skicka med dem.
+    rows = client.get("/api/matches/list").json()["records"]
+    assert rows and all("reads" not in row for row in rows)
+
+    # Detaljvyn ska visa dem, med klartext.
+    detail = client.get(f"/api/analysis/match?source={done['file']}&game=1")
+    assert detail.status_code == 200
+    rows = [r for v in detail.json()["match"]["reads"] for r in v["profiles"]]
+    assert rows and all(r["text"] for r in rows)

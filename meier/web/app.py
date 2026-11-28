@@ -846,8 +846,10 @@ def _read_status(path: Path) -> dict:
     }
 
 
-#: Fält som bara hör hemma i protokollet, inte i matchningslistan.
-_LIST_OMIT = ("events",)
+#: Fält som bara hör hemma i protokollet, inte i matchningslistan. Raderna i
+#: listan behöver bara vinnare, rundor och siffror; händelserna och
+#: motståndarbilderna hämtas per match när raden fälls upp.
+_LIST_OMIT = ("events", "reads")
 
 
 def _list_row(rec: dict) -> dict:
@@ -1099,6 +1101,76 @@ def analysis_select(req: _SelectLogsRequest) -> dict:
         if name not in wanted:
             _store.remove(name)
     return _store.info()
+
+
+class _DeleteLogsRequest(BaseModel):
+    names: list[str] = Field(default_factory=list, description="Loggfilnamn som ska bort")
+
+
+@app.post("/api/analysis/delete")
+def analysis_delete(req: _DeleteLogsRequest) -> dict:
+    """Ta bort loggar helt: ur loggrepet (commit + push) och från disk.
+
+    Borttagningen gäller filen, inte bara inläsningen. En logg som raderas här
+    försvinner därför också från GitHub, och det går inte att ångra. Gränssnittet
+    frågar en gång extra innan det anropar den här vägen.
+    """
+    global _current_match_file
+    names = list(dict.fromkeys(n for n in req.names if n))
+    if not names:
+        raise HTTPException(status_code=400, detail="Inga loggar angivna.")
+    try:
+        for name in names:
+            logrepo.check_name(name)
+    except logrepo.LogRepoError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if _match_job is not None and _match_job.running and _match_job.file.name in names:
+        raise HTTPException(
+            status_code=409,
+            detail="Serien som spelas just nu skriver till den loggen.",
+        )
+
+    repo = logrepo.LogRepo()
+    local_dir = _local_log_dir()
+    in_repo = [n for n in names if (repo.directory / n).is_file()]
+    local = [n for n in names if (local_dir / n).is_file()]
+    if not in_repo and not local:
+        raise HTTPException(status_code=404, detail="Loggarna finns inte längre.")
+
+    for name in names:
+        _store.remove(name)
+    for name in local:
+        try:
+            (local_dir / name).unlink()
+        except OSError as exc:
+            raise HTTPException(
+                status_code=500, detail=f"Kunde inte ta bort {name}: {exc}"
+            ) from exc
+    for name in in_repo:
+        try:
+            (repo.directory / name).unlink()
+        except OSError:
+            pass  # delete_logs nedan tar bort den ur git ändå
+
+    status = ""
+    if in_repo:
+        status = repo.delete_logs(in_repo, f"Meier: tar bort {len(in_repo)} logg(ar)")
+    if _current_match_file.name in names:
+        # Serien som fliken Matchserie pekar på finns inte längre. Släpp
+        # pekfilen, så att fliken säger "ingen serie" i stället för att leta
+        # efter en fil som är borta.
+        _current_match_file = local_dir / "meier_matches.jsonl"
+        try:
+            _last_series_path().unlink()
+        except OSError:
+            pass
+    return {
+        "deleted": names,
+        "in_repo": in_repo,
+        "local": local,
+        "status": status,
+        **_store.info(),
+    }
 
 
 class AnalysisAskRequest(BaseModel):

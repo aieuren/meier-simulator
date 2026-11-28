@@ -150,6 +150,44 @@ class CallResult:
         }
 
 
+def opponent_views(players: list, *, with_text: bool = False) -> list[dict]:
+    """Vad varje spelare tror om de andra, i den ordning spelarna står.
+
+    En agent har en ``profiles``-mapp (motståndarnamn → profil). Den fylls när
+    agenten svarar på ett påstående, så läsande agenter listas i takt med att de
+    får en bild. En agent utan läsning (Axel) får aldrig någon.
+
+    Bilder som saknar underlag (``source == "population"``) hoppas över: de
+    säger inget om motståndaren och skulle bara skräpa i listan. ``with_text``
+    lägger till profilens klartext, för vyerna i webbappen. Matchningsprotokollet
+    sparar bara talen — texten går att räkna fram ur dem.
+    """
+    views: list[dict] = []
+    for player in players:
+        profiles = getattr(player, "profiles", None)
+        shown = [
+            (opp, prof)
+            for opp, prof in (profiles or {}).items()
+            if prof.source != "population"
+        ]
+        if not shown:
+            continue
+        rows = []
+        for opp, prof in shown:
+            row = {"opponent": opp, "profile": prof.to_dict()}
+            if with_text:
+                row["text"] = prof.describe()
+            rows.append(row)
+        views.append(
+            {
+                "agent": player.name,
+                "role": player.role.key,
+                "profiles": rows,
+            }
+        )
+    return views
+
+
 @dataclass
 class Session:
     """En pågående interaktiv Meier-session med flera agenter."""
@@ -799,42 +837,8 @@ class Session:
         }
 
     def _views(self) -> list[dict]:
-        """Vad varje agent tror om de andra, för insyn i webbappen.
-
-        En agent har en ``profiles``-mapp (motståndarnamn → profil). Den fylls
-        när agenten svarar på ett påstående. Läsande agenter listas därför i takt med
-        att de får en bild; Axel (ingen läsning) får aldrig någon.
-        """
-        views = []
-        for idx in self.order:
-            player = self.players[idx]
-            profiles = getattr(player, "profiles", None)
-            if not profiles:
-                continue
-            # Bara bilder som vilar på något: en profil utan underlag säger
-            # inget och skulle bara skräpa i listan.
-            shown = [
-                (opp, prof)
-                for opp, prof in profiles.items()
-                if prof.source != "population"
-            ]
-            if not shown:
-                continue
-            views.append(
-                {
-                    "agent": player.name,
-                    "role": player.role.key,
-                    "profiles": [
-                        {
-                            "opponent": opp,
-                            "profile": prof.to_dict(),
-                            "text": prof.describe(),
-                        }
-                        for opp, prof in shown
-                    ],
-                }
-            )
-        return views
+        """Vad varje agent tror om de andra, för insyn i webbappen."""
+        return opponent_views([self.players[i] for i in self.order], with_text=True)
 
     def _phase(self) -> str:
         if self.finished:

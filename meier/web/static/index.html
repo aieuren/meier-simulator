@@ -201,13 +201,18 @@
       <h2>Välj datakällor</h2>
       <p class="hint">
         Markera de matchloggar du vill fråga om. En vald logg läses in direkt,
-        och avmarkerar du den tas den bort. Flera loggar sammanställs tillsammans
-        till en större datamängd.
+        och avmarkerar du den tas den ur analysen. Flera loggar sammanställs
+        tillsammans till en större datamängd.
       </p>
-      <div id="analysisLogList" class="analysis-log-list"></div>
       <div class="analysis-actions">
         <button id="analysisRefreshBtn">Uppdatera listan</button>
+        <button id="analysisDeleteBtn" class="danger" disabled>Ta bort markerade</button>
+        <span id="analysisDeleteHint" class="hint">
+          Kryssa i "ta bort" på de loggar som ska raderas. De tas bort från
+          loggrepet också, alltså även från GitHub, och du får frågan en gång extra.
+        </span>
       </div>
+      <div id="analysisLogList" class="analysis-log-list"></div>
     </section>
 
     <section class="card">

@@ -672,7 +672,13 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
 }
 
 /* -- Flik 5: analys -- */
-.analysis-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; }
+.analysis-actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 0.8rem;
+}
 .analysis-actions button { margin-top: 0; width: auto; }
 .analysis-log-list { display: grid; gap: 0.4rem; margin-bottom: 0.9rem; }
 .analysis-log {
@@ -683,21 +689,48 @@ footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 1
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 0.55rem 0.75rem;
-  cursor: pointer;
 }
 .analysis-log:hover { background: var(--panel-2); }
 /* Lokal serie: finns på disk men inte i loggrepet. */
 .analysis-log.is-local { border-style: dashed; }
 .analysis-log.is-local .analysis-log-meta { color: var(--warn, #d08a2e); }
 .analysis-log input[type="checkbox"] { width: auto; flex: none; }
-.analysis-log-name { font-size: 0.92rem; }
+.analysis-log-name { font-size: 0.92rem; cursor: pointer; }
 .analysis-log-meta { margin-left: auto; color: var(--muted); font-size: 0.8rem; }
+/* Borttagningsmarkeringen ligger för sig själv, så att den inte kan förväxlas
+   med kryssrutan som läser in loggen i analysen. */
+.analysis-log-del-wrap {
+  white-space: nowrap;
+  display: inline-flex;
+  /* Den allmänna label-regeln staplar innehållet; här ska rutan och ordet
+     stå på rad. */
+  flex-direction: row;
+  align-items: center;
+  gap: 0.35rem;
+  flex: none;
+  font-size: 0.78rem;
+  color: var(--muted);
+  cursor: pointer;
+  border-left: 1px solid var(--line);
+  padding-left: 0.7rem;
+}
+.analysis-log-del-wrap:hover { color: var(--bad, #cf8378); }
+.analysis-log-del-wrap input[type="checkbox"] { width: auto; flex: none; }
+button.danger { border-color: var(--bad, #cf8378); color: var(--bad, #cf8378); }
+button.danger:hover { background: #33262a; }
 /* Detaljraden ligger under loggraden och hör till samma logg. */
 .drill-source {
   margin: -0.15rem 0 0.5rem 0.7rem;
   border-left-color: var(--accent-2);
 }
 .drill-source .drill-title { font-weight: 400; font-size: 0.85rem; }
+/* Motståndarbilderna i en matchdetalj, med samma rader som sessionsvyn. */
+.match-reads {
+  margin: 0.5rem 0 0.9rem 0.2rem;
+  padding-left: 0.7rem;
+  border-left: 2px solid var(--accent-2);
+}
+.match-reads .view-agent { font-size: 0.85rem; color: var(--muted); }
 .analysis-ask { display: grid; gap: 0.6rem; }
 .analysis-ask textarea {
   width: 100%;

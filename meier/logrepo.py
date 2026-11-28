@@ -148,6 +148,18 @@ def series_label(name: str) -> str:
     return f"{when.day} {_MONTHS[when.month - 1]} {when.year}, {clock} (UTC)"
 
 
+def check_name(name: str) -> str:
+    """Validera ett loggfilnamn och returnera det.
+
+    Namnet ska vara ett bart filnamn som slutar på ``.jsonl``. Kontrollen
+    skyddar mot sökvägar utanför klonen, både när en logg ska läsas och när en
+    ska tas bort.
+    """
+    if not name or Path(name).name != name or not name.endswith(".jsonl"):
+        raise LogRepoError(f"Ogiltigt loggnamn: {name!r}")
+    return name
+
+
 class LogRepo:
     """Klonen av loggrepet: filnamn, commit och push."""
 
@@ -260,9 +272,7 @@ class LogRepo:
 
     def log_path(self, name: str) -> Path:
         """Sökväg till en logg i klonen. Skyddar mot sökvägar utanför klonen."""
-        if not name or Path(name).name != name or not name.endswith(".jsonl"):
-            raise LogRepoError(f"Ogiltigt loggnamn: {name!r}")
-        path = self.directory / name
+        path = self.directory / check_name(name)
         if not path.is_file():
             raise LogRepoError(f"Loggen finns inte: {name}")
         return path
@@ -293,16 +303,49 @@ class LogRepo:
         """Pusha det som redan ligger i lokala commits."""
         return self._push_with_retry()
 
-    def _push_with_retry(self) -> str:
+    def delete_logs(self, names: list[str], message: str, push: bool = True) -> str:
+        """Ta bort loggfiler ur klonen och checka in borttagningen.
+
+        Filerna försvinner ur git (``git rm``), inte bara från disk, så att
+        borttagningen går att pusha. Returnerar en statusrad; fel kastas inte,
+        eftersom anroparen redan har tagit bort filerna från disk och behöver
+        veta hur incheckningen gick. Ogiltiga namn kastar däremot
+        :class:`LogRepoError` — de ska aldrig nå git.
+        """
+        paths = [self.directory / check_name(n) for n in names]
+        removed = 0
+        for path in paths:
+            proc = self._git("rm", "-q", "--", str(path), check=False)
+            if proc.returncode != 0:
+                # Filen kan ligga i klonen utan att vara incheckad än.
+                path.unlink(missing_ok=True)
+            removed += 1
+        if not removed:
+            return "Inga filer att ta bort."
+        staged = self._git("diff", "--cached", "--quiet", check=False)
+        if staged.returncode == 0:
+            return "Inga ändringar att checka in."
+        try:
+            self._git(
+                "commit", "-q", "-m", message,
+                config=(f"user.name={COMMIT_NAME}", f"user.email={COMMIT_EMAIL}"),
+            )
+        except LogRepoError as exc:
+            return f"Borttagningen kunde inte checkas in: {exc}"
+        if not push:
+            return "Borttaget lokalt (pushas med nästa)."
+        return self._push_with_retry("Borttaget och pushat.")
+
+    def _push_with_retry(self, ok: str = "Incheckat och pushat.") -> str:
         try:
             self._git("push", "origin", "HEAD", config=self._credential_config())
-            return "Incheckat och pushat."
+            return ok
         except LogRepoError as exc:
             # Vanligaste orsaken är att fjärren hunnit få nya commits: hämta
             # och försök en gång till innan vi ger upp.
             self._git("pull", "--rebase", "--autostash", check=False)
             try:
                 self._git("push", "origin", "HEAD", config=self._credential_config())
-                return "Incheckat och pushat (efter omsynk)."
+                return f"{ok.rstrip('.')} (efter omsynk)."
             except LogRepoError as exc2:
                 return f"Push misslyckades: {exc2 or exc}"

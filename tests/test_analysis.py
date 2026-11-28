@@ -418,3 +418,89 @@ def test_analysis_detail_reads_record_without_format(monkeypatch, tmp_path):
     data = client.get("/api/analysis/matches", params={"source": name}).json()
     assert data["games"] == 2
     assert all(m["legacy"] for m in data["matches"])
+
+
+def test_analysis_delete_removes_the_log_from_the_repo(monkeypatch, tmp_path):
+    """Borttagningen ska nå fjärren: filen bort ur git, inte bara ur vyn."""
+    import subprocess
+
+    name = _log_repo(monkeypatch, tmp_path, games=2)
+    monkeypatch.setenv("MEIER_LOCAL_LOG_DIR", str(tmp_path / "lokalt"))
+    client = TestClient(web_app.app)
+    web_app._store.clear()
+    client.post("/api/analysis/select", json={"names": [name]})
+
+    res = client.post("/api/analysis/delete", json={"names": [name]})
+
+    assert res.status_code == 200
+    data = res.json()
+    assert data["deleted"] == [name]
+    assert data["in_repo"] == [name]
+    assert data["local"] == []
+    assert "pushat" in data["status"].lower()
+    # Loggen ska också vara borta ur analysmaterialet.
+    assert data["games"] == 0
+
+    assert not (tmp_path / "clone" / name).exists()
+    names = subprocess.run(
+        ["git", "--git-dir", str(tmp_path / "remote.git"), "ls-tree", "-r",
+         "--name-only", "HEAD"],
+        capture_output=True, text=True, check=True,
+    ).stdout
+    assert name not in names
+    assert client.get("/api/analysis/logs").json()["logs"] == []
+
+
+def test_analysis_delete_removes_a_local_series(monkeypatch, tmp_path):
+    local = tmp_path / "lokalt"
+    local.mkdir()
+    name = "2026-01-01-120000.jsonl"
+    (local / name).write_text(json.dumps(_records(1)[0]) + "\n", encoding="utf-8")
+    monkeypatch.setenv("MEIER_LOGS_DIR", str(tmp_path / "finns-inte"))
+    monkeypatch.setenv("MEIER_LOCAL_LOG_DIR", str(local))
+    client = TestClient(web_app.app)
+    web_app._store.clear()
+    client.post("/api/analysis/select", json={"names": [name]})
+
+    res = client.post("/api/analysis/delete", json={"names": [name]})
+
+    assert res.status_code == 200
+    data = res.json()
+    assert data["local"] == [name]
+    assert data["in_repo"] == []
+    assert data["games"] == 0
+    assert not (local / name).exists()
+
+
+def test_analysis_delete_rejects_bad_and_missing_names(monkeypatch, tmp_path):
+    _log_repo(monkeypatch, tmp_path, games=1)
+    monkeypatch.setenv("MEIER_LOCAL_LOG_DIR", str(tmp_path / "lokalt"))
+    client = TestClient(web_app.app)
+
+    assert client.post("/api/analysis/delete", json={"names": []}).status_code == 400
+    # Sökvägar utanför klonen ska aldrig nå git.
+    assert client.post(
+        "/api/analysis/delete", json={"names": ["../x.jsonl"]}
+    ).status_code == 400
+    assert client.post(
+        "/api/analysis/delete", json={"names": ["saknas.jsonl"]}
+    ).status_code == 404
+
+
+def test_analysis_delete_releases_the_last_series_pointer(monkeypatch, tmp_path):
+    """Raderas serien som Matchserie-fliken pekar på ska pekfilen släppas."""
+    local = tmp_path / "lokalt"
+    local.mkdir()
+    name = "2026-01-01-120000.jsonl"
+    (local / name).write_text(json.dumps(_records(1)[0]) + "\n", encoding="utf-8")
+    monkeypatch.setenv("MEIER_LOGS_DIR", str(tmp_path / "finns-inte"))
+    monkeypatch.setenv("MEIER_LOCAL_LOG_DIR", str(local))
+    web_app._current_match_file = local / name
+    web_app._remember_series(local / name, 1)
+    client = TestClient(web_app.app)
+
+    res = client.post("/api/analysis/delete", json={"names": [name]})
+
+    assert res.status_code == 200
+    assert web_app._current_match_file.name != name
+    assert not web_app._last_series_path().exists()

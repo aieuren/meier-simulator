@@ -23,7 +23,7 @@ from .agents.roster import make_players
 from .legacy import upgrade_record
 from .llm import LLMClient
 from .rules import MEIER, is_true_claim, rank, read_dice
-from .session import LogEntry, Session
+from .session import LogEntry, Session, opponent_views
 from .significance import win_difference
 
 #: Åtgärder som är spelarens eget påstående (spelaren säger ett värde).
@@ -160,6 +160,9 @@ class GameRecord:
     events: list[dict[str, Any]]
     player_stats: dict[str, dict[str, Any]]
     usage: dict[str, Any] = field(default_factory=dict)
+    #: Vad spelarna trodde om varandra när matchen var slut: en rad per läsande
+    #: spelare med en profil per motståndare (eller tomt för en äldre logg).
+    reads: list[dict[str, Any]] = field(default_factory=list)
     started_at: float = field(default_factory=time.time)
     finished_at: float | None = None
     lives_per_player: int = 0
@@ -183,6 +186,7 @@ class GameRecord:
             "elimination_order": self.elimination_order,
             "player_stats": self.player_stats,
             "usage": self.usage,
+            "reads": self.reads,
             "events": self.events,
         }
 
@@ -246,6 +250,9 @@ def play_match(
         elimination_order=_elimination_order(session.log),
         events=[e.to_dict() for e in session.log],
         player_stats=_player_stats(session.log, names),
+        # Bilderna läses av när matchen är slut, så att protokollet visar vad
+        # spelarna trodde om varandra efter allt de sett — inte mitt i.
+        reads=opponent_views([agents[i] for i in session.order]),
         usage=_match_usage(agents),
         lives_per_player=lives,
         finished_at=time.time(),
@@ -551,10 +558,39 @@ def match_detail(rec: dict[str, Any]) -> dict[str, Any]:
         "provider": rec.get("provider"),
         "model": rec.get("model"),
         "usage": rec.get("usage") or {},
+        "reads": reads_with_text(rec.get("reads")),
         "started_at": rec.get("started_at"),
         "finished_at": rec.get("finished_at"),
         "rounds_list": group_rounds(events),
     }
+
+
+def reads_with_text(reads: Any) -> list[dict[str, Any]]:
+    """Motståndarbilderna med klartext, för detaljvyn.
+
+    Protokollet sparar bara talen: texten går att räkna fram ur dem, och att
+    spara den skulle både göra loggen större och låta en gammal formulering
+    ligga kvar i historiken. Här byggs den med samma beskrivning som
+    sessionens vy använder, så att orden aldrig kan glida isär.
+    """
+    from .opponents import OpponentProfile
+
+    out: list[dict[str, Any]] = []
+    for view in reads or []:
+        if not isinstance(view, dict):
+            continue
+        profiles = []
+        for row in view.get("profiles") or []:
+            if not isinstance(row, dict):
+                continue
+            data = row.get("profile") or {}
+            try:
+                text = OpponentProfile(**data).describe()
+            except TypeError:
+                text = ""
+            profiles.append({**row, "text": text})
+        out.append({**view, "profiles": profiles})
+    return out
 
 
 def _rate(part: int, whole: int) -> float:

@@ -602,6 +602,42 @@ svarade 422, eftersom `detail` då är en lista av valideringsfel. `errorText` i
 `app.js` plockar ut `msg` ur listan, och klienten stoppar för stort antal innan
 anropet skickas.
 
+## Borttagning av loggar i Analys (2026-11-27)
+
+Varje loggrad i Analys har två kryssrutor: den vänstra läser in loggen i
+analysen (`/api/analysis/select`), den högra markerar för radering. De får
+aldrig slås ihop. Raden är därför en `div` och inte en `label` — en `label` som
+omsluter två kryssrutor växlar den första när man klickar på den andra, och då
+kunde ett klick för att läsa in en logg råka markera den för borttagning.
+
+`POST /api/analysis/delete` raderar filen på riktigt: `LogRepo.delete_logs`
+kör `git rm`, committar och pushar, så loggen försvinner även från GitHub. En
+lokal serie (som aldrig kom in i loggrepet) avlänkas bara från disk. Klienten
+frågar en gång extra med `confirm()` och räknar upp loggarna med tid och antal
+matcher, eftersom borttagningen inte går att ångra. Anropet vägras (409) om
+serien som spelas just nu skriver till filen, och pekfilen `last-series.json`
+släpps om det var serien Matchserie pekade på.
+
+## Spelarnas motståndarbilder loggas per match (2026-11-27)
+
+Läsningen fanns bara i sessionens vy (`Session._views`), så efter en serie fanns
+ingen bild kvar. Nu sparas `reads` i varje matchpost: en rad per läsande spelare
+med en profil per motståndare (`call_tendency`, `bluff_tendency`,
+`predictability`, `kind`, `confidence`, `source`).
+
+* Byggaren ligger i `opponent_views` i `meier/session.py` och används av både
+  sessionens vy (`with_text=True`) och matchprotokollet. Bilder med
+  `source == "population"` hoppas över — de säger inget om motståndaren.
+* Protokollet sparar bara talen. Klartexten räknas fram i `reads_with_text`
+  (`meier/match.py`), som används av `match_detail`, så orden kan inte glida
+  isär mellan loggen och vyn.
+* `reads` står i `_LIST_OMIT` i `meier/web/app.py`: matchlistan ska förbi lätt,
+  och bilderna hämtas per match när raden fälls upp. Detaljvyn ritar dem i en
+  `readsBlock` ovanför rundorna.
+* Utan språkmodell sätter sekreteraren `kind = "okänd"`; etiketten är alltså
+  bara en tolkning när LLM-läsaren svarar. Siffrorna och `source` finns i båda
+  fallen.
+
 ## Kvotraden i Matchserie (meier/quota.py)
 
 Google redovisar aldrig återstående dygnskvot i något API, så appen räknar
