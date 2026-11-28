@@ -1722,7 +1722,6 @@ function setupAnalysis() {
   if (!refresh) return;
   refresh.onclick = refreshAnalysisLogs;
   $("analysisAskBtn").onclick = askAnalysis;
-  $("analysisDeleteBtn").onclick = deleteMarkedLogs;
   refreshAnalysisLogs();
   refreshAnalysisData();
 }
@@ -1744,7 +1743,6 @@ async function refreshAnalysisLogs() {
 function renderAnalysisLogs(data) {
   const box = $("analysisLogList");
   box.innerHTML = "";
-  updateDeleteButton();
   if (!data.ready) {
     box.innerHTML = '<p class="hint">Inget loggrepo är konfigurerat på servern.</p>';
     return;
@@ -1755,8 +1753,8 @@ function renderAnalysisLogs(data) {
     return;
   }
   data.logs.forEach((log) => {
-    // Raden är en div, inte en label: den innehåller två kryssrutor (läs in
-    // och ta bort), och en label hade då växlat fel ruta när man klickade.
+    // Raden är en div, inte en label: den innehåller både kryssrutan och en
+    // knapp, och en label hade skickat knappklicket vidare till kryssrutan.
     const row = document.createElement("div");
     row.className = "analysis-log" + (log.local ? " is-local" : "");
     const cb = document.createElement("input");
@@ -1781,83 +1779,56 @@ function renderAnalysisLogs(data) {
     // Lokala serier kan inte checkas in (trasig fjärr eller nödbroms). Märk
     // dem, så att det syns varför de inte finns på GitHub.
     meta.textContent = `${log.games} matcher${log.local ? " · lokal" : ""}`;
-    // Borttagning markeras för sig, så att ett klick för att läsa in en logg
-    // aldrig kan råka markera den för radering.
-    const delWrap = document.createElement("label");
-    delWrap.className = "analysis-log-del-wrap";
-    delWrap.title = "Markera loggen för borttagning";
-    const del = document.createElement("input");
-    del.type = "checkbox";
+    // Borttagningen är en egen liten knapp, så att ett klick för att läsa in
+    // en logg aldrig kan råka radera den.
+    const del = document.createElement("button");
+    del.type = "button";
     del.className = "analysis-log-del";
-    del.dataset.name = log.name;
-    del.onchange = updateDeleteButton;
-    delWrap.append(del, document.createTextNode("ta bort"));
-    row.append(cb, name, meta, delWrap);
+    del.textContent = "Ta bort";
+    del.title = log.local
+      ? "Raderar den lokala filen från disk. Du får frågan först."
+      : "Raderar loggen ur loggrepet också, alltså även på GitHub. Du får frågan först.";
+    del.onclick = () => deleteLog(log, row);
+    row.append(cb, name, meta, del);
     box.appendChild(row);
 
-    // Detaljvyn ligger utanför raden, annars hade ett klick på knappen
-    // växlat kryssrutan. Den fungerar även för loggar som inte är inlästa.
+    // Detaljvyn ligger utanför raden, så att den inte påverkas av radens klick.
     box.appendChild(logDrill(log));
   });
-  updateDeleteButton();
 }
 
-// De loggar som är markerade för borttagning.
-function markedLogs() {
-  return Array.from(
-    $("analysisLogList").querySelectorAll("input.analysis-log-del:checked")
-  );
-}
-
-function updateDeleteButton() {
-  const btn = $("analysisDeleteBtn");
-  if (!btn) return;
-  const n = markedLogs().length;
-  btn.disabled = n === 0;
-  btn.textContent = n ? `Ta bort ${n} logg${n === 1 ? "" : "ar"}` : "Ta bort markerade";
-}
-
-// Ta bort markerade loggar. Frågar en gång extra, eftersom filerna raderas
-// även ur loggrepet på GitHub och borttagningen inte går att ångra.
-async function deleteMarkedLogs() {
-  const boxes = markedLogs();
-  if (!boxes.length) return;
-  const names = boxes.map((b) => b.dataset.name);
-  const lines = boxes.map((b) => {
-    const row = b.closest(".analysis-log");
-    const label = row ? row.querySelector(".analysis-log-name").textContent : b.dataset.name;
-    const meta = row ? row.querySelector(".analysis-log-meta").textContent : "";
-    return `  • ${label}${meta ? ` (${meta})` : ""}`;
-  });
-  const many = names.length > 1;
+// Ta bort en logg. Frågar en gång extra, eftersom filen raderas även ur
+// loggrepet på GitHub och borttagningen inte går att ångra.
+async function deleteLog(log, row) {
+  const label = row.querySelector(".analysis-log-name").textContent;
+  const games = `${log.games} match${log.games === 1 ? "" : "er"}`;
+  const where = log.local
+    ? "Den lokala filen raderas från disk."
+    : "Filen raderas ur loggrepet och borttagningen checkas in, alltså även på GitHub.";
   const ok = window.confirm(
-    `Ta bort ${names.length} logg${many ? "ar" : ""}?\n\n` +
-      `${lines.join("\n")}\n\n` +
-      "Filerna raderas ur loggrepet och borttagningen checkas in, alltså även " +
-      "på GitHub. Det går inte att ångra."
+    `Ta bort ${label} (${games})?\n\n${where}\nDet går inte att ångra.`
   );
   if (!ok) return;
-  const btn = $("analysisDeleteBtn");
-  const hint = $("analysisDeleteHint");
+  const btn = row.querySelector("button.analysis-log-del");
+  const status = $("analysisStatus");
   btn.disabled = true;
   btn.textContent = "Tar bort…";
   try {
     const res = await fetch("/api/analysis/delete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ names }),
+      body: JSON.stringify({ names: [log.name] }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(errorText(data) || "Fel");
     // Servern säger hur incheckningen gick; ett push-fel ska synas, inte tystas.
-    const n = (data.deleted || []).length;
-    let text = `${n} logg${n === 1 ? "" : "ar"} borttagen${n === 1 ? "" : "a"}`;
-    if ((data.local || []).length) text += ` (${data.local.length} lokal fil)`;
-    hint.textContent = `${text}. ${data.status || ""}`.trim();
-    hint.className = data.status && /misslyckades/i.test(data.status) ? "hint warn" : "hint";
+    let text = `${label} borttagen`;
+    if ((data.local || []).length) text += " (lokal fil)";
+    status.textContent = `${text}. ${data.status || ""}`.trim();
+    status.className = data.status && /misslyckades/i.test(data.status) ? "hint warn" : "hint";
   } catch (e) {
-    hint.textContent = `Kunde inte ta bort: ${e.message}`;
-    hint.className = "hint warn";
+    status.textContent = `Kunde inte ta bort ${label}: ${e.message}`;
+    status.className = "hint warn";
   }
   await refreshAnalysisLogs();
   await refreshAnalysisData();

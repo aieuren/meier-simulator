@@ -618,6 +618,26 @@ matcher, eftersom borttagningen inte går att ångra. Anropet vägras (409) om
 serien som spelas just nu skriver till filen, och pekfilen `last-series.json`
 släpps om det var serien Matchserie pekade på.
 
+## Webbläsarverktyget accepterar confirm-dialoger (2026-11-28)
+
+Klickar du på en knapp som öppnar `window.confirm` i den inbyggda
+webbläsaren, så **godkänns dialogen automatiskt** (den avvisas inte). Det går
+inte att avbryta därifrån. Följden blev att ett klick på en riktig "Ta bort" i
+Analys-fliken raderade en lokal serie på riktigt. Testa därför destruktiva
+knappar mot en tillfällig logg du själv har skapat, eller mot API:t med curl —
+klicka aldrig på en rad du vill behålla.
+
+## Borttagning i Analys: en knapp per rad (2026-11-28)
+
+Första versionen hade en kryssruta "ta bort" per rad plus en gemensam knapp.
+Det blev två klick och en mellanliggande markering att hålla reda på, så raden
+har nu en egen liten knapp (`button.analysis-log-del`) som raderar just den
+loggen via `POST /api/analysis/delete` med ett namn. Raden är fortfarande en
+`div`: en `label` runt kryssrutan hade skickat knappklicket vidare till
+kryssrutan och växlat inläsningen i stället. Resultatet av borttagningen skrivs
+i statusraden `#analysisStatus` ovanför listan; serverns status om incheckning
+och push visas där, så att ett push-fel syns.
+
 ## Logglistan i Analys sorteras på seriens tid (2026-11-28)
 
 Listan sorterades på filens mtime, men en logg som hämtas med `git pull` får

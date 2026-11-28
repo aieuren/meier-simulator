@@ -320,12 +320,12 @@ Uppdatera listan hämtar nya loggar från fjärren. Flera loggar sammanställs
 tillsammans, så att du kan bygga en stor datamängd över tid, från flera
 körningar.
 
-Varje rad har också en egen kryssruta, ta bort, som markerar loggen för
-radering. Knappen Ta bort markerade frågar en gång extra och raderar sedan
-filen på riktigt: den tas bort ur loggrepet, checkas in och pushas, alltså även
-på GitHub. Borttagningen går inte att ångra. En lokal serie (som aldrig kom in i
-loggrepet) raderas bara från disk. Serien som fliken Matchserie pekar på släpps
-samtidigt, så att fliken inte letar efter en fil som är borta.
+Varje rad har också en liten knapp, Ta bort, som raderar just den loggen.
+Knappen frågar en gång extra och raderar sedan filen på riktigt: den tas bort ur
+loggrepet, checkas in och pushas, alltså även på GitHub. Borttagningen går inte
+att ångra. En lokal serie (som aldrig kom in i loggrepet) raderas bara från
+disk. Serien som fliken Matchserie pekar på släpps samtidigt, så att fliken inte
+letar efter en fil som är borta.
 
 Därefter ställer du frågor i fritext under Ställ frågor. Svaret
 bygger på en kompakt sammanställning av materialet – aggregerade mått per roll,
