@@ -1146,12 +1146,6 @@ def analysis_delete(req: _DeleteLogsRequest) -> dict:
             raise HTTPException(
                 status_code=500, detail=f"Kunde inte ta bort {name}: {exc}"
             ) from exc
-    for name in in_repo:
-        try:
-            (repo.directory / name).unlink()
-        except OSError:
-            pass  # delete_logs nedan tar bort den ur git ändå
-
     status = ""
     if in_repo:
         status = repo.delete_logs(in_repo, f"Meier: tar bort {len(in_repo)} logg(ar)")
