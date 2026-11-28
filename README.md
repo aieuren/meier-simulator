@@ -314,7 +314,8 @@ efter varje färdig match. Se avsnittet om loggrepet ovan.
 Fliken Analys låter dig borra vidare i insamlat material. Under
 Välj datakällor markerar du de matchloggar som redan checkats in i
 loggrepet. En markerad logg läses in direkt, och avmarkerar du den tas den ur
-analysen igen. Varje rad visar datum och tid samt antal matcher. Knappen
+analysen igen. Listan har den nyaste serien överst, och varje rad visar datum
+och tid samt antal matcher. Knappen
 Uppdatera listan hämtar nya loggar från fjärren. Flera loggar sammanställs
 tillsammans, så att du kan bygga en stor datamängd över tid, från flera
 körningar.

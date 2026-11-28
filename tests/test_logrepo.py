@@ -195,3 +195,31 @@ def test_delete_logs_reports_push_failure(log_repo):
     status = repo.delete_logs(["2026-11-12-030000.jsonl"], "städar")
 
     assert "misslyckades" in status.lower()
+
+
+def test_newest_first_sorts_on_the_stamp_in_the_name():
+    """Ordningen ska komma ur seriens tid, inte ur filens mtime.
+
+    En logg som hämtats med git pull får mtime när den checkas ut, så en
+    mtime-ordning kunde visa en gammal serie över en ny.
+    """
+    entries = [
+        {"name": "2026-01-02-090000.jsonl", "started_at": 200.0, "modified": 100},
+        {"name": "2026-01-01-100000.jsonl", "started_at": 100.0, "modified": 900},
+    ]
+    assert [e["name"] for e in logrepo.newest_first(entries)] == [
+        "2026-01-02-090000.jsonl",
+        "2026-01-01-100000.jsonl",
+    ]
+
+
+def test_newest_first_falls_back_to_mtime_without_a_stamp():
+    """En serie som pågår har ingen tidsstämpel i namnet; då gäller mtime."""
+    entries = [
+        {"name": "2026-01-01-120000.jsonl", "started_at": 100.0, "modified": 100},
+        {"name": "meier_matches.jsonl", "started_at": None, "modified": 500},
+    ]
+    assert [e["name"] for e in logrepo.newest_first(entries)] == [
+        "meier_matches.jsonl",
+        "2026-01-01-120000.jsonl",
+    ]

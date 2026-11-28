@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 
 from fastapi.testclient import TestClient
 
@@ -504,3 +505,45 @@ def test_analysis_delete_releases_the_last_series_pointer(monkeypatch, tmp_path)
     assert res.status_code == 200
     assert web_app._current_match_file.name != name
     assert not web_app._last_series_path().exists()
+
+
+def test_analysis_lists_the_newest_series_first(monkeypatch, tmp_path):
+    """Ordningen ska komma ur seriens tid i namnet, inte ur filens mtime.
+
+    En logg som hämtas med git pull får mtime när den checkas ut, så
+    mtime-ordning kastar om historiken: en gammal serie kunde hamna över en ny.
+    Etiketten visar namnets tid, och listan ska följa samma tid.
+    """
+    local = tmp_path / "lokalt"
+    local.mkdir()
+    older = local / "2026-01-01-100000.jsonl"
+    newer = local / "2026-01-02-090000.jsonl"
+    for path in (older, newer):
+        path.write_text(json.dumps(_records(1)[0]) + "\n", encoding="utf-8")
+    # Den äldre serien får nyast mtime, som efter en utcheckning ur git.
+    os.utime(older, (2_000_000_000, 2_000_000_000))
+    os.utime(newer, (1_000_000_000, 1_000_000_000))
+    monkeypatch.setenv("MEIER_LOGS_DIR", str(tmp_path / "finns-inte"))
+    monkeypatch.setenv("MEIER_LOCAL_LOG_DIR", str(local))
+    client = TestClient(web_app.app)
+    web_app._store.clear()
+
+    names = [e["name"] for e in client.get("/api/analysis/logs").json()["logs"]]
+    assert names == [newer.name, older.name]
+
+
+def test_analysis_lists_repo_and_local_series_in_one_order(monkeypatch, tmp_path):
+    """De incheckade och de lokala loggarna ska blandas i samma tidsordning."""
+    repo_name = _log_repo(monkeypatch, tmp_path, games=1)  # 2026-01-01-120000
+    local = tmp_path / "lokalt"
+    local.mkdir()
+    newer = "2026-01-03-080000.jsonl"
+    older = "2025-12-31-235900.jsonl"
+    for name in (newer, older):
+        (local / name).write_text(json.dumps(_records(1)[0]) + "\n", encoding="utf-8")
+    monkeypatch.setenv("MEIER_LOCAL_LOG_DIR", str(local))
+    client = TestClient(web_app.app)
+    web_app._store.clear()
+
+    names = [e["name"] for e in client.get("/api/analysis/logs").json()["logs"]]
+    assert names == [newer, repo_name, older]

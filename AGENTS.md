@@ -618,6 +618,16 @@ matcher, eftersom borttagningen inte går att ångra. Anropet vägras (409) om
 serien som spelas just nu skriver till filen, och pekfilen `last-series.json`
 släpps om det var serien Matchserie pekade på.
 
+## Logglistan i Analys sorteras på seriens tid (2026-11-28)
+
+Listan sorterades på filens mtime, men en logg som hämtas med `git pull` får
+mtime när den checkas ut — då hamnade en gammal serie över en ny. Nu sorterar
+`logrepo.newest_first` på tidsstämpeln i filnamnet (`started_at`), samma tid som
+etiketten visar, och faller tillbaka på mtime bara när namnet saknar stämpel
+(t.ex. en serie som pågår). Samma funktion används av `LogRepo.list_logs`,
+`_local_log_files` och den sammanslagna listan i `/api/analysis/logs`, så
+incheckade och lokala serier blandas i en enda tidsordning med nyaste överst.
+
 ## Spelarnas motståndarbilder loggas per match (2026-11-27)
 
 Läsningen fanns bara i sessionens vy (`Session._views`), så efter en serie fanns

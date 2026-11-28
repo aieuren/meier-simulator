@@ -982,9 +982,10 @@ def analysis_logs() -> dict:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
     local = _local_log_files()
     known = {e["name"] for e in logs}
-    # Lokala serier listas efter de incheckade. En lokal serie kan heta samma
-    # sak som en incheckad (samma tidsstämpel), då vinner den incheckade.
-    logs += [e for e in local if e["name"] not in known]
+    # En lokal serie kan heta samma sak som en incheckad (samma tidsstämpel),
+    # då vinner den incheckade. Ordningen blir den nyaste serien först, oavsett
+    # om den ligger i loggrepet eller bara lokalt.
+    logs = logrepo.newest_first(logs + [e for e in local if e["name"] not in known])
     loaded = set(_store.sources())
     for entry in logs:
         entry["games"] = _count_lines(_path_for_log(entry))
@@ -1064,8 +1065,7 @@ def _local_log_files() -> list[dict]:
                 "local": True,
             }
         )
-    out.sort(key=lambda d: d["modified"], reverse=True)
-    return out
+    return logrepo.newest_first(out)
 
 
 def _path_for_log(entry: dict) -> Path:

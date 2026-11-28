@@ -130,6 +130,25 @@ def series_epoch(name: str) -> float | None:
     return when.timestamp() if when is not None else None
 
 
+def newest_first(entries: list[dict]) -> list[dict]:
+    """Sortera en logglista med den nyaste serien överst.
+
+    Tiden tas ur filnamnet (seriens starttid), inte ur filens mtime: en logg
+    som hämtats med git pull får mtime när den checkas ut, så en mtime-ordning
+    kastar om historiken. Etiketten i gränssnittet visar namnets tid, och
+    listan ska följa samma tid. Ett namn utan tidsstämpel (t.ex. en serie som
+    pågår) sorteras på filens mtime i stället.
+    """
+
+    def key(entry: dict) -> float:
+        started = entry.get("started_at")
+        if started is not None:
+            return float(started)
+        return float(entry.get("modified") or 0)
+
+    return sorted(entries, key=key, reverse=True)
+
+
 def series_label(name: str) -> str:
     """Läsbar etikett ur filnamnet: "12 november 2026, 01:48:13" (i UTC).
 
@@ -267,8 +286,7 @@ class LogRepo:
                 "size": stat.st_size,
                 "modified": int(stat.st_mtime),
             })
-        out.sort(key=lambda d: d["modified"], reverse=True)
-        return out
+        return newest_first(out)
 
     def log_path(self, name: str) -> Path:
         """Sökväg till en logg i klonen. Skyddar mot sökvägar utanför klonen."""
